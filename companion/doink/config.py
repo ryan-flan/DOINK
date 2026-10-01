@@ -38,6 +38,7 @@ class Config:
     dry_run: bool = False
     poll_interval: float = 2.0
     max_backlog: int = 10
+    realtime: bool = False  # experimental screen reader; opt-in
 
 
 def _read(path: Path) -> dict:
@@ -78,6 +79,7 @@ def load_config(path: Path, dry_run: bool = False, require_paths: bool = True) -
         dry_run=dry_run or raw.get("dry_run", False),
         poll_interval=float(raw.get("poll_interval", 2.0)),
         max_backlog=int(raw.get("max_backlog", 10)),
+        realtime=bool(raw.get("realtime", False)),
     )
 
 

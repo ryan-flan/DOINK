@@ -171,6 +171,20 @@ def _utf8(raw: str) -> str:
     return raw.encode("latin-1").decode("utf-8", errors="replace")
 
 
+def decode_message(data: bytes) -> dict | None:
+    """A message from the realtime transport: the same JSON the addon
+    queues, or a ``hello`` (which has no seq). None if it isn't usable."""
+    try:
+        message = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(message, dict):
+        return None
+    if message.get("type") == "hello":
+        return message if all(k in message for k in ("char", "realm")) else None
+    return _decode_event(data.decode("latin-1"))
+
+
 def _decode_event(raw: str) -> dict | None:
     text = _utf8(raw)
     try:

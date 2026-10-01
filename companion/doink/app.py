@@ -1,16 +1,18 @@
-"""The companion as the settings window sees it: owns the config and the
-watcher thread, and applies changes without a restart."""
+"""The companion as the settings window sees it: owns the config, the shared
+posting state and the worker threads, and applies changes without a restart."""
 
 import logging
+import sys
 import threading
 from pathlib import Path
 
 from . import autostart
 from .config import Config, load_config, native_path, save_settings
-from .discord import Webhook, WebhookError, connection_test_embed, is_webhook_url
+from .discord import Webhook, WebhookError, WebhookPool, connection_test_embed, is_webhook_url
 from .discover import discover_in_wow_dir
 from .parser import parse_webhooks
-from .runner import run
+from .runner import RealtimeWorker, run
+from .state import State
 from .status import Status
 
 log = logging.getLogger("doink")
@@ -26,22 +28,31 @@ class App:
         self.status = status
         self.dry_run = dry_run
         self.config: Config = load_config(config_path, dry_run, require_paths=False)
+        # One State and one WebhookPool, shared by both workers, so the file
+        # path and the realtime path can never double-post.
+        self.state = State(self.config.state_path, persist=not self.config.dry_run)
+        self.pool = WebhookPool(dry_run=self.config.dry_run)
         self._stop: threading.Event | None = None
         self._worker: threading.Thread | None = None
+        self._rt_stop: threading.Event | None = None
+        self._rt_worker: RealtimeWorker | None = None
 
-    # ---------------------------------------------------------- watcher
+    # ---------------------------------------------------------- workers
 
     def start(self) -> None:
-        if not self.config.savedvariables_paths:
+        if self.config.savedvariables_paths:
+            self._stop = threading.Event()
+            self._worker = threading.Thread(target=self._work, args=(self.config, self._stop),
+                                            name="watcher", daemon=True)
+            self._worker.start()
+        else:
             self.status.watching(0)
             self.status.failed("World of Warcraft not found. Open settings to choose its folder")
-            return
-        self._stop = threading.Event()
-        self._worker = threading.Thread(target=self._work, args=(self.config, self._stop),
-                                        name="watcher", daemon=True)
-        self._worker.start()
+        if self.config.realtime:
+            self._start_realtime()
 
     def stop(self) -> None:
+        self._stop_realtime()
         if self._stop:
             self._stop.set()
             self._worker.join(timeout=5)
@@ -54,10 +65,25 @@ class App:
 
     def _work(self, config: Config, stop: threading.Event) -> None:
         try:
-            run(config, stop=stop, status=self.status)
+            run(config, stop=stop, status=self.status, state=self.state, pool=self.pool)
         except Exception:
             log.exception("watcher crashed")
             self.status.failed("stopped after an error; see the log")
+
+    def _start_realtime(self) -> None:
+        if self._rt_worker and self._rt_worker.is_alive():
+            return
+        self._rt_stop = threading.Event()
+        self._rt_worker = RealtimeWorker(self.config, self.state, self.pool, self.status,
+                                         self._rt_stop, self.game_webhooks)
+        self._rt_worker.start()
+
+    def _stop_realtime(self) -> None:
+        if self._rt_stop:
+            self._rt_stop.set()
+            self._rt_worker.join(timeout=5)
+            self._rt_stop = self._rt_worker = None
+        self.status.realtime_update(enabled=False, reason="off")
 
     # ---------------------------------------------------------- settings
 
@@ -85,7 +111,7 @@ class App:
             raise SettingsError("That isn't a Discord webhook URL. It should start with "
                                 "https://discord.com/api/webhooks/")
         save_settings(self.config_path, {"webhook_url": url})
-        self.config.webhook_url = url  # the watcher reads it on every post
+        self.config.webhook_url = url  # the workers read it on every post
         log.info("webhook %s in settings", "saved" if url else "cleared")
         if url:
             self.status.ok()
@@ -110,6 +136,21 @@ class App:
         save_settings(self.config_path, {"wow_dir": folder, "savedvariables_path": None})
         self.restart()
         return len(found)
+
+    # ---------------------------------------------------------- realtime
+
+    @staticmethod
+    def realtime_available() -> bool:
+        return sys.platform == "win32"
+
+    def set_realtime(self, on: bool) -> None:
+        save_settings(self.config_path, {"realtime": on})
+        self.config.realtime = on
+        log.info("realtime posting (experimental): %s", "on" if on else "off")
+        if on:
+            self._start_realtime()
+        else:
+            self._stop_realtime()
 
     # ---------------------------------------------------------- autostart
 

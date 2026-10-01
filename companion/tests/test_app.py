@@ -114,6 +114,20 @@ class AppTest(unittest.TestCase):
                 self.fail(f"{text!r} not in {self.status.summary()!r}")
             time.sleep(0.02)
 
+    def test_realtime_is_off_by_default_and_saves_when_toggled(self):
+        self.assertFalse(self.app.config.realtime)
+        self.assertFalse(self.app.status.realtime()["enabled"])
+        self.app.set_realtime(True)
+        self.assertTrue(load_config(self.config_path).realtime)
+        if self.app.realtime_available():
+            self.wait_for("", 0)  # nothing to wait for on Windows; the thread runs
+        else:
+            self.app._rt_worker.join(timeout=3)
+            self.assertEqual(self.app.status.realtime()["reason"], "needs Windows")
+        self.app.set_realtime(False)
+        self.assertFalse(load_config(self.config_path).realtime)
+        self.assertEqual(self.app.status.realtime()["reason"], "off")
+
     def test_start_and_restart_watcher(self):
         self.app.start()
         self.wait_for("watching 1 file")

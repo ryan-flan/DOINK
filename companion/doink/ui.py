@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, ttk
@@ -37,6 +38,15 @@ EVENT_NAMES = {
     "level_up": "Level up", "loot": "Loot", "death": "Death", "quest": "Quest",
     "boss_kill": "Boss kill", "skill_up": "Skill up",
 }
+
+REALTIME_EXPLAIN = (
+    "Normally events post when WoW saves (on /reload or logout). With this on, "
+    "the addon shows a thin black-and-white strip in a corner of the game for "
+    "about two seconds after an event, and DOINK reads it straight off the WoW "
+    "window. It reads only that strip, never saves images, and switches itself "
+    "off if reading starts costing CPU or memory. Needs /doink realtime on in "
+    "game as well.")
+REALTIME_DOCS = "https://github.com/ryan-flan/DOINK#how-realtime-works-experimental"
 
 
 def enable_dpi_awareness() -> None:
@@ -82,6 +92,7 @@ class SettingsWindow:
     def show(self) -> None:
         self.webhook.set(self.app.config.webhook_url)
         self.autostart.set(self.app.autostart_enabled())
+        self.realtime_var.set(self.app.config.realtime)
         self._message(self.webhook_msg, "")
         self._message(self.wow_msg, "")
         self._refresh_overrides()
@@ -199,6 +210,29 @@ class SettingsWindow:
         self.wow_msg.grid(row=0, column=1, padx=(12, 0))
         row += 1
 
+        # Realtime (experimental).
+        row = self._section(page, row, "Realtime (experimental)")
+        self.realtime_var = tk.BooleanVar()
+        rt_check = ttk.Checkbutton(page, text="Realtime posting: post events while you play",
+                                   variable=self.realtime_var, command=self._toggle_realtime)
+        rt_check.grid(row=row, sticky="w")
+        if not self.app.realtime_available():
+            rt_check.state(["disabled"])
+            rt_check.configure(text="Realtime posting (Windows only)")
+        row += 1
+        ttk.Label(page, style="Muted.TLabel", wraplength=WRAP, justify="left",
+                  text=REALTIME_EXPLAIN).grid(row=row, sticky="w", pady=(4, 0))
+        row += 1
+        ttk.Button(page, text="How it works, in detail", style="Link.TButton",
+                   command=self._learn_more).grid(row=row, sticky="w", pady=(2, 6))
+        row += 1
+        self.rt_reader = ttk.Label(page, font=SMALL, wraplength=WRAP, justify="left")
+        self.rt_reader.grid(row=row, sticky="w")
+        row += 1
+        self.rt_addon = ttk.Label(page, font=SMALL, wraplength=WRAP, justify="left")
+        self.rt_addon.grid(row=row, sticky="w")
+        row += 1
+
         # Startup.
         row = self._section(page, row, "Startup")
         self.autostart = tk.BooleanVar()
@@ -257,15 +291,56 @@ class SettingsWindow:
                      "places. Choose the folder that contains _classic_beta_ (or similar)."]
         self.paths.configure(text="\n".join(lines))
 
+        self._refresh_realtime(status.realtime())
+
         recent = status.recent()
         if recent:
             self.recent.configure(font=("Consolas", 9), text="\n".join(
-                f"{time.strftime('%H:%M', time.localtime(at))}  {who:<18.18} "
-                f"{EVENT_NAMES.get(what, what)}" for at, who, what in recent))
+                f"{'⚡' if live else ' '} {time.strftime('%H:%M', time.localtime(at))}  "
+                f"{who:<18.18} {EVENT_NAMES.get(what, what)}" for at, who, what, live in recent))
         else:
             self.recent.configure(text="Nothing posted yet. Events post when WoW saves:\n"
                                        "on /reload, logout, or /doink flush.",
                                   font=SMALL)
+
+    def _refresh_realtime(self, rt: dict) -> None:
+        if not rt["enabled"]:
+            reason = rt.get("reason") or "off"
+            if reason == "off":
+                self._message(self.rt_reader, "Reader: off", MUTED)
+            else:
+                self._message(self.rt_reader, f"Reader: off — {reason}", RED)
+        else:
+            meter = rt.get("meter") or {}
+            cost = ""
+            if meter.get("ws_mb") is not None and meter.get("rate_hz"):
+                cost = (f" · {meter['cpu_pct']:.1f}% CPU · {meter['ws_mb']:.0f} MB"
+                        f" · {meter['rate_hz']:.0f} captures/s")
+            window = rt.get("window")
+            if window == "foreground":
+                self._message(self.rt_reader, "Reader: watching the WoW window" + cost, GREEN)
+            elif window == "background":
+                self._message(self.rt_reader, "Reader: WoW is behind another window; "
+                              "reading resumes when it's in front" + cost, MUTED)
+            elif window == "minimized":
+                self._message(self.rt_reader, "Reader: WoW is minimized", MUTED)
+            else:
+                self._message(self.rt_reader, "Reader: waiting for WoW to start", MUTED)
+
+        hello = rt.get("hello")
+        if hello:
+            when = time.strftime("%H:%M", time.localtime(hello["at"]))
+            strip = rt.get("strip")
+            detail = f" · {strip[0]:g} px blocks, {strip[1]}/row" if strip else ""
+            test = " (test pattern)" if hello.get("test") else ""
+            self._message(self.rt_addon, f"Addon: sending · hello from {hello['who']} at {when}"
+                          f" · v{hello['addon']}{detail}{test}", GREEN)
+        elif rt["enabled"]:
+            self._message(self.rt_addon, "Addon: nothing received yet. In game: "
+                          "/doink realtime on, then /doink realtime test to check.", MUTED)
+        else:
+            self._message(self.rt_addon, "Addon: /doink realtime on in game turns the strip on.",
+                          MUTED)
 
     def _refresh_overrides(self) -> None:
         hooks = self.app.game_webhooks()
@@ -325,6 +400,19 @@ class SettingsWindow:
                       GREEN)
         self._refresh_overrides()
         self._refresh()
+
+    def _toggle_realtime(self) -> None:
+        try:
+            self.app.set_realtime(self.realtime_var.get())
+        except OSError as e:
+            self.realtime_var.set(self.app.config.realtime)
+            self._message(self.rt_reader, f"Couldn't save settings: {e}", RED)
+            return
+        self._refresh_realtime(self.app.status.realtime())
+
+    @staticmethod
+    def _learn_more() -> None:
+        webbrowser.open(REALTIME_DOCS)
 
     def _toggle_autostart(self) -> None:
         try:

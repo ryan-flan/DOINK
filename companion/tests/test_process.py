@@ -1,11 +1,14 @@
+import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
 from doink.config import Config
 from doink.discord import WebhookError, build_embed
+from doink.runner import RealtimeWorker, post_events, process
 from doink.state import State
-from doink.runner import process
+from doink.status import Status
 
 
 CONFIG_HOOK = "https://discord.com/api/webhooks/1/config"
@@ -158,6 +161,48 @@ class ProcessTest(unittest.TestCase):
         self.run_with(events_file(1), state)  # SavedVariables wiped
         self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 1")
         self.assertEqual(state.last_seen("Paul-R"), 1)
+
+    def event(self, seq, char="Paul"):
+        return {"char": char, "class": "MAGE", "data": {"level": seq}, "realm": "R",
+                "seq": seq, "ts": 1790870764, "type": "level_up"}
+
+    def test_realtime_post_then_file_fills_the_gaps_only(self):
+        state = State(self.config.state_path)
+        status = Status()
+        # The reader catches #3 of a character it has never seen.
+        ok = post_events(self.config, "Paul-R", [self.event(3)], state, self.webhook, status,
+                         {}, first_sight_backlog=10, realtime=True)
+        self.assertTrue(ok)
+        self.assertEqual(status.recent()[0][3], True, "marked as a realtime post")
+        self.assertEqual(state.missing("Paul-R"), {1, 2})
+
+        # The file arrives later with #1-4: only 1, 2 and 4 may post.
+        self.webhook.sent.clear()
+        ok, _ = self.run_with(events_file(1, 2, 3, 4), state)
+        self.assertTrue(ok)
+        self.assertEqual([e["title"] for m in self.webhook.sent for e in m],
+                         ["Paul reached level 1", "Paul reached level 2", "Paul reached level 4"])
+        self.assertEqual(state.missing("Paul-R"), set())
+        self.assertEqual(state.last_seen("Paul-R"), 4)
+
+    def test_realtime_worker_dedupes_and_skips_hello(self):
+        state = State(self.config.state_path)
+        self.run_with(events_file(1, 2), state)
+        self.webhook.sent.clear()
+        status = Status()
+        worker = RealtimeWorker(self.config, state, self.webhook, status, threading.Event(),
+                                game_hooks=lambda: {})
+        worker._handle(json.dumps(self.event(2)).encode())  # already posted from the file
+        self.assertEqual(self.webhook.sent, [])
+        worker._handle(b'{"type":"hello","char":"Paul","realm":"R","addon":"0.6.0","test":true}')
+        self.assertEqual(self.webhook.sent, [])
+        self.assertEqual(status.realtime()["hello"]["who"], "Paul")
+        self.assertTrue(status.realtime()["hello"]["test"])
+        worker._handle(json.dumps(self.event(3)).encode())
+        self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 3")
+        worker._handle(json.dumps(self.event(3)).encode())  # the strip repeats it
+        self.assertEqual(len(self.webhook.sent), 1)
+        self.assertEqual(state.last_seen("Paul-R"), 3)
 
 
 class EmbedTest(unittest.TestCase):

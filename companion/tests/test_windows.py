@@ -74,6 +74,59 @@ class TrayTest(unittest.TestCase):
 
 
 @unittest.skipUnless(WINDOWS, "Windows only")
+class CaptureTest(unittest.TestCase):
+    """The GDI path against whatever is on the desktop: it must not leak and
+    must not find a strip where there is none."""
+
+    def desktop_capture(self):
+        from doink import pixel
+        user32 = pixel._user32
+        return pixel.Capture(find_window=lambda: user32.GetDesktopWindow(),
+                             require_foreground=False)
+
+    def test_no_handle_or_memory_leak_over_many_captures(self):
+        from doink import pixel
+        capture = self.desktop_capture()
+        try:
+            for _ in range(20):  # warm up: first allocations
+                capture.grab()
+            gdi0, ws0 = pixel.gdi_handles(), pixel.working_set_mb()
+            grabbed = 0
+            for _ in range(1000):
+                if capture.grab() is not None:
+                    grabbed += 1
+            gdi1, ws1 = pixel.gdi_handles(), pixel.working_set_mb()
+        finally:
+            capture.close()
+        self.assertGreater(grabbed, 0, "desktop capture produced frames")
+        self.assertLessEqual(abs(gdi1 - gdi0), 2, f"GDI handles drifted {gdi0}->{gdi1}")
+        self.assertLess(ws1 - ws0, 5.0, f"working set grew {ws0:.1f}->{ws1:.1f} MB")
+
+    def test_reader_degrades_without_wow(self):
+        from doink import pixel
+        reader = pixel.Reader(capture=pixel.Capture(find_window=lambda: None))
+        try:
+            for _ in range(5):
+                self.assertEqual(reader.poll(), [])
+            self.assertEqual(reader.window, "none")
+            self.assertEqual(reader.meter.snapshot()["captures"], 5)
+        finally:
+            reader.close()
+
+    def test_reader_on_desktop_finds_nothing_and_is_cheap(self):
+        from doink import pixel
+        reader = pixel.Reader(capture=self.desktop_capture())
+        try:
+            for _ in range(100):
+                self.assertEqual(reader.poll(), [])
+            snap = reader.meter.snapshot()
+        finally:
+            reader.close()
+        self.assertEqual(snap["captures"], 100)
+        self.assertLess(snap["avg_ms"], 200, "a capture+decode of two bands is far under this")
+
+
+@unittest.skipUnless(WINDOWS, "Windows only")
 class SettingsWindowTest(unittest.TestCase):
     def test_builds_shows_refreshes_and_hides(self):
         import tkinter as tk
@@ -99,6 +152,8 @@ class SettingsWindowTest(unittest.TestCase):
             window.webhook.set("nope")
             window._save_webhook()
             self.assertIn("isn't a Discord webhook", window.webhook_msg.cget("text"))
+            self.assertIn("Reader: off", window.rt_reader.cget("text"))
+            self.assertFalse(window.realtime_var.get(), "realtime is off by default")
             window.hide()
             root.update()
         finally:
