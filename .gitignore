@@ -1,0 +1,5 @@
+companion/config.toml
+companion/state.json
+companion/state.tmp
+__pycache__/
+.venv/

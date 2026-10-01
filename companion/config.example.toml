@@ -1,0 +1,27 @@
+# Copy to config.toml (gitignored) and edit.
+
+# Single quotes = TOML literal string, so backslashes need no escaping.
+# <ACCOUNT> is the folder under WTF\Account, e.g. 12345678#1.
+savedvariables_path = 'C:\Program Files (x86)\World of Warcraft\_classic_beta_\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua'
+
+# Server Settings -> Integrations -> Webhooks -> Copy Webhook URL. Keep secret.
+webhook_url = "https://discord.com/api/webhooks/..."
+
+# Print embeds to stdout instead of posting (same as --dry-run).
+dry_run = false
+
+# Seconds between checks of the SavedVariables file.
+poll_interval = 2.0
+
+# When a character is seen for the first time, post at most this many of its
+# queued events (the queue holds up to 500). 0 = post nothing old.
+max_backlog = 10
+
+# Per-type switches. Missing types default to true.
+[notifiers]
+level_up = true
+loot = true
+death = true
+quest = true
+boss_kill = true
+skill_up = true

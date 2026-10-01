@@ -47,11 +47,13 @@ DOINK/
     ├── pyproject.toml
     ├── main.py
     ├── config.example.toml
+    ├── tests/                # python -m unittest discover -s tests
     └── doink/
+        ├── config.py         # loads + validates config.toml
         ├── watcher.py        # polls SavedVariables file mtime
         ├── parser.py         # extracts event JSON strings from the Lua file
         ├── discord.py        # embed builders + webhook POST
-        └── state.py          # last-seen seq per character, persisted locally
+        └── state.py          # last-seen seq per character (state.json, gitignored)
 ```
 
 ## Data contract (both halves depend on this — do not change casually)
@@ -175,6 +177,15 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - `--dry-run` prints embeds to stdout instead of POSTing.
 - Config via `config.toml`: `savedvariables_path`, `webhook_url`, per-type
   enable flags, `dry_run`. Ship `config.example.toml`, gitignore `config.toml`.
+- Standard library only (`urllib`, `tomllib`); no dependencies.
+- The watcher only reports a change once `(mtime, size)` has held still for one
+  poll, so it never reads a half-written file.
+- Up to 10 embeds per webhook message (Discord's limit), at least 2s between
+  messages, and 429 `retry_after` is respected. State is saved after each
+  message.
+- First time a character is seen, post at most `max_backlog` (default 10) of
+  its queued events. If the newest seq is below `last_seen` (SavedVariables
+  wiped), treat the character as new.
 - Later: PyInstaller single-exe build. Not v1.
 
 ## Dev setup (reference)
