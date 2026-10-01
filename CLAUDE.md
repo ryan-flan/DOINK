@@ -248,6 +248,9 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   from an action only available to the Blizzard UI". It doesn't throw, so
   `pcall` can't catch it. Never register it; `addon/tests` guards this.
   Combat-log data must come from the companion reading `WoWCombatLog.txt`.
+- [x] **`/chatlog` is useless as a realtime transport** (tested 2026-10-01):
+  `Logs\WoWChatLog.txt` is created at `/chatlog` but stayed 0 bytes after a
+  self-whisper, for 80s+ and after turning logging off. Retest at launch.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
   title resolves (quest 818 "A Solvent Spirit", 625 xp).
