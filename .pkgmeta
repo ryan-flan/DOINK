@@ -3,11 +3,14 @@
 # tests, docs) goes into the zip. The companion ships on GitHub Releases.
 package-as: DOINK
 
+# Lifts addon/DOINK/* up into the zip's DOINK/ folder; the packager then
+# removes the emptied addon/ directory. Ignore rules run first, so only
+# addon/tests may be ignored here, not addon/ itself.
 move-folders:
   DOINK/addon/DOINK: DOINK
 
 ignore:
-  - addon
+  - addon/tests
   - companion
   - .github
   - .gitattributes
