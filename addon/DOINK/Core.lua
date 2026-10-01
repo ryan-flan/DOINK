@@ -160,7 +160,6 @@ end
 
 -- Events too frequent to echo in /doink debug.
 local QUIET_EVENTS = {
-  COMBAT_LOG_EVENT_UNFILTERED = true,
   GET_ITEM_INFO_RECEIVED = true, -- fires for every tooltip, not just loot
 }
 

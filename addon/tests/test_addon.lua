@@ -58,8 +58,7 @@ function GetItemInfo(id)
   if row then return unpack(row, 1, 11) end
 end
 
-local cleu = {}
-function CombatLogGetCurrentEventInfo() return unpack(cleu, 1, 12) end
+PROTECTED_EVENTS = { COMBAT_LOG_EVENT_UNFILTERED = true }
 
 local skills = {
   { "Professions", true }, { "Blacksmithing", false, nil, 150, 0, 0, 225 },
@@ -156,29 +155,20 @@ test("loot: uncached item waits for GET_ITEM_INFO_RECEIVED", function()
   eq(count(), n + 1, "no double emit")
 end)
 
-test("death: killer from recent combat log damage", function()
-  cleu = { 0, "SWING_DAMAGE", false, "Creature-1", "Hogger", 0, 0, "Player-1-ABC", "Paul", 0, 0 }
-  fire("COMBAT_LOG_EVENT_UNFILTERED")
-  now = now + 2
-  fire("PLAYER_DEAD")
-  assert(has('"killer":"Hogger"') and has('"zone":"Elwynn Forest"') and has('"subzone":null'), last())
+test("no notifier registers events protected in Forever", function()
+  -- Registering these pops "DOINK has been blocked from an action only
+  -- available to the Blizzard UI" at load. See CLAUDE.md beta facts.
+  for _, f in ipairs(frames) do
+    for event in pairs(PROTECTED_EVENTS) do
+      assert(not f.events[event], event .. " is registered")
+    end
+  end
 end)
 
-test("death: environmental damage names the environment", function()
-  cleu = { 0, "ENVIRONMENTAL_DAMAGE", false, "", nil, 0, 0, "Player-1-ABC", "Paul", 0, 0, "Falling" }
-  fire("COMBAT_LOG_EVENT_UNFILTERED")
+test("death: zone and subzone, killer unknown", function()
   fire("PLAYER_DEAD")
-  assert(has('"killer":"Falling"'), last())
-end)
-
-test("death: stale or other-target damage gives null killer", function()
-  cleu = { 0, "SPELL_DAMAGE", false, "Creature-2", "Kobold", 0, 0, "Player-1-ABC", "Paul", 0, 0 }
-  fire("COMBAT_LOG_EVENT_UNFILTERED")
-  cleu = { 0, "SWING_DAMAGE", false, "Creature-3", "Wolf", 0, 0, "Pet-1", "Cat", 0, 0 }
-  fire("COMBAT_LOG_EVENT_UNFILTERED")
-  now = now + 60
-  fire("PLAYER_DEAD")
-  assert(has('"killer":null'), last())
+  assert(has('"type":"death"') and has('"zone":"Elwynn Forest"'), last())
+  assert(has('"subzone":null') and has('"killer":null'), last())
 end)
 
 test("quest: title from reward screen when log lookup fails", function()
