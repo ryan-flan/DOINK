@@ -162,9 +162,15 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 
 ## Companion conventions
 
-- Python 3.12+, run with **Windows Python** (the file lives on NTFS; inotify
-  across WSL `/mnt/c` is unreliable). Developer may run git/tooling from WSL.
-- Poll the SavedVariables file's mtime every ~2s. No OS file-watch hooks.
+- Python 3.12+, run from **WSL** (`python3`; there is no Windows Python on the
+  dev machine). Run: `cd /mnt/c/dev/DOINK/companion && python3 main.py`.
+  Tests: `python3 -m unittest discover -s tests`. The PyInstaller .exe build
+  (M4) will need Windows Python.
+- Config paths may be written Windows-style (`C:\...`); `config.native_path`
+  maps them to `/mnt/c/...` under WSL, so one config works in both places.
+- Poll the SavedVariables file's mtime every ~2s. No OS file-watch hooks
+  (inotify across WSL `/mnt/c` is unreliable; stat polling is verified to see
+  Windows-side writes immediately).
 - On change: parse → events with `seq > state[char].last_seen` → POST in order →
   persist state. Never re-post on restart.
 - Parsing: find the `events = { ... }` blocks, extract Lua string literals
@@ -197,8 +203,8 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   `/etrace`, `/dump`, `/fstack`, `/console scriptErrors 1`.
 - SavedVariables path:
   `<WoW>\<flavor>\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua`
-- `git` and `gh` are installed only in WSL, not on the Windows PATH. From
-  PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && git ..."`.
+- Run all tooling (`git`, `gh`, `python3`) in WSL; none of it is on the
+  Windows PATH. From PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && ..."`.
 - Remote: https://github.com/ryan-flan/DOINK (private), default branch `main`.
 
 ## Commits

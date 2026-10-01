@@ -1,11 +1,23 @@
 """Loads and validates config.toml."""
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 WEBHOOK_URL = re.compile(r"^https://(discord|discordapp)\.com/api/webhooks/\d+/[\w-]+")
+WINDOWS_PATH = re.compile(r"^([A-Za-z]):[\\/](.*)$")
+
+
+def native_path(raw: str) -> Path:
+    """Accept Windows paths everywhere: under WSL, ``C:\\x`` becomes
+    ``/mnt/c/x``. One config then works from WSL and from Windows."""
+    match = WINDOWS_PATH.match(raw)
+    if match and os.name == "posix":
+        drive, rest = match.groups()
+        return Path("/mnt", drive.lower(), *re.split(r"[\\/]+", rest))
+    return Path(raw)
 
 
 @dataclass
@@ -30,7 +42,7 @@ def load_config(path: Path, dry_run: bool = False) -> Config:
 
     try:
         config = Config(
-            savedvariables_path=Path(raw["savedvariables_path"]),
+            savedvariables_path=native_path(raw["savedvariables_path"]),
             webhook_url=raw.get("webhook_url", ""),
             state_path=path.parent / "state.json",
             dry_run=dry_run or raw.get("dry_run", False),
