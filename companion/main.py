@@ -88,7 +88,7 @@ def process(config: Config, path: Path, state: State, pool: WebhookPool) -> bool
             except WebhookError as e:
                 log.error("%s: post failed: %s", key, e)
                 return False
-            log.info("%s: posted %s", key,
+            log.info("%s: %s %s", key, "printed" if config.dry_run else "posted",
                      ", ".join(f"#{e['seq']} {e['type']}" for e in chunk))
             state.set_last_seen(key, chunk[-1]["seq"])
 
