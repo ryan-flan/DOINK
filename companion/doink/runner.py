@@ -187,14 +187,27 @@ class RealtimeWorker(threading.Thread):
             return
         self.status.realtime_update(enabled=True, reason=None)
         log.info("realtime: reading the WoW window's top and bottom bands (experimental)")
+        last_report = time.monotonic()
+        last_window = None
         try:
             while not self.stop_event.is_set():
                 started = time.perf_counter()
                 for raw in reader.poll():
                     self.handle_message(raw)
+                snapshot = reader.meter.snapshot()
                 self.status.realtime_update(window=reader.window, strip=reader.strip,
-                                            strip_seen=reader.last_seen,
-                                            meter=reader.meter.snapshot())
+                                            strip_seen=reader.last_seen, meter=snapshot)
+                if reader.window != last_window:
+                    log.info("realtime: WoW window %s", reader.window)
+                    last_window = reader.window
+                if reader.window == "foreground" and time.monotonic() - last_report >= 60:
+                    # A cost line a minute while reading, for the README numbers
+                    # and for anyone's bug report.
+                    log.info("realtime: %s captures/s, %s ms avg, %s%% CPU, %s MB, %s GDI handles",
+                             snapshot["rate_hz"], snapshot["avg_ms"], snapshot["cpu_pct"],
+                             None if snapshot["ws_mb"] is None else round(snapshot["ws_mb"]),
+                             snapshot["gdi"])
+                    last_report = time.monotonic()
                 reason = reader.meter.should_stop()
                 if reason:
                     log.warning("realtime: stopping: %s", reason)
