@@ -100,8 +100,9 @@ Event JSON schema:
 
 Rules:
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
-- `death.killer` is the source of the last damage to the player within 5s
-  (from the combat log), or the environment type (`"Falling"`), else `null`.
+- `death.killer` is always `null` from the addon for now (see beta facts:
+  the combat log is protected). Reserved for the companion's combat-log
+  tailer to fill in.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -242,6 +243,11 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - [x] TOC `## Interface:` version: `16001` (client `1.60.1 70124`, Sep 29 2026).
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
+- [x] **`COMBAT_LOG_EVENT_UNFILTERED` is protected for addons** (as in the
+  current retail engine). Registering it at load pops "DOINK has been blocked
+  from an action only available to the Blizzard UI". It doesn't throw, so
+  `pcall` can't catch it. Never register it; `addon/tests` guards this.
+  Combat-log data must come from the companion reading `WoWCombatLog.txt`.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [ ] `QUEST_TURNED_IN` exists, and does `C_QuestLog.GetQuestInfo` give titles? ______
 - [ ] `SKILL_RANK_UP` global text (`/run print(SKILL_RANK_UP)`): ______
