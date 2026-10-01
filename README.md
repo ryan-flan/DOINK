@@ -15,7 +15,9 @@ WoW addons can't talk to the internet, so DOINK comes in two parts:
 
 > **Posts arrive when WoW saves addon data:** on `/reload`, logout, or exit.
 > That's a WoW limitation, not a setting. Play normally and your session posts
-> when you log out, or type `/doink flush` to post right away.
+> when you log out, or type `/doink flush` to post right away. There is also
+> an opt-in, experimental **realtime** mode that posts while you play; see
+> [How realtime works](#how-realtime-works-experimental).
 
 ## Install
 
@@ -62,6 +64,10 @@ over the one in DOINK's settings: per character first, then
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
+- **Realtime (off unless you turn it on):** reads the top and bottom 24 pixel
+  rows of the WoW window while it's the active window, looking for the
+  addon's strip. Nothing else on screen, never saved, and it watches its own
+  CPU and memory use (details below).
 - **Uninstall:** untick Start with Windows, quit, delete the folder.
 
 Every release is built from this repository's source by
@@ -70,12 +76,60 @@ the release's workflow run. Check your download against the `.sha256` file on
 the release page:
 
 ```powershell
-Get-FileHash DOINK-v0.5.0.zip -Algorithm SHA256
+Get-FileHash DOINK-v0.6.0.zip -Algorithm SHA256
 ```
 
 > Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
 > (*More info → Run anyway*). Code signing costs money per year; it may come
 > later.
+
+## How realtime works (experimental)
+
+WoW only writes addon data on `/reload` or logout, and in the Forever beta
+every other way out of the client is shut: addons can't read the combat log,
+and the chat and combat log *files* are written minutes or hours late. The
+one thing an addon can always do is draw on the screen. So realtime mode
+works like this:
+
+1. **In game**, after an event, the addon shows a strip of small black and
+   white blocks, a bit like a barcode, in a corner of the screen. It's
+   9 pixels tall and up to 1200 wide, shows the event's text encoded as bits,
+   and disappears after about two seconds. Nothing shows between events.
+2. **The companion** looks at the top and bottom 24 pixel rows of the WoW
+   window a few times a second, finds the strip, checks it (every strip
+   carries checksums), and posts the event. Typical delay: under a second.
+
+What it does **not** do: it doesn't read the game's memory, doesn't send any
+input to the game, and doesn't inject anything into it. It reads pixels that
+your own addon put on screen, the same technique the DiscordRichPresence
+addon has used for years. We can't speak for Blizzard, which is why it's
+opt-in and labelled experimental.
+
+**Cost.** Each look copies two thin bands of the window (about 250 KB) into a
+buffer that is allocated once and reused, and decodes them in place; on a
+3440-pixel-wide window that's roughly a millisecond, so well under 1% of one
+CPU core. The companion measures its own capture time, memory and Windows
+handle count while realtime is on, shows them in the settings window, and
+**turns realtime off by itself** if captures get slow or memory climbs. The
+normal posting path is unaffected either way.
+
+**Reliability.** Realtime is best effort on top of the normal path. If the
+companion misses a strip (WoW was behind another window, or something
+covered the strip), the event still posts at the next `/reload` or logout,
+and nothing ever posts twice.
+
+**Turning it on** takes two steps, because the companion can't reach into the
+game:
+
+1. Settings window → tick **Realtime posting**.
+2. In game: `/doink realtime on`. Then `/doink realtime test` shows a test
+   pattern for ten seconds; the settings window should report it.
+
+If something external sits in that corner (the Discord overlay's voice widget
+defaults to the top-left), move the strip: `/doink realtime position
+bottomright` (or `topright`, `bottomleft`). Realtime only reads while WoW is
+the active window; events that happen while you're alt-tabbed post at the
+next reload. `/doink realtime off` removes the strip entirely.
 
 ## In-game commands
 
@@ -90,6 +144,9 @@ Get-FileHash DOINK-v0.5.0.zip -Algorithm SHA256
 | `/doink webhook here <url>` | Webhook for this character only (e.g. one channel per alt) |
 | `/doink webhook [here] clear` | Remove it |
 | `/doink test <type>` | Queue a fake event to check your setup |
+| `/doink realtime on\|off` | Experimental: show events as a strip for the companion to read live |
+| `/doink realtime test` | Show a test pattern for 10 s |
+| `/doink realtime position <corner>` | `topleft` (default), `topright`, `bottomleft`, `bottomright` |
 | `/doink flush` | Reload now so pending events post |
 | `/doink dump [n]`, `/doink debug` | For troubleshooting |
 
@@ -123,8 +180,8 @@ newest 10 queued events.
 
 ## Known limitations
 
-- Not realtime (see above). The beta client's chat and combat log files stay
-  empty during play, so there's no faster route yet.
+- Posts normally arrive on `/reload` or logout. Realtime mode is experimental
+  and only reads while WoW is the active window.
 - Deaths don't say what killed you: Forever blocks addons from reading the
   combat log.
 - Boss kills aren't confirmed in Forever dungeons yet.
@@ -144,8 +201,11 @@ cd companion && python3 main.py --dry-run     # console mode
 cd companion && python main.py --tray          # tray mode (Windows Python)
 ```
 
-The tray, autostart and single-instance code (`tray.py`, `autostart.py`)
-talks to Win32 directly through `ctypes`; its tests run on the Windows CI job.
+The tray, autostart, single-instance and screen-reading code (`tray.py`,
+`autostart.py`, `pixel.py`) talks to Win32 directly through `ctypes`; its
+tests run on the Windows CI job, including a capture leak test. The strip
+encoder is `addon/DOINK/Transports/Pixel.lua`; `addon/tests/fixtures/` holds
+its output for a fixed event, which the Python decoder tests must read back.
 The icon is drawn by `companion/assets/make_icon.py`.
 
 Push a `v*` tag to build `doink.exe` and publish a release. Design notes and

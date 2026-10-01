@@ -38,6 +38,7 @@ DOINK/
 │   ├── Core.lua              # init, SavedVariables, queue, slash commands
 │   ├── Json.lua              # minimal JSON encoder (strings, numbers, bools, tables)
 │   ├── Defaults.lua          # default config table
+│   ├── Transports/Pixel.lua  # realtime strip encoder (experimental, off by default)
 │   └── Notifiers/
 │       ├── LevelUp.lua
 │       ├── Loot.lua
@@ -59,6 +60,7 @@ DOINK/
         ├── status.py         # thread-safe state for the tooltip/notifications
         ├── config.py         # loads config.toml (optional, every key optional)
         ├── discover.py       # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
+        ├── pixel.py          # realtime: GDI capture of two bands, strip decoder, meter
         ├── watcher.py        # polls SavedVariables file mtime
         ├── parser.py         # extracts event JSON strings from the Lua file
         ├── discord.py        # embed builders + webhook POST
@@ -154,6 +156,49 @@ Rules:
 Deferred to v1.1 pending beta findings: achievements (vanilla had none; Forever
 may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 
+## Pixel transport contract (realtime, experimental)
+
+`addon/DOINK/Transports/Pixel.lua` encodes; `companion/doink/pixel.py`
+decodes. `addon/tests/fixtures/pixel_levelup.txt` is the Lua encoder's output
+for a fixed event; the Lua test asserts it, the Python tests decode it, so the
+two implementations can't drift apart. Regenerate with
+`DOINK_WRITE_FIXTURE=1 luajit tests/test_addon.lua` when the layout changes.
+
+- **Strip**: `ROWS=3` rows × `N` blocks of `B`×`B` px (`B` default 3; `N =
+  clamp(floor(screenWidth/B), 104, 400)`). Anchored to a user-chosen corner
+  (`DOINKDB.realtime.position`, default `topleft`), parented to `WorldFrame`,
+  strata `TOOLTIP`, level 10000, mouse disabled, pixel-perfect via
+  `SetIgnoreParentScale(true)` + `SetScale(768/physicalHeight)`.
+- **Bits**: 1 bit per block, 1 = white, 0 = black, opaque.
+- **Row 0**: 16-block sync `1010101010110011`, then MSB-first: `version(4)=1,
+  flags(4)=0, blocks(16), msg_id(16), chunk_index(8), chunk_count(8),
+  payload_len(8), payload_crc16(16), header_crc8(8)`: 104 blocks, rest 0.
+  CRC-16/CCITT-FALSE (0x1021, init 0xFFFF) over the chunk payload; CRC-8
+  (0x07, init 0) over the 10 header bytes.
+- **Rows 1+**: payload bytes MSB-first, row-major, rest 0. Capacity
+  `floor((ROWS-1)*N/8)` bytes per chunk (100 at N=400).
+- **Message** = the event's JSON string exactly as queued (UTF-8), or a hello
+  `{"type":"hello","addon":..,"char":..,"surname":..,"realm":..,"position":..}`
+  (plus `"test":true` from `/doink realtime test`). Hellos are shown as
+  status, never posted.
+- **Timing**: each chunk shows for 250 ms; the outbox (max 8 messages) cycles
+  until each message has been shown 4 times, then the strip hides. No idle
+  heartbeat. A hello is sent at `PLAYER_LOGIN` and on `/doink realtime on`.
+- **Reader**: BitBlt of the top and bottom `BAND_ROWS=24` rows of the client
+  area into one DIB section; finds the sync at any x with per-block-size
+  regexes (±2 px), fits the grid by least squares and keeps refining it from
+  every transition along each row (the sync alone can't pin a fractional
+  block width over 400 blocks), calibrates black/white on the sync blocks,
+  checks both CRCs. 8 Hz while WoW is the foreground window, 1 Hz otherwise;
+  foreground-only (no `PrintWindow`) by design.
+- **Dedupe**: `state.json` gained `missing`: seqs below `last_seen` not yet
+  posted. Realtime posts call `mark_posted(key, seq, first_sight_backlog)`;
+  the file pass posts `seq > last_seen or seq in missing` and prunes gaps the
+  file can't fill. Both workers share one `State` and one `WebhookPool`.
+- **Opt-in on both sides**: `DOINKDB.realtime.enabled` (addon) and
+  `realtime` in `config.toml` (companion), both default false. Nothing is
+  created in game until `/doink realtime on`.
+
 ## Addon conventions
 
 - File header pattern: `local ADDON, ns = ...` — share state via `ns`, never
@@ -248,6 +293,14 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   every call (64-bit handles). Keep the companion dependency-free; no
   pystray/Pillow. Win32 behaviour is only testable on the Windows CI job
   (`tests/test_windows.py`).
+- Realtime reading has a budget: capture only the two bands, allocate the
+  buffer once, no per-pixel Python objects, decode ≈ 1 ms per capture at
+  3421 px (≈ 5 ms on pure noise). `ResourceMeter` samples capture time,
+  working set and GDI handle count; `RealtimeWorker` stops itself (and says
+  why in the settings window) if captures average > 25 ms or memory/handles
+  grow > 50 MB / 50 past the first sample. The Windows CI job runs a
+  1000-capture leak test. Status updates from the reader never notify the
+  tray except on an on/off change.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the
@@ -327,15 +380,14 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   from an action only available to the Blizzard UI". It doesn't throw, so
   `pcall` can't catch it. Never register it; `addon/tests` guards this.
   Combat-log data must come from the companion reading `WoWCombatLog.txt`.
-- [x] **`/chatlog` is useless as a realtime transport** (tested 2026-10-01):
-  `Logs\WoWChatLog.txt` is created at `/chatlog` but stayed 0 bytes after a
-  self-whisper, for 80s+ and after turning logging off. Retest at launch.
-- [x] **`/combatlog` doesn't write during play either** (tested 2026-10-01):
-  `Logs\WoWCombatLog-MMDDYY_HHMMSS.txt` (timestamped name) is created but
-  stayed empty through a full fight, verified by reading the file through an
-  open handle, not just the directory size. So the combat-log tailer is
-  blocked in beta too. Next: check whether both logs fill on logout.
-  Until then the pixel bridge is the only realtime path.
+- [x] **Log files are written late, not never** (tested 2026-10-01):
+  `Logs\WoWChatLog.txt` stayed 0 bytes through a self-whisper and after
+  `/chatlog` off, then filled on exit about an hour later (1.9 KB; the
+  whisper is in it, both directions). `Logs\WoWCombatLog-MMDDYY_HHMMSS.txt`
+  stayed empty through a fight and filled ~4 minutes after it (50 KB). So
+  neither file is a realtime transport; the pixel bridge is. The combat log
+  header reads `COMBAT_LOG_VERSION,22,...,BUILD_VERSION,1.60.1,PROJECT_ID,18`
+  (Forever's project id is 18). Retest the flush timing at launch.
 - [x] **Surnames.** `UnitName("player")` and `UnitFullName("player")` both
   return `"Paul", "Hebbs"` (surname where other clients put the realm);
   `GetUnitName("player", true)` returns `"Paul Hebbs"`. Related APIs exist
@@ -393,8 +445,11 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 - **Post-M4 (done):** v0.3.0 surnames; v0.4.0 tray app, Start with Windows,
   MIT license; v0.5.0 settings window (webhook + test message, WoW folder
   picker, recent posts).
-- **Later:** combat-log tailer (realtime deaths/boss kills), pixel bridge
-  (realtime everything), options UI (Ace3), rare kills, achievements.
+- **v0.6.0:** realtime via the pixel bridge (experimental, opt-in both
+  sides). See "Pixel transport contract". Not done: `PrintWindow` capture
+  for an alt-tabbed WoW; `Screenshot()`-based capture as a fallback.
+- **Later:** combat-log tailer if the file ever flushes promptly (realtime
+  deaths with killer), options UI (Ace3), rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style

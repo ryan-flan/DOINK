@@ -24,5 +24,10 @@
 # queued events (the queue holds up to 500). 0 = post nothing old.
 # max_backlog = 10
 
+# Experimental: read the addon's strip off the WoW window and post while you
+# play. Set by the settings window's "Realtime posting" checkbox; also needs
+# /doink realtime on in game. See README, "How realtime works".
+# realtime = false
+
 # Notifier on/off switches and filters live in the game now:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>
