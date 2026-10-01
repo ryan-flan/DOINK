@@ -2,20 +2,45 @@
 -- and drive it with real-format events. Lua 5.1 / LuaJIT.
 --   cd addon && luajit tests/test_addon.lua
 
-local ROOT = (arg and arg[0] or ""):match("^(.*)/tests/") or "."
-ROOT = ROOT .. "/DOINK"
+local BASE = (arg and arg[0] or ""):match("^(.*)/tests/") or "."
+local ROOT = BASE .. "/DOINK"
+local FIXTURES = BASE .. "/tests/fixtures"
 
 ------------------------------------------------------------------ WoW stubs
 
 local frames = {}
-function CreateFrame()
-  local f = { events = {} }
+function CreateFrame(_, _, parent)
+  local f = { events = {}, shown = false, textures = {}, parent = parent }
   function f:RegisterEvent(e) self.events[e] = true end
   function f:UnregisterEvent(e) self.events[e] = nil end
-  function f:SetScript(_, fn) self.onEvent = fn end
+  function f:SetScript(kind, fn)
+    if kind == "OnUpdate" then self.onUpdate = fn else self.onEvent = fn end
+  end
+  function f:SetFrameStrata(s) self.strata = s end
+  function f:SetFrameLevel(l) self.level = l end
+  function f:EnableMouse(on) self.mouse = on end
+  function f:SetIgnoreParentScale(on) self.ignoreParentScale = on end
+  function f:SetScale(s) self.scale = s end
+  function f:SetSize(w, h) self.w, self.h = w, h end
+  function f:ClearAllPoints() self.point = nil end
+  function f:SetPoint(p, rel, rp, x, y) self.point = { p, rel, rp, x, y } end
+  function f:Show() self.shown = true end
+  function f:Hide() self.shown = false end
+  function f:IsShown() return self.shown end
+  function f:GetEffectiveScale() return 1 end
+  function f:CreateTexture()
+    local t = {}
+    function t:SetSize(w, h) self.w, self.h = w, h end
+    function t:SetPoint(_, _, _, x, y) self.x, self.y = x, y end
+    function t:SetColorTexture(r) self.color = r end
+    f.textures[#f.textures + 1] = t
+    return t
+  end
   frames[#frames + 1] = f
   return f
 end
+WorldFrame = CreateFrame("Frame")
+function GetPhysicalScreenSize() return 1920, 1080 end
 
 local function fire(event, ...)
   for _, f in ipairs(frames) do
@@ -74,7 +99,8 @@ print = function(s) printed[#printed + 1] = s end
 local ns = {}
 for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
-    "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua" }) do
+    "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
+    "Transports/Pixel.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
 
@@ -305,6 +331,132 @@ test("every notifier has a working /doink test fixture", function()
     eq(count(), n + 1, t)
     assert(has('"test":true'), last())
   end
+end)
+
+------------------------------------------------------------------ realtime
+
+local Pixel = ns.Transports.Pixel
+local T = Pixel._test
+
+local function bitString(row, n)
+  local out = {}
+  for c = 1, n do out[c] = tostring(row[c] or 0) end
+  return table.concat(out)
+end
+
+local function field(row, offset, width) -- MSB-first integer from row bits
+  local v = 0
+  for i = offset + 1, offset + width do v = v * 2 + (row[i] or 0) end
+  return v
+end
+
+test("realtime: off by default and creates nothing until enabled", function()
+  eq(DOINKDB.realtime.enabled, false, "default")
+  slash("test levelup")
+  eq(T.frame(), nil, "no frame while off")
+  assert(slash(""):find("realtime (experimental): off", 1, true))
+end)
+
+test("realtime: CRCs match the standard check values", function()
+  eq(T.crc16("123456789"), 0x29B1, "CRC-16/CCITT-FALSE")
+  eq(T.crc8("123456789"), 0xF4, "CRC-8")
+end)
+
+test("realtime: chunk layout, header fields and padding", function()
+  local msg = string.rep("x", 150)
+  local chunks = Pixel.Encode(400, 0x1234, msg)
+  eq(#chunks, 2, "150 bytes at 100/chunk")
+  local row0 = chunks[2][1]
+  eq(bitString(row0, 16), "1010101010110011", "sync")
+  eq(field(row0, 16, 4), 1, "version")
+  eq(field(row0, 20, 4), 0, "flags")
+  eq(field(row0, 24, 16), 400, "blocks")
+  eq(field(row0, 40, 16), 0x1234, "msg id")
+  eq(field(row0, 56, 8), 1, "chunk index")
+  eq(field(row0, 64, 8), 2, "chunk count")
+  eq(field(row0, 72, 8), 50, "payload length of the last chunk")
+  eq(field(row0, 80, 16), T.crc16(msg:sub(101)), "payload crc")
+  eq(#bitString(row0, 400), 400, "row 0 padded to width")
+  -- First data row of chunk 1: 'x' = 0x78 = 01111000, repeated.
+  eq(bitString(chunks[1][2], 16), "0111100001111000", "data bits")
+  -- Chunk 2 has 50 bytes = 400 bits: fills row 1 exactly, row 2 is padding.
+  eq(bitString(chunks[2][3], 400), string.rep("0", 400), "padding")
+end)
+
+test("realtime: on builds the strip, says hello, cycles, then hides", function()
+  slash("realtime on")
+  local f = T.frame()
+  assert(f and f.parent == WorldFrame, "frame parented to WorldFrame")
+  eq(f.strata, "TOOLTIP", "strata"); eq(f.mouse, false, "mouse off")
+  eq(f.ignoreParentScale, true, "ignores parent scale")
+  assert(math.abs(f.scale - 768 / 1080) < 1e-9, "pixel-perfect scale")
+  local n, b = T.geometry()
+  eq(n, 400, "blocks (1920/3 capped at 400)"); eq(b, 3, "block px")
+  eq(#f.textures, 3 * 400, "one texture per block")
+  eq(f.w, 1200, "width px"); eq(f.h, 9, "height px")
+  eq(f.point[1], "TOPLEFT", "default corner")
+
+  assert(f:IsShown(), "hello shows the strip immediately")
+  local outbox = T.outbox()
+  eq(#outbox, 1, "hello queued")
+  local chunks = #outbox[1].chunks
+  assert(chunks >= 1, "hello encoded")
+  local first = T.current()
+  assert(first == outbox[1].chunks[1], "chunk 1 painted first")
+  -- Painted colours follow the bits.
+  eq(f.textures[1].color, 1, "sync starts white"); eq(f.textures[2].color, 0, "then black")
+
+  T.advance(0.1)
+  assert(T.current() == first, "nothing changes before 0.25s")
+  T.advance(0.15)
+  if chunks > 1 then assert(T.current() == outbox[1].chunks[2], "chunk 2 next") end
+  for _ = 2, chunks * 4 do T.advance(0.25) end
+  assert(not f:IsShown(), "hidden after 4 showings")
+  eq(#T.outbox(), 0, "outbox drained")
+end)
+
+test("realtime: emitted events are queued, outbox is capped at 8", function()
+  slash("test levelup 10")
+  eq(#T.outbox(), 8, "capped")
+  assert(T.frame():IsShown(), "showing")
+  slash("realtime off")
+  eq(#T.outbox(), 0, "cleared on off")
+  assert(not T.frame():IsShown(), "hidden on off")
+  slash("test levelup")
+  eq(#T.outbox(), 0, "nothing queued while off")
+end)
+
+test("realtime: position and block commands", function()
+  slash("realtime on")
+  assert(slash("realtime position top-right"):find("topright", 1, true))
+  eq(T.frame().point[1], "TOPRIGHT", "repositioned")
+  eq(DOINKDB.realtime.position, "topright", "saved")
+  assert(slash("realtime position middle"):find("usage", 1, true))
+  assert(slash("realtime block 9"):find("usage", 1, true))
+  slash("realtime block 4")
+  eq(DOINKDB.realtime.block, 4, "block saved for next reload")
+  assert(slash("realtime"):find("on, topright", 1, true))
+  slash("realtime off")
+end)
+
+test("realtime: fixture matches (shared with the companion's decoder tests)", function()
+  local payload = '{"char":"Paul","class":"WARRIOR","data":{"level":10},"level":10,'
+    .. '"realm":"Classic Beta PvE 2","seq":3,"surname":"Hebbs","test":true,'
+    .. '"ts":1790870000,"type":"level_up"}'
+  local chunks = Pixel.Encode(400, 4660, payload)
+  local lines = { "msg_id 4660", "blocks 400", "rows 3", "payload " .. payload }
+  for i, rows in ipairs(chunks) do
+    lines[#lines + 1] = "chunk " .. (i - 1)
+    for r = 1, 3 do lines[#lines + 1] = bitString(rows[r], 400) end
+  end
+  local text = table.concat(lines, "\n") .. "\n"
+  local path = FIXTURES .. "/pixel_levelup.txt"
+  if os.getenv("DOINK_WRITE_FIXTURE") then
+    local f = assert(io.open(path, "w")); f:write(text); f:close()
+  end
+  local f = assert(io.open(path, "r"), "fixture missing; run with DOINK_WRITE_FIXTURE=1")
+  local expected = f:read("*a"); f:close()
+  eq(text, expected, "fixture")
 end)
 
 print = io.write

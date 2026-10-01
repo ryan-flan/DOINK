@@ -6,6 +6,10 @@ local MAX_EVENTS = 500
 
 -- Notifier files (loaded after this one) register themselves here.
 ns.Notifiers = {}
+-- Transports carry events out of the game faster than SavedVariables can.
+-- Core never knows how; it just hands them the JSON. Each exposes
+-- Send(json), SetEnabled(bool), OnLogin() and Status().
+ns.Transports = {}
 
 local frame = CreateFrame("Frame")
 local handlers = {} -- event name -> list of notifiers listening to it
@@ -72,6 +76,8 @@ local function InitDB()
   db.version = db.version or DB_VERSION
   db.chars = db.chars or {}
   db.webhooks = db.webhooks or {} -- ["*"] = account-wide, ["Name-Realm"] = per char
+  -- Realtime (pixel transport) is experimental and opt-in; see Transports/.
+  db.realtime = db.realtime or { enabled = false, position = "topleft", block = 3 }
   -- Future migrations go here:
   -- if db.version < 2 then ... db.version = 2 end
   ns.db = db
@@ -167,6 +173,10 @@ function ns:Emit(eventType, data, isTest)
   end
 
   self:Debug("emit %s", json)
+  for _, transport in pairs(ns.Transports) do
+    -- A transport bug must never cost the queued event above.
+    xpcall(function() transport.Send(json) end, geterrorhandler())
+  end
   return envelope
 end
 
@@ -221,6 +231,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "PLAYER_LOGIN" then
     InitChar()
     RegisterNotifiers()
+    for _, transport in pairs(ns.Transports) do
+      xpcall(transport.OnLogin, geterrorhandler())
+    end
   else
     if event == "PLAYER_LEVEL_UP" then
       ns.knownLevel = ... -- before notifiers run, so their Emit sees it
@@ -271,6 +284,7 @@ local HELP = {
   "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
   "/doink reset <type> - back to defaults",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
+  "/doink realtime on|off|test|position <corner> - post without reloading (experimental)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
   "/doink debug - toggle verbose logging",
@@ -355,6 +369,7 @@ commands[""] = function()
   ns:Print("queue %d/%d, last seq %d, debug %s",
     #char.events, MAX_EVENTS, char.seq, DOINKDB.debug and "on" or "off")
   ns:Print("webhook: %s", WebhookStatus())
+  ns:Print("realtime (experimental): %s", ns.Transports.Pixel.Status())
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
       and "|cff60ff60on|r" or "|cffff6060off|r"
@@ -492,6 +507,52 @@ commands.webhook = function(args)
   else
     ns:Print("that doesn't look like a Discord webhook URL "
       .. "(https://discord.com/api/webhooks/...)")
+  end
+end
+
+commands.realtime = function(args)
+  local pixel = ns.Transports.Pixel
+  local settings = DOINKDB.realtime
+  local sub, rest = args:match("^(%S*)%s*(.-)$")
+  sub = sub:lower()
+
+  if sub == "on" or sub == "off" then
+    pixel.SetEnabled(sub == "on")
+    if sub == "on" then
+      ns:Print("realtime on (experimental): events also show as a strip in the "
+        .. "%s corner for the companion to read. Tick \"Realtime posting\" in "
+        .. "the companion's settings too.", settings.position)
+    else
+      ns:Print("realtime off")
+    end
+  elseif sub == "test" then
+    if not settings.enabled then
+      ns:Print("realtime is off. /doink realtime on first")
+      return
+    end
+    pixel.Hello(true)
+    ns:Print("showing a test pattern for 10s; the companion's settings window "
+      .. "should report it")
+  elseif sub == "position" then
+    rest = rest:lower():gsub("[%s_-]", "")
+    if not pixel.CORNERS[rest] then
+      ns:Print("usage: /doink realtime position topleft|topright|bottomleft|bottomright")
+      return
+    end
+    settings.position = rest
+    pixel.Reposition()
+    ns:Print("realtime strip moved to the %s corner", rest)
+  elseif sub == "block" then
+    local n = tonumber(rest)
+    if not n or n < 2 or n > 8 or n ~= math.floor(n) then
+      ns:Print("usage: /doink realtime block <2-8> (pixels per block; default 3)")
+      return
+    end
+    settings.block = n
+    ns:Print("block size set to %dpx; takes effect after /reload", n)
+  else
+    ns:Print("realtime (experimental): %s", pixel.Status())
+    ns:Print("usage: /doink realtime on|off|test|position <corner>|block <n>")
   end
 end
 
