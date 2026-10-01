@@ -186,6 +186,31 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   `/etrace`, `/dump`, `/fstack`, `/console scriptErrors 1`.
 - SavedVariables path:
   `<WoW>\<flavor>\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua`
+- `git` and `gh` are installed only in WSL, not on the Windows PATH. From
+  PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && git ..."`.
+- Remote: https://github.com/ryan-flan/DOINK (private), default branch `main`.
+
+## Commits
+
+[Conventional Commits](https://www.conventionalcommits.org):
+
+```
+<type>(<scope>): <imperative summary, lowercase, no trailing period>
+
+<optional body: what and why, wrapped at ~72>
+```
+
+- Types: `feat`, `fix`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`,
+  `perf`, `style`.
+- Scopes: `addon`, `companion`, `contract` (the data contract above). Omit the
+  scope for repo-wide changes (e.g. `docs: update milestones`).
+- Any change to the data contract uses `!` and a `BREAKING CHANGE:` footer,
+  e.g. `feat(contract)!: rename quest.xp to quest.xp_reward`. Both halves
+  depend on it.
+- One logical change per commit. Don't mix addon and companion changes unless
+  they're a single contract change that touches both.
+- History is changelog fodder (BigWigs packager later), so write summaries for
+  a player reading release notes, not for yourself.
 
 ## Beta facts to fill in (TODO — do not guess these)
 
