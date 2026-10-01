@@ -51,6 +51,9 @@ DOINK/
     ├── config.example.toml
     ├── tests/                # python -m unittest discover -s tests
     └── doink/
+        ├── runner.py         # the watch-and-post loop (process, run)
+        ├── app.py            # controller for the UI: settings, watcher restart
+        ├── ui.py             # settings window (tkinter, dark theme)
         ├── tray.py           # Windows tray icon + single-instance lock (ctypes Win32)
         ├── autostart.py      # "Start with Windows": HKCU\...\Run\DOINK
         ├── status.py         # thread-safe state for the tooltip/notifications
@@ -228,9 +231,17 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   its queued events. If the newest seq is below `last_seen` (SavedVariables
   wiped), treat the character as new.
 - **Two modes.** `python3 main.py` (WSL/dev) is a console app. The packaged
-  Windows build (`doink.exe`, `--noconsole`) and `--tray` run as a tray app:
-  the tray owns the main thread (Win32 message loop), the watcher runs in a
-  worker thread with a stop `Event`, and they talk through `Status`. Tray
+  Windows build (`doink.exe`, `--noconsole`) and `--tray` run as a tray app
+  with three threads: Tk owns the main thread (settings window), the tray
+  runs its own Win32 message loop, and the watcher runs with a stop `Event`.
+  Tray → Tk goes through a `queue.Queue` polled with `root.after` (Tk isn't
+  thread-safe); watcher → both goes through `Status`. `App` owns config and
+  the watcher: webhook changes apply live (`config.webhook_url` is read per
+  post), folder changes restart the watcher.
+- Settings window writes `config.toml` via `config.save_settings` (comments
+  aren't preserved). Webhook precedence: in-game per-char > in-game `*` >
+  settings window. It opens itself on first run (`App.needs_setup()`), and
+  "WoW not found" is a state the window resolves, not a fatal error. Tray
   mode logs to `doink.log` next to the exe (rotating, ~2 MB max), never
   `print`s (there's no stdout), and shows startup errors in a message box.
 - Tray code is ctypes against Win32 with explicit `argtypes`/`restype` on
@@ -368,7 +379,8 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
     install locations so it rarely needs setting.
   - `dry_run`, `poll_interval`, `max_backlog` stay companion-side.
 - **Post-M4 (done):** v0.3.0 surnames; v0.4.0 tray app, Start with Windows,
-  MIT license.
+  MIT license; v0.5.0 settings window (webhook + test message, WoW folder
+  picker, recent posts).
 - **Later:** combat-log tailer (realtime deaths/boss kills), pixel bridge
   (realtime everything), options UI (Ace3), CurseForge/Wago packaging via the
   BigWigs packager action, rare kills, achievements.

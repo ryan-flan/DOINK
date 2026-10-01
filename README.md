@@ -24,36 +24,41 @@ WoW addons can't talk to the internet, so DOINK comes in two parts:
 2. Copy `AddOns\DOINK` into your WoW AddOns folder, e.g.
    `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
    Restart WoW completely (new addons are only picked up on start).
-3. In Discord: *Server Settings → Integrations → Webhooks → New Webhook*,
-   choose a channel, *Copy Webhook URL*.
-4. In game, paste it:
-   ```
-   /doink webhook https://discord.com/api/webhooks/...
-   /doink flush
-   ```
-5. Move the `Companion` folder somewhere permanent that you can write to,
+3. Move the `Companion` folder somewhere permanent that you can write to,
    e.g. `Documents\DOINK`, and run `doink.exe`. A gold **D** appears in the
-   system tray (click `^` if it's hidden). It finds your WoW install by itself.
-6. Optional: right-click the tray icon → **Start with Windows**.
+   system tray (click `^` if it's hidden) and the settings window opens.
+4. In Discord: *Server Settings → Integrations → Webhooks → New Webhook*,
+   choose a channel, *Copy Webhook URL*. Paste it into DOINK's settings,
+   click **Save**, then **Send test message** to check it.
+5. Optional: tick **Start DOINK with Windows**.
 
-To check everything works: `/doink test levelup`, then `/doink flush`. A
-`[TEST]` post should appear in your channel a few seconds after the reload.
+DOINK finds your WoW install by itself; if it can't, the settings window
+says so and lets you choose the folder.
 
-### The tray icon
+To check the whole loop in game: `/doink test levelup`, then `/doink flush`.
+A `[TEST]` post should appear a few seconds after the reload.
 
-Hover for the last post, or the current problem. If something goes wrong
-(no webhook set, Discord unreachable) you get a Windows notification once.
-Right-click for **Open log**, **Open DOINK folder**, **Start with Windows**
-and **Quit**.
+### The tray icon and settings
+
+**Left-click** the tray icon for settings: webhook, WoW folder, Start with
+Windows, and your recent posts. Hover for the last post or the current
+problem; if something goes wrong (no webhook, Discord unreachable) you get a
+Windows notification once. **Right-click** for Settings, Open log, Open DOINK
+folder, Start with Windows and Quit. Closing the settings window keeps DOINK
+running in the tray.
+
+**One channel per character?** Set a webhook in game with
+`/doink webhook here <url>` on that character. In-game webhooks take priority
+over the one in DOINK's settings: per character first, then
+`/doink webhook <url>` (all characters), then the settings window.
 
 ## What doink.exe does (and doesn't)
 
-- **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders, and
-  `config.toml` if you made one.
-- **Writes** only inside its own folder: `state.json` (what it has already
-  posted), `doink.log` (capped at ~2 MB).
+- **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
+- **Writes** only inside its own folder: `config.toml` (your settings),
+  `state.json` (what it has already posted), `doink.log` (capped at ~2 MB).
 - **Network:** only HTTPS posts to your Discord webhook. No telemetry, no
-  update checks.
+  update checks. It doesn't listen on any port.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
@@ -65,7 +70,7 @@ the release's workflow run. Check your download against the `.sha256` file on
 the release page:
 
 ```powershell
-Get-FileHash DOINK-v0.4.0.zip -Algorithm SHA256
+Get-FileHash DOINK-v0.5.0.zip -Algorithm SHA256
 ```
 
 > Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
@@ -107,10 +112,10 @@ Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
 
 ## Companion settings
 
-None are needed. To override, copy `config.example.toml` to `config.toml`
-next to `doink.exe`. You can set the SavedVariables path (if WoW isn't in a
-standard folder), a fallback webhook, and `dry_run` (log embeds to
-`doink.log` instead of posting). Restart DOINK after editing it.
+The settings window covers everyday setup and saves to `config.toml` next to
+`doink.exe`. For the rest (`dry_run`, `max_backlog`, `poll_interval`, an
+exact `savedvariables_path`), see `config.example.toml`; quit DOINK before
+editing the file by hand, then start it again.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the

@@ -1,12 +1,17 @@
-# Optional. Copy to config.toml (gitignored) next to main.py / doink.exe and
-# uncomment what you need. With no config.toml at all, DOINK finds your WoW
-# install by itself and uses the webhook set in game (/doink webhook <url>).
+# Optional. The settings window (left-click the tray icon) writes config.toml
+# for you; this file documents every option. To edit config.toml by hand,
+# quit DOINK first. With no config.toml at all, DOINK finds your WoW install
+# by itself and uses the webhook set in game (/doink webhook <url>).
 
-# Only needed if WoW isn't in a standard location (e.g. C:\Program Files (x86)\
-# World of Warcraft). Single quotes = TOML literal string, no escaping needed.
+# The WoW install folder, if it isn't in a standard location. Set by
+# "Choose WoW folder…". Single quotes = TOML literal string, no escaping.
+# wow_dir = 'D:\Games\World of Warcraft'
+
+# Or one exact file; overrides wow_dir.
 # savedvariables_path = 'D:\Games\World of Warcraft\_classic_beta_\WTF\Account\12345678#1\SavedVariables\DOINK.lua'
 
-# Fallback webhook for characters without one set in game. Keep it secret.
+# Webhook for characters without one set in game. Set by the settings
+# window. Keep it secret.
 # webhook_url = "https://discord.com/api/webhooks/..."
 
 # Print embeds to the console instead of posting (same as --dry-run).
