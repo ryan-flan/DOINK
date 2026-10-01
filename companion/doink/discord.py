@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -148,6 +149,13 @@ def build_embed(event: dict) -> dict:
 
 # ------------------------------------------------------------------ transport
 
+WEBHOOK_URL = re.compile(r"^https://(discord|discordapp)\.com/api/webhooks/\d+/[\w-]+$")
+
+
+def is_webhook_url(url: str) -> bool:
+    return bool(WEBHOOK_URL.match(url))
+
+
 class WebhookError(Exception):
     pass
 
@@ -198,3 +206,16 @@ class Webhook:
         if headers.get("X-RateLimit-Remaining") == "0":
             wait = max(wait, float(headers.get("X-RateLimit-Reset-After", 0)))
         self._next_post = time.monotonic() + wait
+
+
+class WebhookPool:
+    """One Webhook per URL, so each keeps its own rate-limit timing."""
+
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
+        self._hooks: dict[str, Webhook] = {}
+
+    def get(self, url: str) -> Webhook:
+        if url not in self._hooks:
+            self._hooks[url] = Webhook(url, dry_run=self.dry_run)
+        return self._hooks[url]

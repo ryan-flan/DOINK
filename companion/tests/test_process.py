@@ -8,15 +8,34 @@ from doink.state import State
 from main import process
 
 
+CONFIG_HOOK = "https://discord.com/api/webhooks/1/config"
+GAME_HOOK = "https://discord.com/api/webhooks/2/account"
+CHAR_HOOK = "https://discord.com/api/webhooks/3/alt"
+
+
 class FakeWebhook:
+    """Stands in for both WebhookPool and Webhook; records which URL got what."""
+
     def __init__(self):
         self.sent = []      # one list of embeds per message
+        self.urls = []      # URL each message went to
         self.fail = False
+        self._url = None
+
+    def get(self, url):
+        self._url = url
+        return self
 
     def send(self, embeds):
         if self.fail:
             raise WebhookError("boom")
         self.sent.append(embeds)
+        self.urls.append(self._url)
+
+
+def webhooks_block(**hooks):
+    entries = "".join(f'["{k}"] = "{v}",\n' for k, v in hooks.items())
+    return '["webhooks"] = {\n' + entries + "},\n"
 
 
 def events_file(*seqs, char="Paul", event_type="level_up"):
@@ -32,14 +51,14 @@ class ProcessTest(unittest.TestCase):
     def setUp(self):
         tmp = Path(tempfile.mkdtemp())
         self.sv = tmp / "DOINK.lua"
-        self.config = Config(savedvariables_path=self.sv, webhook_url="",
+        self.config = Config(savedvariables_paths=[self.sv], webhook_url=CONFIG_HOOK,
                              state_path=tmp / "state.json", max_backlog=10)
         self.webhook = FakeWebhook()
 
     def run_with(self, text, state=None):
         self.sv.write_text(text, encoding="utf-8")
         state = state or State(self.config.state_path)
-        return process(self.config, state, self.webhook), state
+        return process(self.config, self.sv, state, self.webhook), state
 
     def test_posts_only_new_and_survives_restart(self):
         self.run_with(events_file(1, 2))
@@ -71,11 +90,34 @@ class ProcessTest(unittest.TestCase):
         self.assertEqual(self.webhook.sent, [])
         self.assertEqual(state.last_seen("Paul-R"), 3)
 
-    def test_disabled_type_is_skipped_but_advances(self):
-        self.config.notifiers = {"level_up": False}
-        _, state = self.run_with(events_file(1, 2))
+    def test_webhook_precedence_char_then_account_then_config(self):
+        text = (webhooks_block(**{"*": GAME_HOOK, "Alt-R": CHAR_HOOK})
+                + events_file(1) + events_file(1, char="Alt") + events_file(1, char="Bob"))
+        self.run_with(text)
+        self.assertEqual(sorted(self.webhook.urls), sorted([GAME_HOOK, CHAR_HOOK, GAME_HOOK]))
+
+        self.webhook.urls.clear()
+        self.run_with(events_file(1, 2))  # no in-game webhooks at all
+        self.assertEqual(self.webhook.urls, [CONFIG_HOOK])
+
+    def test_no_webhook_anywhere_keeps_events_for_later(self):
+        self.config.webhook_url = ""
+        with self.assertLogs("doink", "ERROR"):
+            ok, state = self.run_with(events_file(1, 2))
+        self.assertFalse(ok)
         self.assertEqual(self.webhook.sent, [])
-        self.assertEqual(state.last_seen("Paul-R"), 2)
+        self.assertIsNone(state.last_seen("Paul-R"))
+
+        # Set in game -> next reload posts them.
+        ok, _ = self.run_with(webhooks_block(**{"*": GAME_HOOK}) + events_file(1, 2))
+        self.assertTrue(ok)
+        self.assertEqual(len(self.webhook.sent[0]), 2)
+
+    def test_bad_game_webhook_is_refused(self):
+        with self.assertLogs("doink", "ERROR"):
+            ok, _ = self.run_with(webhooks_block(**{"*": "https://evil.example/x"}) + events_file(1))
+        self.assertFalse(ok)
+        self.assertEqual(self.webhook.sent, [])
 
     def test_failure_keeps_state_for_retry(self):
         state = State(self.config.state_path)

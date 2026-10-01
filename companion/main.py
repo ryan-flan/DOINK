@@ -9,8 +9,9 @@ from collections import defaultdict
 from pathlib import Path
 
 from doink.config import Config, load_config
-from doink.discord import MAX_EMBEDS_PER_MESSAGE, Webhook, WebhookError, build_embed
-from doink.parser import char_key, parse_events
+from doink.discord import (MAX_EMBEDS_PER_MESSAGE, WebhookError, WebhookPool,
+                           build_embed, is_webhook_url)
+from doink.parser import char_key, parse_events, parse_webhooks
 from doink.state import State
 from doink.watcher import Watcher
 
@@ -19,20 +20,35 @@ log = logging.getLogger("doink")
 MAX_RETRY_DELAY = 60.0
 
 
-def process(config: Config, state: State, webhook: Webhook) -> bool:
-    """Post every event newer than what we've seen. Returns False if a post
-    failed; state is saved after each message, so a retry resumes cleanly."""
+def app_dir() -> Path:
+    """Where config.toml and state.json live: next to the .exe when frozen
+    by PyInstaller (``__file__`` is then a temp dir), else next to main.py."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def webhook_for(key: str, game_hooks: dict[str, str], config: Config) -> str:
+    return game_hooks.get(key) or game_hooks.get("*") or config.webhook_url
+
+
+def process(config: Config, path: Path, state: State, pool: WebhookPool) -> bool:
+    """Post every event newer than what we've seen. Returns False if anything
+    is left to retry; state is saved after each message, so a retry resumes
+    cleanly."""
     try:
         # latin-1 maps bytes 1:1; the parser decodes UTF-8 per string.
-        text = config.savedvariables_path.read_bytes().decode("latin-1")
+        text = path.read_bytes().decode("latin-1")
     except OSError as e:
-        log.warning("can't read %s: %s", config.savedvariables_path, e)
+        log.warning("can't read %s: %s", path, e)
         return False
 
+    game_hooks = parse_webhooks(text)
     by_char = defaultdict(list)
     for event in parse_events(text):
         by_char[char_key(event)].append(event)
 
+    ok = True
     for key, events in by_char.items():
         events.sort(key=lambda e: e["seq"])
         newest = events[-1]["seq"]
@@ -53,8 +69,20 @@ def process(config: Config, state: State, webhook: Webhook) -> bool:
         else:
             new = [e for e in events if e["seq"] > last]
 
-        to_post = [e for e in new if config.enabled(e["type"])]
-        for chunk in itertools.batched(to_post, MAX_EMBEDS_PER_MESSAGE):
+        url = webhook_for(key, game_hooks, config)
+        if new and not config.dry_run:
+            if not url:
+                log.error("%s: no webhook. In game: /doink webhook <url>, then /reload "
+                          "(or set webhook_url in config.toml)", key)
+                ok = False
+                continue  # state untouched: these post once a webhook exists
+            if not is_webhook_url(url):
+                log.error("%s: webhook isn't a Discord webhook URL", key)
+                ok = False
+                continue
+
+        for chunk in itertools.batched(new, MAX_EMBEDS_PER_MESSAGE):
+            webhook = pool.get(url or "dry-run")
             try:
                 webhook.send([build_embed(e) for e in chunk])
             except WebhookError as e:
@@ -65,42 +93,44 @@ def process(config: Config, state: State, webhook: Webhook) -> bool:
             state.set_last_seen(key, chunk[-1]["seq"])
 
         if last is None or newest > last:
-            state.set_last_seen(key, newest)  # also skips past disabled types
-    return True
+            state.set_last_seen(key, newest)  # also covers backlog we skipped
+    return ok
 
 
 def run(config: Config, once: bool) -> int:
     state = State(config.state_path, persist=not config.dry_run)
-    webhook = Webhook(config.webhook_url, dry_run=config.dry_run)
+    pool = WebhookPool(dry_run=config.dry_run)
+    paths = config.savedvariables_paths
 
     if once:
-        return 0 if process(config, state, webhook) else 1
+        results = [process(config, p, state, pool) for p in paths]
+        return 0 if all(results) else 1
 
-    log.info("watching %s%s", config.savedvariables_path,
-             " (dry run)" if config.dry_run else "")
-    watcher = Watcher(config.savedvariables_path)
-    dirty = False
+    for path in paths:
+        log.info("watching %s%s", path, " (dry run)" if config.dry_run else "")
+    watchers = [Watcher(p) for p in paths]
+    dirty: set[Path] = set()
     failures = 0
     retry_at = 0.0
     while True:
-        if watcher.poll():
-            dirty = True
+        for watcher in watchers:
+            if watcher.poll():
+                dirty.add(watcher.path)
         if dirty and time.monotonic() >= retry_at:
-            if process(config, state, webhook):
-                dirty = False
-                failures = 0
-            else:
+            dirty = {p for p in dirty if not process(config, p, state, pool)}
+            if dirty:
                 failures += 1
                 delay = min(MAX_RETRY_DELAY, config.poll_interval * 2 ** failures)
                 log.info("retrying in %.0fs", delay)
                 retry_at = time.monotonic() + delay
+            else:
+                failures = 0
         time.sleep(config.poll_interval)
 
 
 def main() -> int:
-    here = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=here / "config.toml")
+    parser.add_argument("--config", type=Path, default=app_dir() / "config.toml")
     parser.add_argument("--dry-run", action="store_true",
                         help="print embeds instead of posting; don't save state")
     parser.add_argument("--once", action="store_true",

@@ -1,27 +1,23 @@
-# Copy to config.toml (gitignored) and edit.
+# Optional. Copy to config.toml (gitignored) next to main.py / doink.exe and
+# uncomment what you need. With no config.toml at all, DOINK finds your WoW
+# install by itself and uses the webhook set in game (/doink webhook <url>).
 
-# Single quotes = TOML literal string, so backslashes need no escaping.
-# <ACCOUNT> is the folder under WTF\Account, e.g. 12345678#1.
-savedvariables_path = 'C:\Program Files (x86)\World of Warcraft\_classic_beta_\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua'
+# Only needed if WoW isn't in a standard location (e.g. C:\Program Files (x86)\
+# World of Warcraft). Single quotes = TOML literal string, no escaping needed.
+# savedvariables_path = 'D:\Games\World of Warcraft\_classic_beta_\WTF\Account\12345678#1\SavedVariables\DOINK.lua'
 
-# Server Settings -> Integrations -> Webhooks -> Copy Webhook URL. Keep secret.
-webhook_url = "https://discord.com/api/webhooks/..."
+# Fallback webhook for characters without one set in game. Keep it secret.
+# webhook_url = "https://discord.com/api/webhooks/..."
 
-# Print embeds to stdout instead of posting (same as --dry-run).
-dry_run = false
+# Print embeds to the console instead of posting (same as --dry-run).
+# dry_run = false
 
 # Seconds between checks of the SavedVariables file.
-poll_interval = 2.0
+# poll_interval = 2.0
 
 # When a character is seen for the first time, post at most this many of its
 # queued events (the queue holds up to 500). 0 = post nothing old.
-max_backlog = 10
+# max_backlog = 10
 
-# Per-type switches. Missing types default to true.
-[notifiers]
-level_up = true
-loot = true
-death = true
-quest = true
-boss_kill = true
-skill_up = true
+# Notifier on/off switches and filters live in the game now:
+#   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>

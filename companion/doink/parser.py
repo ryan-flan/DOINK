@@ -13,6 +13,7 @@ import re
 log = logging.getLogger(__name__)
 
 EVENTS_BLOCK = re.compile(r'\["events"\]\s*=\s*\{')
+WEBHOOKS_BLOCK = re.compile(r'\["webhooks"\]\s*=\s*\{')
 REQUIRED_FIELDS = ("seq", "char", "realm", "type")
 
 # Character after the backslash -> what it stands for.
@@ -43,6 +44,49 @@ def parse_events(text: str) -> list[dict]:
     for match in EVENTS_BLOCK.finditer(text):
         events.extend(_parse_block(text, match.end()))
     return events
+
+
+def parse_webhooks(text: str) -> dict[str, str]:
+    """Return ``DOINKDB.webhooks``: ``{"*": url, "Name-Realm": url}``.
+
+    A flat table of string keys to string values, by design (see the data
+    contract), so a few lines of scanning cover it.
+    """
+    match = WEBHOOKS_BLOCK.search(text)
+    if not match:
+        return {}
+    hooks = {}
+    i, n = match.end(), len(text)
+    try:
+        while i < n:
+            c = text[i]
+            if c in " \t\r\n,":
+                i += 1
+            elif text.startswith("--", i):
+                end = text.find("\n", i)
+                i = n if end == -1 else end
+            elif c == "}":
+                break
+            elif c == "[":
+                key, i = _read_string(text, _expect(text, i + 1, "\"'"))
+                i = _expect(text, i, "]") + 1
+                i = _expect(text, i, "=") + 1
+                value, i = _read_string(text, _expect(text, i, "\"'"))
+                hooks[_utf8(key)] = _utf8(value)
+            else:
+                raise ParseError(f"unexpected {c!r}")
+    except ParseError as e:
+        log.warning("webhooks block at offset %d: %s", i, e)
+    return hooks
+
+
+def _expect(text: str, i: int, chars: str) -> int:
+    """Skip whitespace; return the index of the next char, which must be one of ``chars``."""
+    while i < len(text) and text[i] in " \t\r\n":
+        i += 1
+    if i >= len(text) or text[i] not in chars:
+        raise ParseError(f"expected one of {chars!r}")
+    return i
 
 
 def _parse_block(text: str, i: int):
@@ -111,8 +155,13 @@ def _read_string(text: str, i: int) -> tuple[str, int]:
     raise ParseError("unterminated string")
 
 
+def _utf8(raw: str) -> str:
+    """Undo the latin-1 decoding of the file for one string value."""
+    return raw.encode("latin-1").decode("utf-8", errors="replace")
+
+
 def _decode_event(raw: str) -> dict | None:
-    text = raw.encode("latin-1").decode("utf-8", errors="replace")
+    text = _utf8(raw)
     try:
         event = json.loads(text)
     except json.JSONDecodeError as e:
