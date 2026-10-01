@@ -29,8 +29,9 @@ assumes a particular transport.
 ```
 DOINK/
 ├── CLAUDE.md
-├── README.md
+├── README.md                 # user-facing install + commands
 ├── .gitattributes            # * text=auto eol=lf
+├── .github/workflows/        # ci.yml: both test suites; release.yml: doink.exe on v* tags
 ├── addon/tests/test_addon.lua  # offline harness: cd addon && luajit tests/test_addon.lua
 ├── addon/DOINK/              # junctioned into <WoW>/<flavor>/Interface/AddOns/DOINK
 │   ├── DOINK.toc
@@ -50,7 +51,8 @@ DOINK/
     ├── config.example.toml
     ├── tests/                # python -m unittest discover -s tests
     └── doink/
-        ├── config.py         # loads + validates config.toml
+        ├── config.py         # loads config.toml (optional, every key optional)
+        ├── discover.py       # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
         ├── watcher.py        # polls SavedVariables file mtime
         ├── parser.py         # extracts event JSON strings from the Lua file
         ├── discord.py        # embed builders + webhook POST
@@ -195,8 +197,16 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   verified), footer `Char-Realm`. Respect the
   webhook rate limit (~30/min); batch if many events arrive from one reload.
 - `--dry-run` prints embeds to stdout instead of POSTing.
-- Config via `config.toml`: `savedvariables_path`, `webhook_url`, per-type
-  enable flags, `dry_run`. Ship `config.example.toml`, gitignore `config.toml`.
+- Zero config is the goal: `config.toml` is optional and so is every key in
+  it (`savedvariables_path`, `webhook_url`, `dry_run`, `poll_interval`,
+  `max_backlog`). Without a path, `discover.py` scans standard WoW folders on
+  every drive, keeping only flavors where `Interface/AddOns/DOINK` exists, and
+  watches every account's file. Notifier toggles are **not** companion config.
+- `config.toml` and `state.json` live next to `main.py`, or next to the .exe
+  when frozen (`main.app_dir()`).
+- Webhooks are per URL (`WebhookPool`) so each keeps its own rate limiting.
+  A character with no resolvable webhook logs an error and its events stay
+  queued (state not advanced) until one is set.
 - Standard library only (`urllib`, `tomllib`); no dependencies.
 - The watcher only reports a change once `(mtime, size)` has held still for one
   poll, so it never reads a half-written file.
@@ -300,8 +310,9 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - **M3 — Notifiers. ✅ Done** (all fixtures post end to end; real-event
   checks still open in beta facts). Loot, Death, Quest, BossKill, SkillUp following the
   LevelUp pattern. Each with a `/doink test` fixture.
-- **M4 — Polish.** Config via slash commands, README, PyInstaller build.
-  Config ownership (decided):
+- **M4 — Polish.** Config via slash commands, README, PyInstaller build
+  (built on GitHub Actions `windows-latest`; no local Windows Python).
+  Config ownership (decided, implemented):
   - Notifier toggles and filters live **only in the addon** (it filters
     before emitting). Remove `[notifiers]` from the companion config.
   - Optional in-game webhook: `/doink webhook <url>` stored in `DOINKDB`,
