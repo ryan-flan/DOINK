@@ -171,7 +171,8 @@ class Webhook:
     def send(self, embeds: list[dict]) -> None:
         payload = {"embeds": embeds}
         if self.dry_run:
-            print(json.dumps(payload, indent=2, ensure_ascii=False), flush=True)
+            # Logged, not printed: the tray build has no console.
+            log.info("dry run, would post:\n%s", json.dumps(payload, indent=2, ensure_ascii=False))
             return
 
         delay = self._next_post - time.monotonic()
