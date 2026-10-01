@@ -105,7 +105,7 @@ Rules:
 - Ring buffer: when `#events > 500`, drop from the front.
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
-  - `loot`:      `{"item_id": 123, "link": "|cff...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234}`
+  - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234}`
   - `death`:     `{"zone": "Westfall", "subzone": "...", "killer": "Defias Pillager"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
   - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "...", "difficulty": 1, "success": true, "group_size": 5}`
@@ -238,7 +238,12 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
-- [ ] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes): ______
+- [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
+  `You receive loot: |cnIQ1:|Hitem:769::::::::8:1491::::::::::|h[Chunk of Boar Meat]|h|r`
+  - Links use the **named-colour** form `|cnIQ<quality>:`, not `|cffRRGGBB`.
+    Never parse quality from the colour hex; use `C_Item.GetItemInfo`, with
+    `IQ<n>` as a fallback while item info is uncached. Item ID: `|Hitem:(%d+)`.
+  - [ ] Stack sample (`...|h|rx2`) not yet seen live; inferred from template.
   - [x] Templates: `LOOT_ITEM_SELF` = `You receive loot: %s`,
     `LOOT_ITEM_SELF_MULTIPLE` = `You receive loot: %sx%d`. **No trailing
     period** (vanilla has one). Build match patterns from these globals,
