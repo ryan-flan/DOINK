@@ -63,7 +63,7 @@ jobs:
           Copy-Item -Recurse addon/DOINK "$out/AddOns/DOINK"
           Copy-Item -Recurse companion/dist/doink/* "$out/Companion/"
           Copy-Item companion/config.example.toml "$out/Companion/"
-          Copy-Item README.md "$out/"
+          Copy-Item README.md, LICENSE "$out/"
           Compress-Archive -Path $out -DestinationPath "package/$name.zip"
           $hash = (Get-FileHash "package/$name.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  $name.zip" | Set-Content -NoNewline "package/$name.zip.sha256"

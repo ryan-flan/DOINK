@@ -21,6 +21,7 @@ TEMPLATE = f"""VSVersionInfo(
       StringStruct('FileDescription', 'DOINK companion: posts WoW events to Discord'),
       StringStruct('FileVersion', '{__version__}'),
       StringStruct('InternalName', 'doink'),
+      StringStruct('LegalCopyright', 'Copyright (c) 2026 Ryan Flanagan. MIT License.'),
       StringStruct('OriginalFilename', 'doink.exe'),
       StringStruct('ProductName', 'DOINK'),
       StringStruct('ProductVersion', '{__version__}'),
