@@ -282,11 +282,12 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
      **addon-only** zip `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta`
      (`move-folders` lifts `addon/DOINK` to the zip root; ignore rules run
      first, so never ignore `addon/` itself). Interface 16xxx → game type
-     `forever`, game version 1.60.1. On tags it uploads to CurseForge/Wago
-     when repo **variables** `CURSEFORGE_PROJECT_ID` / `WAGO_PROJECT_ID` and
-     **secrets** `CF_API_KEY` / `WAGO_API_TOKEN` are set; manual runs pass
-     `-d` and never upload. The store zip never contains `doink.exe`; store
-     pages link to GitHub Releases for the companion.
+     `forever`, game version 1.60.1. On tags it uploads to **CurseForge**
+     (the only store, by choice) when repo **variable**
+     `CURSEFORGE_PROJECT_ID` and **secret** `CF_API_KEY` are set; manual
+     runs pass `-d` and never upload. The store zip never contains
+     `doink.exe`; the CurseForge page (text in `docs/store-description.md`,
+     logo `docs/logo-400.png`) links to GitHub Releases for the companion.
 
 Semver: breaking data-contract changes bump the minor version while < 1.0.
 
@@ -392,8 +393,8 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   MIT license; v0.5.0 settings window (webhook + test message, WoW folder
   picker, recent posts).
 - **Later:** combat-log tailer (realtime deaths/boss kills), pixel bridge
-  (realtime everything), options UI (Ace3), CurseForge/Wago packaging via the
-  BigWigs packager action, rare kills, achievements.
+  (realtime everything), options UI (Ace3), rare kills, achievements.
+  (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style
 

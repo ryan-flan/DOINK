@@ -1,4 +1,4 @@
-# BigWigs packager: builds the addon-only zip for CurseForge and Wago.
+# BigWigs packager: builds the addon-only zip for CurseForge.
 # The addon lives in addon/DOINK; nothing else in the repo (companion,
 # tests, docs) goes into the zip. The companion ships on GitHub Releases.
 package-as: DOINK

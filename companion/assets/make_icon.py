@@ -94,6 +94,11 @@ def main() -> None:
     png.write_bytes(png_entry(render(48)))
     print(f"wrote {png}")
 
+    # CurseForge project logo (not bundled with the app).
+    logo = Path(__file__).resolve().parents[2] / "docs" / "logo-400.png"
+    logo.write_bytes(png_entry(render(400)))
+    print(f"wrote {logo}")
+
 
 if __name__ == "__main__":
     main()
