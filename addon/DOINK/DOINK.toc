@@ -1,12 +1,11 @@
-## Interface: 11507
+## Interface: 16001
 ## Title: DOINK
 ## Notes: Posts in-game events to Discord via the DOINK companion app.
 ## Version: 0.1.0
 ## SavedVariables: DOINKDB
 
-# TODO(beta): ## Interface above is a Classic Era PLACEHOLDER, not the Forever
-# value. Replace with the output of: /run print(select(4, GetBuildInfo()))
-# Until then, tick "Load out of date AddOns" on the character select screen.
+# Interface from: /run print(select(4, GetBuildInfo()))
+# (Forever beta 1.60.1.70124). Bump when the client patches.
 
 # Every notifier is listed up front: TOC changes need a full client restart,
 # Lua changes only need /reload.
