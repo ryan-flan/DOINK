@@ -34,11 +34,15 @@ def is_enabled(name: str = NAME, cmd: str | None = None) -> bool:
 
 def set_enabled(on: bool, name: str = NAME, cmd: str | None = None) -> None:
     import winreg
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
-        if on:
+    if on:
+        # CreateKeyEx, not OpenKey: a fresh profile may not have a Run key yet.
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
+                                winreg.KEY_SET_VALUE) as key:
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, cmd or command())
-        else:
-            try:
-                winreg.DeleteValue(key, name)
-            except FileNotFoundError:
-                pass
+        return
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
+                            winreg.KEY_SET_VALUE) as key:
+            winreg.DeleteValue(key, name)
+    except FileNotFoundError:
+        pass  # no Run key, or no entry: already off
