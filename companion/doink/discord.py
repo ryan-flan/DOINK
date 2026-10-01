@@ -29,11 +29,87 @@ CLASS_COLOURS = {
 }
 DEFAULT_COLOUR = 0x99AAB5
 
+# ITEM_QUALITY_COLORS: poor, common, uncommon, rare, epic, legendary, artifact.
+QUALITY_COLOURS = [0x9D9D9D, 0xFFFFFF, 0x1EFF00, 0x0070DD, 0xA335EE, 0xFF8000, 0xE6CC80]
+
+# Verified against wowhead.com/forever/item=769 and /quest=783.
+WOWHEAD = "https://www.wowhead.com/forever"
+
+
+def format_money(copper: int) -> str:
+    gold, rest = divmod(copper, 10000)
+    silver, copper = divmod(rest, 100)
+    parts = [f"{gold}g"] if gold else []
+    if silver:
+        parts.append(f"{silver}s")
+    if copper or not parts:
+        parts.append(f"{copper}c")
+    return " ".join(parts)
+
+
+def _field(name: str, value) -> dict:
+    return {"name": name, "value": str(value), "inline": True}
+
 
 # ------------------------------------------------------------------ embeds
 
 def _level_up(event: dict, data: dict) -> dict:
     return {"title": f"{event['char']} reached level {data.get('level', '?')}"}
+
+
+def _loot(event: dict, data: dict) -> dict:
+    name = data.get("name") or "an item"
+    qty = data.get("qty") or 1
+    embed = {"title": f"{event['char']} looted {name}" + (f" ×{qty}" if qty > 1 else "")}
+    if isinstance(data.get("item_id"), int):
+        embed["url"] = f"{WOWHEAD}/item={data['item_id']}"
+    quality = data.get("quality")
+    if isinstance(quality, int) and 0 <= quality < len(QUALITY_COLOURS):
+        embed["color"] = QUALITY_COLOURS[quality]
+    if data.get("vendor_value"):
+        embed["fields"] = [_field("Vendor value", format_money(data["vendor_value"]))]
+    return embed
+
+
+def _death(event: dict, data: dict) -> dict:
+    killer = data.get("killer")
+    where = data.get("zone") or "somewhere"
+    if data.get("subzone"):
+        where = f"{data['subzone']}, {where}"
+    return {
+        "title": f"{event['char']} died" + (f" to {killer}" if killer else ""),
+        "description": f"in {where}",
+    }
+
+
+def _quest(event: dict, data: dict) -> dict:
+    embed = {"title": f"{event['char']} completed {data.get('title') or 'a quest'}"}
+    if isinstance(data.get("quest_id"), int):
+        embed["url"] = f"{WOWHEAD}/quest={data['quest_id']}"
+    if data.get("xp"):
+        embed["fields"] = [_field("XP", f"{data['xp']:,}")]
+    return embed
+
+
+def _boss_kill(event: dict, data: dict) -> dict:
+    embed = {"title": f"{event['char']} defeated {data.get('name') or 'a boss'}"}
+    fields = []
+    if data.get("instance"):
+        fields.append(_field("Instance", data["instance"]))
+    if data.get("group_size"):
+        fields.append(_field("Group size", data["group_size"]))
+    if fields:
+        embed["fields"] = fields
+    return embed
+
+
+def _skill_up(event: dict, data: dict) -> dict:
+    skill = data.get("skill") or "a skill"
+    rank = data.get("rank", "?")
+    embed = {"title": f"{event['char']} reached {rank} {skill}"}
+    if data.get("max_rank"):
+        embed["description"] = f"{rank} / {data['max_rank']}"
+    return embed
 
 
 def _generic(event: dict, data: dict) -> dict:
@@ -47,6 +123,11 @@ def _generic(event: dict, data: dict) -> dict:
 
 BUILDERS = {
     "level_up": _level_up,
+    "loot": _loot,
+    "death": _death,
+    "quest": _quest,
+    "boss_kill": _boss_kill,
+    "skill_up": _skill_up,
 }
 
 

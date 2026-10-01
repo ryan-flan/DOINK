@@ -110,10 +110,10 @@ class EmbedTest(unittest.TestCase):
         self.assertTrue(embed["timestamp"].endswith("+00:00"))
 
     def test_unknown_type_falls_back(self):
-        embed = build_embed({"char": "Paul", "realm": "R", "seq": 1, "type": "loot",
-                             "data": {"name": "Carving Knife"}})
-        self.assertEqual(embed["title"], "Paul: loot")
-        self.assertIn("Carving Knife", embed["description"])
+        embed = build_embed({"char": "Paul", "realm": "R", "seq": 1, "type": "achievement",
+                             "data": {"name": "Explore Elwynn Forest"}})
+        self.assertEqual(embed["title"], "Paul: achievement")
+        self.assertIn("Explore Elwynn Forest", embed["description"])
 
 
 if __name__ == "__main__":
