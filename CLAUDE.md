@@ -251,6 +251,12 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - [x] **`/chatlog` is useless as a realtime transport** (tested 2026-10-01):
   `Logs\WoWChatLog.txt` is created at `/chatlog` but stayed 0 bytes after a
   self-whisper, for 80s+ and after turning logging off. Retest at launch.
+- [x] **`/combatlog` doesn't write during play either** (tested 2026-10-01):
+  `Logs\WoWCombatLog-MMDDYY_HHMMSS.txt` (timestamped name) is created but
+  stayed empty through a full fight, verified by reading the file through an
+  open handle, not just the directory size. So the combat-log tailer is
+  blocked in beta too. Next: check whether both logs fill on logout.
+  Until then the pixel bridge is the only realtime path.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
   title resolves (quest 818 "A Solvent Spirit", 625 xp).
