@@ -1,0 +1,53 @@
+name: Release
+
+# Push a tag like v0.2.0 to publish a GitHub release with DOINK-<tag>.zip.
+# Run manually (Actions tab) to build the zip as a workflow artifact only.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Companion tests (on Windows)
+        working-directory: companion
+        run: python -m unittest discover -s tests -v
+
+      - name: Build doink.exe
+        working-directory: companion
+        run: |
+          pip install pyinstaller
+          pyinstaller --onefile --console --name doink main.py
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = if ($env:GITHUB_REF_TYPE -eq "tag") { "DOINK-$env:GITHUB_REF_NAME" } else { "DOINK-dev" }
+          $out = "package/$name"
+          New-Item -ItemType Directory -Force "$out/AddOns", "$out/Companion" | Out-Null
+          Copy-Item -Recurse addon/DOINK "$out/AddOns/DOINK"
+          Copy-Item companion/dist/doink.exe, companion/config.example.toml "$out/Companion/"
+          Copy-Item README.md "$out/"
+          Compress-Archive -Path $out -DestinationPath "package/$name.zip"
+          "ZIP=package/$name.zip" >> $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doink-package
+          path: ${{ env.ZIP }}
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "${{ env.ZIP }}" --title "DOINK ${{ github.ref_name }}" --generate-notes

@@ -1,6 +1,6 @@
 [project]
 name = "doink-companion"
-version = "0.1.0"
+version = "0.2.0"
 description = "Posts DOINK addon events from WoW SavedVariables to a Discord webhook"
 requires-python = ">=3.12"
 dependencies = []  # stdlib only: keeps the later PyInstaller build trivial

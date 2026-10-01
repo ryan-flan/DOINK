@@ -1,5 +1,8 @@
 companion/config.toml
 companion/state.json
 companion/state.tmp
+companion/build/
+companion/dist/
+*.spec
 __pycache__/
 .venv/
