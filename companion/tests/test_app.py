@@ -1,4 +1,5 @@
 import tempfile
+import time
 import tomllib
 import unittest
 from pathlib import Path
@@ -105,11 +106,20 @@ class AppTest(unittest.TestCase):
         self.assertIn("World of Warcraft not found", app.status.summary())
         self.assertTrue(app.needs_setup())
 
+    def wait_for(self, text: str, timeout: float = 3.0) -> None:
+        """The watcher thread reports asynchronously; poll rather than race it."""
+        deadline = time.monotonic() + timeout
+        while text not in self.status.summary():
+            if time.monotonic() > deadline:
+                self.fail(f"{text!r} not in {self.status.summary()!r}")
+            time.sleep(0.02)
+
     def test_start_and_restart_watcher(self):
         self.app.start()
-        self.assertIn("watching 1 file", self.status.summary())
+        self.wait_for("watching 1 file")
+        self.status.watching(0)  # so the restart has to report again
         self.app.restart()
-        self.assertIn("watching 1 file", self.status.summary())
+        self.wait_for("watching 1 file")
 
 
 if __name__ == "__main__":
