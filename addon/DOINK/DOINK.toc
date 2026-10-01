@@ -1,0 +1,22 @@
+## Interface: 11507
+## Title: DOINK
+## Notes: Posts in-game events to Discord via the DOINK companion app.
+## Version: 0.1.0
+## SavedVariables: DOINKDB
+
+# TODO(beta): ## Interface above is a Classic Era PLACEHOLDER, not the Forever
+# value. Replace with the output of: /run print(select(4, GetBuildInfo()))
+# Until then, tick "Load out of date AddOns" on the character select screen.
+
+# Every notifier is listed up front: TOC changes need a full client restart,
+# Lua changes only need /reload.
+
+Json.lua
+Defaults.lua
+Core.lua
+Notifiers\LevelUp.lua
+Notifiers\Loot.lua
+Notifiers\Death.lua
+Notifiers\Quest.lua
+Notifiers\BossKill.lua
+Notifiers\SkillUp.lua
