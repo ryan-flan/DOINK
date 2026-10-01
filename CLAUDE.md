@@ -51,6 +51,9 @@ DOINK/
     ├── config.example.toml
     ├── tests/                # python -m unittest discover -s tests
     └── doink/
+        ├── tray.py           # Windows tray icon + single-instance lock (ctypes Win32)
+        ├── autostart.py      # "Start with Windows": HKCU\...\Run\DOINK
+        ├── status.py         # thread-safe state for the tooltip/notifications
         ├── config.py         # loads config.toml (optional, every key optional)
         ├── discover.py       # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
         ├── watcher.py        # polls SavedVariables file mtime
@@ -224,7 +227,22 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - First time a character is seen, post at most `max_backlog` (default 10) of
   its queued events. If the newest seq is below `last_seen` (SavedVariables
   wiped), treat the character as new.
-- Later: PyInstaller single-exe build. Not v1.
+- **Two modes.** `python3 main.py` (WSL/dev) is a console app. The packaged
+  Windows build (`doink.exe`, `--noconsole`) and `--tray` run as a tray app:
+  the tray owns the main thread (Win32 message loop), the watcher runs in a
+  worker thread with a stop `Event`, and they talk through `Status`. Tray
+  mode logs to `doink.log` next to the exe (rotating, ~2 MB max), never
+  `print`s (there's no stdout), and shows startup errors in a message box.
+- Tray code is ctypes against Win32 with explicit `argtypes`/`restype` on
+  every call (64-bit handles). Keep the companion dependency-free; no
+  pystray/Pillow. Win32 behaviour is only testable on the Windows CI job
+  (`tests/test_windows.py`).
+- Trust is a feature: autostart is off by default and writes exactly one
+  per-user Run value; a named mutex stops a second copy (double posts); the
+  exe has a version resource and icon; releases ship a `.sha256`. Keep the
+  README's "What doink.exe does" section accurate when behaviour changes.
+- PyInstaller `--onedir` (not `--onefile`: fewer antivirus false positives,
+  faster start). The release workflow smoke-tests the built exe.
 
 ## Dev setup (reference)
 
@@ -349,6 +367,8 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
     it can read anything) but should be auto-discovered from the usual WoW
     install locations so it rarely needs setting.
   - `dry_run`, `poll_interval`, `max_backlog` stay companion-side.
+- **Post-M4 (done):** v0.3.0 surnames; v0.4.0 tray app, Start with Windows,
+  MIT license.
 - **Later:** combat-log tailer (realtime deaths/boss kills), pixel bridge
   (realtime everything), options UI (Ace3), CurseForge/Wago packaging via the
   BigWigs packager action, rare kills, achievements.

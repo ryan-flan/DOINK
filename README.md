@@ -31,15 +31,46 @@ WoW addons can't talk to the internet, so DOINK comes in two parts:
    /doink webhook https://discord.com/api/webhooks/...
    /doink flush
    ```
-5. Run `Companion\doink.exe` and leave it open while you play. It finds your
-   WoW install by itself.
+5. Move the `Companion` folder somewhere permanent that you can write to,
+   e.g. `Documents\DOINK`, and run `doink.exe`. A gold **D** appears in the
+   system tray (click `^` if it's hidden). It finds your WoW install by itself.
+6. Optional: right-click the tray icon → **Start with Windows**.
 
 To check everything works: `/doink test levelup`, then `/doink flush`. A
 `[TEST]` post should appear in your channel a few seconds after the reload.
 
-> Windows may warn about `doink.exe` because it isn't code-signed
-> (*More info → Run anyway*). It's built from this repo by
-> [GitHub Actions](.github/workflows/release.yml).
+### The tray icon
+
+Hover for the last post, or the current problem. If something goes wrong
+(no webhook set, Discord unreachable) you get a Windows notification once.
+Right-click for **Open log**, **Open DOINK folder**, **Start with Windows**
+and **Quit**.
+
+## What doink.exe does (and doesn't)
+
+- **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders, and
+  `config.toml` if you made one.
+- **Writes** only inside its own folder: `state.json` (what it has already
+  posted), `doink.log` (capped at ~2 MB).
+- **Network:** only HTTPS posts to your Discord webhook. No telemetry, no
+  update checks.
+- **Start with Windows** adds one per-user registry value,
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
+  rights. Untick it in the tray menu, or in Task Manager → Startup apps.
+- **Uninstall:** untick Start with Windows, quit, delete the folder.
+
+Every release is built from this repository's source by
+[GitHub Actions](.github/workflows/release.yml); the build log is public on
+the release's workflow run. Check your download against the `.sha256` file on
+the release page:
+
+```powershell
+Get-FileHash DOINK-v0.4.0.zip -Algorithm SHA256
+```
+
+> Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
+> (*More info → Run anyway*). Code signing costs money per year; it may come
+> later.
 
 ## In-game commands
 
@@ -78,8 +109,8 @@ Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
 
 None are needed. To override, copy `config.example.toml` to `config.toml`
 next to `doink.exe`. You can set the SavedVariables path (if WoW isn't in a
-standard folder), a fallback webhook, and `dry_run` (print instead of post).
-`doink.exe --dry-run` and `--once` work too.
+standard folder), a fallback webhook, and `dry_run` (log embeds to
+`doink.log` instead of posting). Restart DOINK after editing it.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the
@@ -104,8 +135,17 @@ companion/         the companion (Python 3.12+, standard library only)
 ```bash
 cd addon && luajit tests/test_addon.lua
 cd companion && python3 -m unittest discover -s tests
-cd companion && python3 main.py --dry-run
+cd companion && python3 main.py --dry-run     # console mode
+cd companion && python main.py --tray          # tray mode (Windows Python)
 ```
+
+The tray, autostart and single-instance code (`tray.py`, `autostart.py`)
+talks to Win32 directly through `ctypes`; its tests run on the Windows CI job.
+The icon is drawn by `companion/assets/make_icon.py`.
 
 Push a `v*` tag to build `doink.exe` and publish a release. Design notes and
 the event data contract are in [CLAUDE.md](CLAUDE.md).
+
+## License
+
+[MIT](LICENSE)
