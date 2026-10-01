@@ -231,6 +231,18 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   Windows PATH. From PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && ..."`.
 - Remote: https://github.com/ryan-flan/DOINK (private), default branch `main`.
 
+## Releases
+
+1. Bump the version in all three places: `addon/DOINK/DOINK.toc`
+   (`## Version`), `companion/doink/__init__.py`, `companion/pyproject.toml`.
+   Commit as `build: release vX.Y.Z`.
+2. `git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`.
+3. `release.yml` tests on Windows, builds `doink.exe`, and publishes
+   `DOINK-vX.Y.Z.zip` (AddOns/, Companion/, README) as a GitHub release.
+   Notes are generated from commits since the previous tag.
+
+Semver: breaking data-contract changes bump the minor version while < 1.0.
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org):
