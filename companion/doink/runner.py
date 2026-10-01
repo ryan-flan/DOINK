@@ -191,7 +191,7 @@ class RealtimeWorker(threading.Thread):
             while not self.stop_event.is_set():
                 started = time.perf_counter()
                 for raw in reader.poll():
-                    self._handle(raw)
+                    self.handle_message(raw)
                 self.status.realtime_update(window=reader.window, strip=reader.strip,
                                             strip_seen=reader.last_seen,
                                             meter=reader.meter.snapshot())
@@ -211,7 +211,8 @@ class RealtimeWorker(threading.Thread):
             if self.stop_event.is_set():  # asked to stop; other exits set their own reason
                 self.status.realtime_update(enabled=False, reason="off")
 
-    def _handle(self, raw: bytes) -> None:
+    # Not "_handle": threading.Thread owns an attribute of that name on 3.13+.
+    def handle_message(self, raw: bytes) -> None:
         message = decode_message(raw)
         if message is None:
             log.warning("realtime: unreadable message: %.120r", raw)

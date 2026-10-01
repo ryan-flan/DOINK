@@ -192,15 +192,15 @@ class ProcessTest(unittest.TestCase):
         status = Status()
         worker = RealtimeWorker(self.config, state, self.webhook, status, threading.Event(),
                                 game_hooks=lambda: {})
-        worker._handle(json.dumps(self.event(2)).encode())  # already posted from the file
+        worker.handle_message(json.dumps(self.event(2)).encode())  # already posted from the file
         self.assertEqual(self.webhook.sent, [])
-        worker._handle(b'{"type":"hello","char":"Paul","realm":"R","addon":"0.6.0","test":true}')
+        worker.handle_message(b'{"type":"hello","char":"Paul","realm":"R","addon":"0.6.0","test":true}')
         self.assertEqual(self.webhook.sent, [])
         self.assertEqual(status.realtime()["hello"]["who"], "Paul")
         self.assertTrue(status.realtime()["hello"]["test"])
-        worker._handle(json.dumps(self.event(3)).encode())
+        worker.handle_message(json.dumps(self.event(3)).encode())
         self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 3")
-        worker._handle(json.dumps(self.event(3)).encode())  # the strip repeats it
+        worker.handle_message(json.dumps(self.event(3)).encode())  # the strip repeats it
         self.assertEqual(len(self.webhook.sent), 1)
         self.assertEqual(state.last_seen("Paul-R"), 3)
 
