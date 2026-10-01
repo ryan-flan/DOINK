@@ -249,8 +249,12 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   `pcall` can't catch it. Never register it; `addon/tests` guards this.
   Combat-log data must come from the companion reading `WoWCombatLog.txt`.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
-- [ ] `QUEST_TURNED_IN` exists, and does `C_QuestLog.GetQuestInfo` give titles? ______
-- [ ] `SKILL_RANK_UP` global text (`/run print(SKILL_RANK_UP)`): ______
+- [ ] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in? ______
+  - [x] `C_QuestLog.GetQuestInfo(783)` → `nil` (quest not in log). Titles
+    rely on the `QUEST_COMPLETE` → `GetTitleText()` fallback; confirm on a
+    real turn-in that the title isn't `Quest #<id>`.
+- [x] `SKILL_RANK_UP` = `Your skill in %s has increased to %d.` (keeps its
+  period, unlike the loot strings).
 - [ ] `PLAYER_DEAD` does *not* re-fire on login/reload while dead? ______
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
   `You receive loot: |cnIQ1:|Hitem:769::::::::8:1491::::::::::|h[Chunk of Boar Meat]|h|r`
@@ -275,7 +279,8 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   produces a `level_up` JSON string in `DOINK.lua`.
 - **M2 — First post. ✅ Done.** Companion watcher + parser + discord + state, posting
   the level-up embed. Done when the end-to-end loop works.
-- **M3 — Notifiers.** Loot, Death, Quest, BossKill, SkillUp following the
+- **M3 — Notifiers. ✅ Done** (all fixtures post end to end; real-event
+  checks still open in beta facts). Loot, Death, Quest, BossKill, SkillUp following the
   LevelUp pattern. Each with a `/doink test` fixture.
 - **M4 — Polish.** Config via slash commands, README, PyInstaller build.
   Config ownership (decided):
