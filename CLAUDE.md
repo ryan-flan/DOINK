@@ -69,6 +69,11 @@ SavedVariables global: `DOINKDB`
 ```lua
 DOINKDB = {
   version = 1,
+  debug = false,
+  webhooks = {                  -- optional; flat so the companion can parse it
+    ["*"] = "https://discord.com/api/webhooks/...",              -- all chars
+    ["Flano-Whatever"] = "https://discord.com/api/webhooks/...", -- override
+  },
   chars = {
     ["Flano-Whatever"] = {
       seq = 42,                 -- last seq issued for this char
@@ -99,6 +104,9 @@ Event JSON schema:
 ```
 
 Rules:
+- Webhook for a character's events: `webhooks["Name-Realm"]`, else
+  `webhooks["*"]`, else the companion's `config.toml`. Set in game with
+  `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` is always `null` from the addon for now (see beta facts:
   the combat log is protected). Reserved for the companion's combat-log

@@ -71,6 +71,7 @@ local function InitDB()
   local db = DOINKDB
   db.version = db.version or DB_VERSION
   db.chars = db.chars or {}
+  db.webhooks = db.webhooks or {} -- ["*"] = account-wide, ["Name-Realm"] = per char
   -- Future migrations go here:
   -- if db.version < 2 then ... db.version = 2 end
   ns.db = db
@@ -237,12 +238,81 @@ end
 
 local HELP = {
   "/doink - status",
+  "/doink enable|disable <type>",
+  "/doink options [type] - show settings",
+  "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
+  "/doink reset <type> - back to defaults",
+  "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
   "/doink debug - toggle verbose logging",
   "/doink flush - /reload to write SavedVariables",
-  "/doink enable|disable <type>",
 }
+
+local function FormatMoney(copper)
+  local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+  local parts = {}
+  if g > 0 then parts[#parts + 1] = g .. "g" end
+  if s > 0 then parts[#parts + 1] = s .. "s" end
+  if c > 0 or #parts == 0 then parts[#parts + 1] = c .. "c" end
+  return table.concat(parts, " ")
+end
+
+-- "1g50s", "75s", "30c" -> copper. nil unless the whole string is money.
+local function ParseMoney(text)
+  text = text:lower():gsub("%s", "")
+  if text == "" or text:gsub("%d+[gsc]", "") ~= "" then return nil end
+  local copper = 0
+  for amount, unit in text:gmatch("(%d+)([gsc])") do
+    copper = copper + tonumber(amount) * (unit == "g" and 10000 or unit == "s" and 100 or 1)
+  end
+  return copper
+end
+
+-- Options take their type from the default, so Defaults.lua is the schema.
+local function ParseValue(default, text)
+  if type(default) == "boolean" then
+    text = text:lower()
+    if text == "on" or text == "true" or text == "yes" or text == "1" then return true end
+    if text == "off" or text == "false" or text == "no" or text == "0" then return false end
+  elseif type(default) == "number" then
+    return tonumber(text) or ParseMoney(text)
+  end
+end
+
+local function FormatValue(key, value)
+  if type(value) == "boolean" then return value and "on" or "off" end
+  if key:find("value$") then return FormatMoney(value) end -- copper amounts
+  return tostring(value)
+end
+
+local function SortedKeys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys)
+  return keys
+end
+
+local WEBHOOK_PATTERNS = {
+  "^https://discord%.com/api/webhooks/%d+/[%w_%-]+$",
+  "^https://discordapp%.com/api/webhooks/%d+/[%w_%-]+$",
+}
+
+local function IsWebhook(url)
+  for _, pattern in ipairs(WEBHOOK_PATTERNS) do
+    if url:match(pattern) then return true end
+  end
+  return false
+end
+
+-- Never print a whole webhook URL: anyone with it can post to the channel.
+local function WebhookStatus()
+  local hooks = DOINKDB.webhooks
+  local url, scope = hooks[ns.player.key], "this character"
+  if not url then url, scope = hooks["*"], "all characters" end
+  if not url then return "not set (companion falls back to config.toml)" end
+  return ("%s, ending ...%s"):format(scope, url:sub(-4))
+end
 
 local commands = {}
 
@@ -256,6 +326,7 @@ commands[""] = function()
   ns:Print("v%s - %s", GetMeta(ADDON, "Version") or "?", ns.player.key)
   ns:Print("queue %d/%d, last seq %d, debug %s",
     #char.events, MAX_EVENTS, char.seq, DOINKDB.debug and "on" or "off")
+  ns:Print("webhook: %s", WebhookStatus())
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
       and "|cff60ff60on|r" or "|cffff6060off|r"
@@ -322,6 +393,79 @@ end
 
 commands.enable = function(args) SetEnabled(args, true) end
 commands.disable = function(args) SetEnabled(args, false) end
+
+local function PrintOptions(notifier)
+  local overrides = ns.char.config[notifier.type] or {}
+  for _, key in ipairs(SortedKeys(ns.Defaults[notifier.type] or {})) do
+    local custom = overrides[key] ~= nil and " |cffffd100(custom)|r" or ""
+    ns:Print("  %s %s = %s%s", notifier.type, key,
+      FormatValue(key, ns:GetOption(notifier.type, key)), custom)
+  end
+end
+
+commands.options = function(args)
+  if args ~= "" then
+    local notifier = FindOrComplain(args)
+    if notifier then PrintOptions(notifier) end
+    return
+  end
+  for _, notifier in ipairs(SortedNotifiers()) do PrintOptions(notifier) end
+end
+
+commands.set = function(args)
+  local query, key, text = args:match("^(%S+)%s+(%S+)%s+(.+)$")
+  if not query then
+    ns:Print("usage: /doink set <type> <option> <value>. See /doink options")
+    return
+  end
+  local notifier = FindOrComplain(query)
+  if not notifier then return end
+
+  local defaults = ns.Defaults[notifier.type] or {}
+  key = key:lower()
+  if defaults[key] == nil then
+    ns:Print("%s has no option '%s'. Options: %s",
+      notifier.type, key, table.concat(SortedKeys(defaults), ", "))
+    return
+  end
+  local value = ParseValue(defaults[key], text)
+  if value == nil then
+    ns:Print("bad value '%s' for %s (%s)", text, key,
+      type(defaults[key]) == "boolean" and "on/off" or "a number, or money like 1g50s")
+    return
+  end
+  ns:SetOption(notifier.type, key, value)
+  ns:Print("%s %s = %s", notifier.type, key, FormatValue(key, value))
+end
+
+commands.reset = function(args)
+  local notifier = FindOrComplain(args)
+  if not notifier then return end
+  ns.char.config[notifier.type] = nil
+  ns:Print("%s reset to defaults", notifier.type)
+end
+
+commands.webhook = function(args)
+  local rest = args:match("^[Hh][Ee][Rr][Ee]%s*(.*)$") -- "here <url>"
+  local here = rest ~= nil
+  rest = rest or args
+  local key = here and ns.player.key or "*"
+  local scope = here and "this character" or "all characters"
+
+  if rest == "" then
+    ns:Print("webhook: %s", WebhookStatus())
+    ns:Print("usage: /doink webhook [here] <url>|clear")
+  elseif rest:lower() == "clear" then
+    DOINKDB.webhooks[key] = nil
+    ns:Print("webhook cleared for %s. /doink flush to apply", scope)
+  elseif IsWebhook(rest) then
+    DOINKDB.webhooks[key] = rest
+    ns:Print("webhook set for %s. /doink flush to hand it to the companion", scope)
+  else
+    ns:Print("that doesn't look like a Discord webhook URL "
+      .. "(https://discord.com/api/webhooks/...)")
+  end
+end
 
 SLASH_DOINK1 = "/doink"
 SlashCmdList.DOINK = function(msg)
