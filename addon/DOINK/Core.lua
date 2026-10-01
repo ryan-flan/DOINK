@@ -33,6 +33,19 @@ local function ArgsToString(...)
   return table.concat(parts, ", ")
 end
 
+------------------------------------------------------------------ helpers
+
+-- Turns a GlobalStrings format such as LOOT_ITEM_SELF ("You receive loot: %s")
+-- into an anchored Lua pattern: %s -> (.+), %d -> (%d+). Matching against
+-- the client's own strings survives rewording (Forever dropped vanilla's
+-- trailing periods) and other locales.
+function ns.FormatToPattern(fmt)
+  local p = fmt:gsub("%%s", "\001"):gsub("%%d", "\002")
+  p = p:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+  p = p:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
+  return "^" .. p .. "$"
+end
+
 ------------------------------------------------------------------ options
 
 function ns:GetOption(eventType, key)
@@ -145,11 +158,19 @@ local function RegisterNotifiers()
   end
 end
 
+-- Events too frequent to echo in /doink debug.
+local QUIET_EVENTS = {
+  COMBAT_LOG_EVENT_UNFILTERED = true,
+  GET_ITEM_INFO_RECEIVED = true, -- fires for every tooltip, not just loot
+}
+
 local function Dispatch(event, ...)
   local list = handlers[event]
   if not list then return end
 
-  ns:Debug("%s: %s", event, ArgsToString(...))
+  if not QUIET_EVENTS[event] then
+    ns:Debug("%s: %s", event, ArgsToString(...))
+  end
   local n, args = select("#", ...), { ... }
   for _, notifier in ipairs(list) do
     -- geterrorhandler() reports to BugSack but lets other notifiers run.

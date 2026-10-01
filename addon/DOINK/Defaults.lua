@@ -5,9 +5,12 @@ local ADDON, ns = ...
 -- editing a default here reaches existing characters. Read via ns:GetOption().
 ns.Defaults = {
   level_up  = { enabled = true, milestones_only = false },
-  loot      = { enabled = true, min_quality = 3, min_vendor_value = 10000 }, -- 1g
+  -- Post if quality >= min_quality (3 = rare/blue) OR the stack's total
+  -- vendor value >= min_vendor_value (copper; 10000 = 1g).
+  loot      = { enabled = true, min_quality = 3, min_vendor_value = 10000 },
   death     = { enabled = true },
   quest     = { enabled = true },
   boss_kill = { enabled = true },
-  skill_up  = { enabled = true },
+  -- milestones_only: post only at multiples of 75 (75/150/225/300).
+  skill_up  = { enabled = true, milestones_only = true },
 }
