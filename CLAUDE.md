@@ -322,7 +322,7 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 - **M3 — Notifiers. ✅ Done** (all fixtures post end to end; real-event
   checks still open in beta facts). Loot, Death, Quest, BossKill, SkillUp following the
   LevelUp pattern. Each with a `/doink test` fixture.
-- **M4 — Polish.** Config via slash commands, README, PyInstaller build
+- **M4 — Polish. ✅ Done** (released as v0.2.0). Config via slash commands, README, PyInstaller build
   (built on GitHub Actions `windows-latest`; no local Windows Python).
   Config ownership (decided, implemented):
   - Notifier toggles and filters live **only in the addon** (it filters
