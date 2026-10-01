@@ -252,8 +252,19 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   the level-up embed. Done when the end-to-end loop works.
 - **M3 — Notifiers.** Loot, Death, Quest, BossKill, SkillUp following the
   LevelUp pattern. Each with a `/doink test` fixture.
-- **M4 — Polish.** Config via slash commands, README, `.gitattributes`,
-  PyInstaller build.
+- **M4 — Polish.** Config via slash commands, README, PyInstaller build.
+  Config ownership (decided):
+  - Notifier toggles and filters live **only in the addon** (it filters
+    before emitting). Remove `[notifiers]` from the companion config.
+  - Optional in-game webhook: `/doink webhook <url>` stored in `DOINKDB`,
+    overridable per character (e.g. one channel per alt). Falls back to
+    `config.toml`. This is a data-contract change; update the contract
+    section first. Trade-off: the URL then sits in plain text in
+    `DOINK.lua`, which people share when asking for addon help.
+  - SavedVariables path stays companion-side (it must find the file before
+    it can read anything) but should be auto-discovered from the usual WoW
+    install locations so it rarely needs setting.
+  - `dry_run`, `poll_interval`, `max_backlog` stay companion-side.
 - **Later:** combat-log tailer (realtime deaths/boss kills), pixel bridge
   (realtime everything), options UI (Ace3), CurseForge/Wago packaging via the
   BigWigs packager action, rare kills, achievements.
