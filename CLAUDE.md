@@ -214,15 +214,21 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 
 ## Beta facts to fill in (TODO — do not guess these)
 
-- [ ] Flavor folder name (e.g. `_forever_beta_`): ______
-- [ ] TOC `## Interface:` version (`/run print(select(4, GetBuildInfo()))`): ______
-- [ ] Achievements present? (`/run print(GetTotalAchievementPoints and GetTotalAchievementPoints())`): ______
+- [x] Flavor folder name: `_classic_beta_` (`.flavor.info`: `wow_classic_beta`).
+  Install: `C:\Program Files (x86)\World of Warcraft\`. Expect a different
+  folder at launch.
+- [x] TOC `## Interface:` version: `16001` (client `1.60.1 70124`, Sep 29 2026).
+- [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
+  not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [ ] `CHAT_MSG_LOOT` self-loot message format sample: ______
+- [x] SavedVariables string format: events are written as double-quoted Lua
+  strings with `\"` escapes, one per line:
+  `"{\"char\":\"Paul\",...,\"type\":\"level_up\"}",`
 
 ## Milestones
 
-- **M1 — Skeleton.** TOC (all files listed), Core, Json, Defaults, LevelUp
+- **M1 — Skeleton. ✅ Done.** TOC (all files listed), Core, Json, Defaults, LevelUp
   notifier, all slash commands. Done when `/doink test levelup` → `/reload`
   produces a `level_up` JSON string in `DOINK.lua`.
 - **M2 — First post.** Companion watcher + parser + discord + state, posting
