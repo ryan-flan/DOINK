@@ -238,7 +238,13 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
-- [ ] `CHAT_MSG_LOOT` self-loot message format sample: ______
+- [ ] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes): ______
+  - [x] Templates: `LOOT_ITEM_SELF` = `You receive loot: %s`,
+    `LOOT_ITEM_SELF_MULTIPLE` = `You receive loot: %sx%d`. **No trailing
+    period** (vanilla has one). Build match patterns from these globals,
+    never hardcode the English.
+  - Tip: in the chat box `||` is typed as a literal `|`; to show raw link
+    codes use `msg:gsub("\124","\124\124")`.
 - [x] SavedVariables string format: events are written as double-quoted Lua
   strings with `\"` escapes, one per line:
   `"{\"char\":\"Paul\",...,\"type\":\"level_up\"}",`
