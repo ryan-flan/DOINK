@@ -266,7 +266,8 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   `<WoW>\<flavor>\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua`
 - Run all tooling (`git`, `gh`, `python3`) in WSL; none of it is on the
   Windows PATH. From PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && ..."`.
-- Remote: https://github.com/ryan-flan/DOINK (private), default branch `main`.
+- Remote: https://github.com/ryan-flan/DOINK (public), default branch `main`.
+- CurseForge project ID: 1721438 (repo variable `CURSEFORGE_PROJECT_ID`).
 
 ## Releases
 
