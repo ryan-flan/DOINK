@@ -248,7 +248,7 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - **M1 — Skeleton. ✅ Done.** TOC (all files listed), Core, Json, Defaults, LevelUp
   notifier, all slash commands. Done when `/doink test levelup` → `/reload`
   produces a `level_up` JSON string in `DOINK.lua`.
-- **M2 — First post.** Companion watcher + parser + discord + state, posting
+- **M2 — First post. ✅ Done.** Companion watcher + parser + discord + state, posting
   the level-up embed. Done when the end-to-end loop works.
 - **M3 — Notifiers.** Loot, Death, Quest, BossKill, SkillUp following the
   LevelUp pattern. Each with a `/doink test` fixture.
