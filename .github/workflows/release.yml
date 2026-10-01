@@ -31,7 +31,8 @@ jobs:
           pip install pyinstaller
           python packaging/version_info.py version_info.txt
           pyinstaller --onedir --noconsole --name doink --icon assets/doink.ico `
-            --add-data "assets/doink.ico;assets" --version-file version_info.txt main.py
+            --add-data "assets/doink.ico;assets" --add-data "assets/doink-48.png;assets" `
+            --version-file version_info.txt main.py
 
       - name: Smoke test the built exe
         shell: pwsh

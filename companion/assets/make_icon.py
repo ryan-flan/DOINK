@@ -89,6 +89,11 @@ def main() -> None:
     path.write_bytes(out)
     print(f"wrote {path} ({len(out):,} bytes)")
 
+    # Tk can't show .ico in a window body; the settings header uses this.
+    png = Path(__file__).with_name("doink-48.png")
+    png.write_bytes(png_entry(render(48)))
+    print(f"wrote {png}")
+
 
 if __name__ == "__main__":
     main()

@@ -133,6 +133,17 @@ BUILDERS = {
 }
 
 
+def connection_test_embed() -> dict:
+    """What the settings window's "Send test message" posts."""
+    return {
+        "title": "DOINK is connected",
+        "description": "Level-ups, loot, deaths and more from World of Warcraft "
+                       "will be posted to this channel.",
+        "color": 0xF2B83C,  # the icon's gold
+        "footer": {"text": f"DOINK companion v{__version__}"},
+    }
+
+
 def build_embed(event: dict) -> dict:
     data = event.get("data") or {}
     embed = BUILDERS.get(event["type"], _generic)(event, data)

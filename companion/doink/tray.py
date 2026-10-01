@@ -1,9 +1,10 @@
 """Windows system tray icon, written against the Win32 API with ctypes so the
 companion stays dependency-free.
 
-The tray owns the main thread (Win32 windows must be serviced by the thread
-that created them); the watcher runs in a worker thread and reports through
-Status, whose changes reach us as a posted window message.
+The tray runs its own thread (Win32 windows must be serviced by the thread
+that created them). Status changes reach it as a posted window message;
+"settings" and "quit" go back to the UI thread through the ``command``
+callback, which must be thread-safe (main.py passes a queue's put).
 """
 
 import ctypes
@@ -95,6 +96,8 @@ AppendMenuW = _api(user32.AppendMenuW, wintypes.BOOL, wintypes.HMENU, wintypes.U
 TrackPopupMenu = _api(user32.TrackPopupMenu, ctypes.c_int, wintypes.HMENU, wintypes.UINT,
                       ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.LPVOID)
 DestroyMenu = _api(user32.DestroyMenu, wintypes.BOOL, wintypes.HMENU)
+SetMenuDefaultItem = _api(user32.SetMenuDefaultItem, wintypes.BOOL, wintypes.HMENU,
+                          wintypes.UINT, wintypes.UINT)
 GetCursorPos = _api(user32.GetCursorPos, wintypes.BOOL, ctypes.POINTER(wintypes.POINT))
 SetForegroundWindow = _api(user32.SetForegroundWindow, wintypes.BOOL, wintypes.HWND)
 GetSystemMetrics = _api(user32.GetSystemMetrics, ctypes.c_int, ctypes.c_int)
@@ -122,7 +125,7 @@ IDI_APPLICATION = 32512
 MB_ICONINFORMATION, MB_ICONERROR = 0x40, 0x10
 ERROR_ALREADY_EXISTS = 183
 
-ID_LOG, ID_FOLDER, ID_AUTOSTART, ID_QUIT = 1, 2, 3, 9
+ID_SETTINGS, ID_LOG, ID_FOLDER, ID_AUTOSTART, ID_QUIT = 1, 2, 3, 4, 9
 
 _mutex = None  # held for the life of the process
 
@@ -138,19 +141,23 @@ def message_box(text: str, error: bool = False) -> None:
     MessageBoxW(None, text, "DOINK", MB_ICONERROR if error else MB_ICONINFORMATION)
 
 
-def icon_path() -> Path:
+def asset(name: str) -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS) / "assets" / "doink.ico"  # bundled by PyInstaller
-    return Path(__file__).resolve().parent.parent / "assets" / "doink.ico"
+        return Path(sys._MEIPASS) / "assets" / name  # bundled by PyInstaller
+    return Path(__file__).resolve().parent.parent / "assets" / name
+
+
+def icon_path() -> Path:
+    return asset("doink.ico")
 
 
 class Tray:
     def __init__(self, status: Status, log_path: Path, folder: Path,
-                 on_quit: Callable[[], None]):
+                 command: Callable[[str], None]):
         self.status = status
         self.log_path = log_path
         self.folder = folder
-        self.on_quit = on_quit
+        self.command = command  # "settings" | "quit"; called from the tray thread
         self.hwnd = None
         self._balloon: str | None = None
         self._wndproc = WNDPROC(self._proc)  # keep a reference: Windows calls it
@@ -221,7 +228,9 @@ class Tray:
     def _proc(self, hwnd, msg, wparam, lparam):
         try:
             if msg == WM_TRAY:
-                if lparam in (WM_LBUTTONUP, WM_RBUTTONUP):
+                if lparam == WM_LBUTTONUP:
+                    self.command("settings")
+                elif lparam == WM_RBUTTONUP:
                     self._menu()
                 return 0
             if msg == WM_STATUS:
@@ -247,6 +256,8 @@ class Tray:
         AppendMenuW(menu, MF_GRAYED, 0, f"DOINK v{__version__}")
         AppendMenuW(menu, MF_GRAYED, 0, self.status.summary().removeprefix("DOINK: "))
         AppendMenuW(menu, MF_SEPARATOR, 0, None)
+        AppendMenuW(menu, MF_STRING, ID_SETTINGS, "Settings…")
+        SetMenuDefaultItem(menu, ID_SETTINGS, 0)  # bold, like a double-click default
         AppendMenuW(menu, MF_STRING, ID_LOG, "Open log")
         AppendMenuW(menu, MF_STRING, ID_FOLDER, "Open DOINK folder")
         if autostart.available():
@@ -263,21 +274,22 @@ class Tray:
         PostMessageW(self.hwnd, WM_NULL, 0, 0)
         DestroyMenu(menu)
 
-        if command == ID_LOG:
-            self._open(self.log_path)
+        if command == ID_SETTINGS:
+            self.command("settings")
+        elif command == ID_LOG:
+            self.open(self.log_path)
         elif command == ID_FOLDER:
-            self._open(self.folder)
+            self.open(self.folder)
         elif command == ID_AUTOSTART:
             on = not autostart.is_enabled()
             autostart.set_enabled(on)
             log.info("start with Windows: %s", "on" if on else "off")
         elif command == ID_QUIT:
             log.info("quit from tray")
-            self.on_quit()
-            self.quit()
+            self.command("quit")
 
     @staticmethod
-    def _open(path: Path) -> None:
+    def open(path: Path) -> None:
         try:
             os.startfile(path)
         except OSError as e:

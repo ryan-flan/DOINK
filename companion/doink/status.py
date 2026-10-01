@@ -5,9 +5,11 @@ Written by the worker thread, read by the tray thread.
 
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 
 TOOLTIP_MAX = 127  # Windows tray tooltip limit (128 incl. terminator)
+RECENT_MAX = 8     # posts listed in the settings window
 
 
 class Status:
@@ -18,18 +20,33 @@ class Status:
         self._lock = threading.Lock()
         self._watching = 0
         self._last_post: tuple[float, str] | None = None
+        self._recent: deque[tuple[float, str, str]] = deque(maxlen=RECENT_MAX)
         self._error: str | None = None
 
     def watching(self, count: int) -> None:
         with self._lock:
             self._watching = count
+            if count:
+                self._error = None
         self.on_change(None)
 
     def posted(self, who: str, what: str) -> None:
+        now = time.time()
         with self._lock:
-            self._last_post = (time.time(), f"{who}: {what}")
+            self._last_post = (now, f"{who}: {what}")
+            self._recent.appendleft((now, who, what))
             self._error = None
         self.on_change(None)
+
+    def recent(self) -> list[tuple[float, str, str]]:
+        """Newest first: (unix time, who, event type)."""
+        with self._lock:
+            return list(self._recent)
+
+    @property
+    def error(self) -> str | None:
+        with self._lock:
+            return self._error
 
     def failed(self, message: str) -> None:
         with self._lock:

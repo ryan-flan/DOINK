@@ -47,7 +47,7 @@ class TrayTest(unittest.TestCase):
         from doink import tray
         folder = Path(tempfile.mkdtemp())
         status = Status()
-        icon = tray.Tray(status, folder / "doink.log", folder, on_quit=lambda: None)
+        icon = tray.Tray(status, folder / "doink.log", folder, command=lambda c: None)
         status.on_change = icon.notify
 
         thread = threading.Thread(target=icon.run, daemon=True)
@@ -67,9 +67,42 @@ class TrayTest(unittest.TestCase):
         thread.join(timeout=5)
         self.assertFalse(thread.is_alive(), "message loop exited on quit")
 
-    def test_icon_file_ships(self):
+    def test_assets_ship(self):
         from doink import tray
-        self.assertTrue(tray.icon_path().is_file(), tray.icon_path())
+        for name in ("doink.ico", "doink-48.png"):
+            self.assertTrue(tray.asset(name).is_file(), tray.asset(name))
+
+
+@unittest.skipUnless(WINDOWS, "Windows only")
+class SettingsWindowTest(unittest.TestCase):
+    def test_builds_shows_refreshes_and_hides(self):
+        import tkinter as tk
+
+        from doink import tray, ui
+        from doink.app import App
+        from doink.config import save_settings
+
+        folder = Path(tempfile.mkdtemp())
+        save_settings(folder / "config.toml", {"wow_dir": str(folder / "no-wow")})
+        app = App(folder / "config.toml", Status())
+        app.start()  # no WoW: the window must explain that, not crash
+        app.status.posted("Paul Hebbs", "level_up")
+
+        root = tk.Tk()
+        try:
+            window = ui.SettingsWindow(root, app, tray.asset("doink-48.png"),
+                                       open_log=lambda: None, open_folder=lambda: None)
+            window.show()
+            root.update()
+            self.assertIn("Level up", window.recent.cget("text"))
+            self.assertIn("wasn't found", window.paths.cget("text"))
+            window.webhook.set("nope")
+            window._save_webhook()
+            self.assertIn("isn't a Discord webhook", window.webhook_msg.cget("text"))
+            window.hide()
+            root.update()
+        finally:
+            root.destroy()
 
 
 if __name__ == "__main__":

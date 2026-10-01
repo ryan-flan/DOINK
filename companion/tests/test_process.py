@@ -5,7 +5,7 @@ from pathlib import Path
 from doink.config import Config
 from doink.discord import WebhookError, build_embed
 from doink.state import State
-from main import process
+from doink.runner import process
 
 
 CONFIG_HOOK = "https://discord.com/api/webhooks/1/config"

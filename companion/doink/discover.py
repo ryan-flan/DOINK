@@ -27,17 +27,24 @@ def drive_roots() -> list[Path]:
     return [p for p in sorted(mnt.iterdir()) if len(p.name) == 1 and p.is_dir()]
 
 
+def discover_in_wow_dir(wow: Path) -> list[Path]:
+    """``DOINK.lua`` paths under one WoW install folder (the one holding
+    ``_classic_beta_`` etc.). They may not exist yet, before the first /reload."""
+    found = []
+    if not wow.is_dir():
+        return found
+    for flavor in sorted(wow.glob("_*_")):
+        if not (flavor / "Interface" / "AddOns" / "DOINK").exists():
+            continue
+        for sv_dir in sorted(flavor.glob("WTF/Account/*/SavedVariables")):
+            found.append(sv_dir / "DOINK.lua")
+    return found
+
+
 def discover_savedvariables(roots: list[Path] | None = None) -> list[Path]:
-    """``DOINK.lua`` paths, which may not exist yet (before the first /reload)."""
+    """Search the usual install folders on every drive."""
     found = []
     for root in drive_roots() if roots is None else roots:
         for rel in WOW_DIRS:
-            wow = root / rel
-            if not wow.is_dir():
-                continue
-            for flavor in sorted(wow.glob("_*_")):
-                if not (flavor / "Interface" / "AddOns" / "DOINK").exists():
-                    continue
-                for sv_dir in sorted(flavor.glob("WTF/Account/*/SavedVariables")):
-                    found.append(sv_dir / "DOINK.lua")
+            found.extend(discover_in_wow_dir(root / rel))
     return found

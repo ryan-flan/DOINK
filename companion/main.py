@@ -1,27 +1,18 @@
 """DOINK companion: watches the SavedVariables file and posts new events to Discord."""
 
 import argparse
-import itertools
 import logging
 import logging.handlers
+import queue
 import sys
 import threading
-import time
-from collections import defaultdict
 from pathlib import Path
 
-from doink.config import Config, load_config
-from doink.discord import (MAX_EMBEDS_PER_MESSAGE, WebhookError, WebhookPool,
-                           build_embed, is_webhook_url)
-from doink.parser import (char_key, full_name, legacy_char_key, parse_events,
-                          parse_webhooks)
-from doink.state import State
-from doink.status import Status
-from doink.watcher import Watcher
+from doink.config import load_config
+from doink.runner import run
 
 log = logging.getLogger("doink")
 
-MAX_RETRY_DELAY = 60.0
 LOG_FORMAT = "%(asctime)s %(levelname)-7s %(message)s"
 
 
@@ -33,126 +24,16 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def webhook_for(key: str, game_hooks: dict[str, str], config: Config) -> str:
-    return game_hooks.get(key) or game_hooks.get("*") or config.webhook_url
-
-
-def process(config: Config, path: Path, state: State, pool: WebhookPool,
-            status: Status | None = None) -> bool:
-    """Post every event newer than what we've seen. Returns False if anything
-    is left to retry; state is saved after each message, so a retry resumes
-    cleanly."""
-    status = status or Status()
-    try:
-        # latin-1 maps bytes 1:1; the parser decodes UTF-8 per string.
-        text = path.read_bytes().decode("latin-1")
-    except OSError as e:
-        log.warning("can't read %s: %s", path, e)
-        return False
-
-    game_hooks = parse_webhooks(text)
-    by_char = defaultdict(list)
-    for event in parse_events(text):
-        by_char[char_key(event)].append(event)
-
-    ok = True
-    for key, events in by_char.items():
-        events.sort(key=lambda e: e["seq"])
-        newest = events[-1]["seq"]
-        legacy = legacy_char_key(events[-1])
-        if legacy != key and state.rename(legacy, key):
-            log.info("%s: carried over posting history from %s", key, legacy)
-        last = state.last_seen(key)
-
-        if last is not None and newest < last:
-            log.warning("%s: newest seq %d is below last seen %d. "
-                        "SavedVariables reset? Starting over.", key, newest, last)
-            last = None
-
-        if last is None:
-            # First time we've seen this character: don't dump the whole
-            # 500-entry ring buffer into Discord.
-            new = events[-config.max_backlog:] if config.max_backlog > 0 else []
-            if len(new) < len(events):
-                log.info("%s: new character, skipping %d older events",
-                         key, len(events) - len(new))
-        else:
-            new = [e for e in events if e["seq"] > last]
-
-        url = webhook_for(key, game_hooks, config)
-        if new and not config.dry_run:
-            if not url:
-                log.error("%s: no webhook. In game: /doink webhook <url>, then /reload "
-                          "(or set webhook_url in config.toml)", key)
-                status.failed(f"no webhook for {full_name(events[-1])}. "
-                              "In game: /doink webhook <url>")
-                ok = False
-                continue  # state untouched: these post once a webhook exists
-            if not is_webhook_url(url):
-                log.error("%s: webhook isn't a Discord webhook URL", key)
-                status.failed(f"bad webhook for {full_name(events[-1])}")
-                ok = False
-                continue
-
-        for chunk in itertools.batched(new, MAX_EMBEDS_PER_MESSAGE):
-            webhook = pool.get(url or "dry-run")
-            try:
-                webhook.send([build_embed(e) for e in chunk])
-            except WebhookError as e:
-                log.error("%s: post failed: %s", key, e)
-                status.failed(f"posting to Discord failed: {e}")
-                return False
-            types = ", ".join(e["type"] for e in chunk)
-            log.info("%s: %s %s", key, "printed" if config.dry_run else "posted",
-                     ", ".join(f"#{e['seq']} {e['type']}" for e in chunk))
-            status.posted(full_name(chunk[-1]), types)
-            state.set_last_seen(key, chunk[-1]["seq"])
-
-        if last is None or newest > last:
-            state.set_last_seen(key, newest)  # also covers backlog we skipped
-    return ok
-
-
-def run(config: Config, once: bool = False, stop: threading.Event | None = None,
-        status: Status | None = None) -> int:
-    stop = stop or threading.Event()
-    status = status or Status()
-    state = State(config.state_path, persist=not config.dry_run)
-    pool = WebhookPool(dry_run=config.dry_run)
-    paths = config.savedvariables_paths
-
-    if once:
-        results = [process(config, p, state, pool, status) for p in paths]
-        return 0 if all(results) else 1
-
-    for path in paths:
-        log.info("watching %s%s", path, " (dry run)" if config.dry_run else "")
-    status.watching(len(paths))
-    watchers = [Watcher(p) for p in paths]
-    dirty: set[Path] = set()
-    failures = 0
-    retry_at = 0.0
-    while not stop.is_set():
-        for watcher in watchers:
-            if watcher.poll():
-                dirty.add(watcher.path)
-        if dirty and time.monotonic() >= retry_at:
-            dirty = {p for p in dirty if not process(config, p, state, pool, status)}
-            if dirty:
-                failures += 1
-                delay = min(MAX_RETRY_DELAY, config.poll_interval * 2 ** failures)
-                log.info("retrying in %.0fs", delay)
-                retry_at = time.monotonic() + delay
-            else:
-                failures = 0
-                status.ok()
-        stop.wait(config.poll_interval)
-    return 0
-
-
 def run_tray(args) -> int:
-    """The packaged Windows app: no console, a tray icon, logs to doink.log."""
-    from doink import tray
+    """The packaged Windows app: tray icon + settings window, logs to doink.log.
+
+    Three threads: Tk owns the main thread (settings window), the tray runs
+    its own Win32 message loop, and the watcher posts in the background.
+    Tray commands reach Tk through a queue, since Tk isn't thread-safe.
+    """
+    from doink import tray, ui
+    from doink.app import App
+    from doink.status import Status
 
     log_path = app_dir() / "doink.log"
     handler = logging.handlers.RotatingFileHandler(
@@ -161,35 +42,57 @@ def run_tray(args) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         handlers=[handler])
 
+    ui.enable_dpi_awareness()
     if not tray.acquire_single_instance():
         tray.message_box("DOINK is already running. Look for its icon in the "
                          "system tray (you may need to click ^ to see it).")
         return 0
+
+    icon = None
+    status = Status(on_change=lambda new_error: icon and icon.notify(new_error))
     try:
-        config = load_config(args.config, dry_run=args.dry_run)
-    except SystemExit as e:
+        app = App(args.config, status, dry_run=args.dry_run)
+    except SystemExit as e:  # e.g. a hand-edited config.toml that doesn't parse
         log.error("%s", e)
         tray.message_box(str(e), error=True)
         return 1
 
-    stop = threading.Event()
-    icon = None
-    status = Status(on_change=lambda new_error: icon and icon.notify(new_error))
-    icon = tray.Tray(status, log_path, app_dir(), on_quit=stop.set)
-
-    def work():
-        try:
-            run(config, stop=stop, status=status)
-        except Exception:
-            log.exception("companion crashed")
-            status.failed("stopped after an error; see the log")
-
+    commands: queue.Queue[str] = queue.Queue()
+    icon = tray.Tray(status, log_path, app_dir(), command=commands.put)
+    threading.Thread(target=icon.run, name="tray", daemon=True).start()
     log.info("DOINK companion started")
-    worker = threading.Thread(target=work, name="watcher", daemon=True)
-    worker.start()
-    icon.run()  # blocks until Quit
-    stop.set()
-    worker.join(timeout=5)
+    app.start()
+
+    import tkinter as tk
+    root = tk.Tk()
+    try:
+        root.iconbitmap(default=str(tray.icon_path()))
+    except tk.TclError:
+        pass
+    window = ui.SettingsWindow(root, app, tray.asset("doink-48.png"),
+                               open_log=lambda: tray.Tray.open(log_path),
+                               open_folder=lambda: tray.Tray.open(app_dir()))
+    if app.needs_setup():
+        window.show()  # first run: say hello rather than sit silently in the tray
+
+    def poll_commands():
+        while True:
+            try:
+                command = commands.get_nowait()
+            except queue.Empty:
+                break
+            if command == "settings":
+                window.show()
+            elif command == "quit":
+                root.quit()
+                return
+        root.after(150, poll_commands)
+
+    poll_commands()
+    root.mainloop()
+
+    app.stop()
+    icon.quit()
     log.info("DOINK companion stopped")
     return 0
 

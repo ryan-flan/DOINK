@@ -1,6 +1,7 @@
 companion/config.toml
 companion/state.json
 companion/state.tmp
+companion/config.tmp
 companion/build/
 companion/dist/
 companion/version_info.txt
