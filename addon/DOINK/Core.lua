@@ -114,13 +114,17 @@ function ns:Emit(eventType, data, isTest)
   local char = self.char
   char.seq = char.seq + 1 -- never reused, even if encoding below fails
 
+  -- UnitLevel lags behind during PLAYER_LEVEL_UP (verified in beta), so
+  -- also trust the level that event delivered.
+  local level = math.max(UnitLevel("player"), self.knownLevel or 0)
+
   local envelope = {
     seq = char.seq,
     ts = time(),
     char = self.player.name,
     realm = self.player.realm,
     class = self.player.class,
-    level = UnitLevel("player"),
+    level = level,
     type = eventType,
     data = data or {},
   }
@@ -189,12 +193,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
     InitChar()
     RegisterNotifiers()
   else
+    if event == "PLAYER_LEVEL_UP" then
+      ns.knownLevel = ... -- before notifiers run, so their Emit sees it
+    end
     Dispatch(event, ...)
   end
 end)
 
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_LEVEL_UP") -- for ns.knownLevel, even if LevelUp is disabled
 
 ------------------------------------------------------------------ slash commands
 

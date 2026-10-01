@@ -5,9 +5,8 @@ ns.Notifiers.LevelUp = {
   events = { "PLAYER_LEVEL_UP" },
 
   -- PLAYER_LEVEL_UP args: newLevel, then health/power/stat deltas.
-  -- TODO(beta): check whether UnitLevel("player") is already the new level
-  -- when this fires. If it lags, the envelope "level" will be one behind
-  -- data.level. Check with /doink debug on a real ding.
+  -- UnitLevel("player") still returns the old level at this point; Core
+  -- handles that for the envelope via ns.knownLevel.
   OnEvent = function(event, level)
     if ns:GetOption("level_up", "milestones_only") and level % 10 ~= 0 then
       return

@@ -195,6 +195,15 @@ test("skill_up: milestones only by default", function()
   assert(has('"skill":"Blacksmithing"') and has('"rank":150') and has('"max_rank":225'), last())
 end)
 
+test("level_up: envelope level isn't stale when UnitLevel lags", function()
+  -- Beta: during PLAYER_LEVEL_UP, UnitLevel still returns the old level.
+  level = 9
+  fire("PLAYER_LEVEL_UP", 10)
+  assert(has('"data":{"level":10}') and has('"level":10,'), last())
+  fire("QUEST_TURNED_IN", 818, 625, 0) -- same-second turn-in that caused it
+  assert(has('"level":10,'), last())
+end)
+
 test("every notifier has a working /doink test fixture", function()
   for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup" }) do
     local n = count()
