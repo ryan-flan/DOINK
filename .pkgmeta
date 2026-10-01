@@ -17,3 +17,4 @@ ignore:
   - .gitignore
   - CLAUDE.md
   - README.md
+  - docs

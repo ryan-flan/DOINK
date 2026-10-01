@@ -274,9 +274,19 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
    (`## Version`), `companion/doink/__init__.py`, `companion/pyproject.toml`.
    Commit as `build: release vX.Y.Z`.
 2. `git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`.
-3. `release.yml` tests on Windows, builds `doink.exe`, and publishes
-   `DOINK-vX.Y.Z.zip` (AddOns/, Companion/, README) as a GitHub release.
-   Notes are generated from commits since the previous tag.
+3. `release.yml` runs two jobs:
+   - `build` (Windows): tests, builds `doink.exe`, publishes
+     `DOINK-vX.Y.Z.zip` (AddOns/, Companion/, README, LICENSE) + `.sha256`
+     as a GitHub release. Notes are generated from commits.
+   - `addon` (BigWigs packager v2, needs ≥ 2.6.0 for Forever): builds the
+     **addon-only** zip `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta`
+     (`move-folders` lifts `addon/DOINK` to the zip root; ignore rules run
+     first, so never ignore `addon/` itself). Interface 16xxx → game type
+     `forever`, game version 1.60.1. On tags it uploads to CurseForge/Wago
+     when repo **variables** `CURSEFORGE_PROJECT_ID` / `WAGO_PROJECT_ID` and
+     **secrets** `CF_API_KEY` / `WAGO_API_TOKEN` are set; manual runs pass
+     `-d` and never upload. The store zip never contains `doink.exe`; store
+     pages link to GitHub Releases for the companion.
 
 Semver: breaking data-contract changes bump the minor version while < 1.0.
 
