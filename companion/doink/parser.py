@@ -28,8 +28,19 @@ class ParseError(Exception):
     pass
 
 
+def full_name(event: dict) -> str:
+    """``Paul Hebbs`` on Forever (surnames), ``Paul`` elsewhere."""
+    surname = event.get("surname")
+    return f"{event['char']} {surname}" if surname else event["char"]
+
+
 def char_key(event: dict) -> str:
-    """The addon's per-character key, e.g. ``Paul-Classic Beta PvE 2``."""
+    """The addon's per-character key, e.g. ``Paul Hebbs-Classic Beta PvE 2``."""
+    return f"{full_name(event)}-{event['realm']}"
+
+
+def legacy_char_key(event: dict) -> str:
+    """The key used before surnames existed (v0.2.0), e.g. ``Paul-Classic Beta PvE 2``."""
     return f"{event['char']}-{event['realm']}"
 
 

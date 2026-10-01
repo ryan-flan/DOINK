@@ -77,11 +77,37 @@ local function InitDB()
   ns.db = db
 end
 
+-- Before surnames, chars were keyed "Paul-Realm". Move that entry (queue,
+-- settings, per-char webhook) to "Paul Hebbs-Realm" and stamp the surname
+-- into its queued events, so the companion sees one character, not two.
+local function MigrateToSurname(name, surname, realm, key)
+  local oldKey = name .. "-" .. realm
+  local old = ns.db.chars[oldKey]
+  if not old or ns.db.chars[key] then return end
+
+  local stamp = '{"surname":' .. ns.Json.Encode(surname) .. ","
+  for i, json in ipairs(old.events or {}) do
+    if not json:find('"surname":', 1, true) then
+      old.events[i] = json:gsub("^{", function() return stamp end, 1)
+    end
+  end
+  ns.db.chars[key], ns.db.chars[oldKey] = old, nil
+  ns.db.webhooks[key] = ns.db.webhooks[key] or ns.db.webhooks[oldKey]
+  ns.db.webhooks[oldKey] = nil
+  ns:Print("moved saved data from %s to %s", oldKey, key)
+end
+
 -- PLAYER_LOGIN: name, realm and class are reliable from here on.
 local function InitChar()
-  local name = UnitName("player")
+  -- Forever: UnitName("player") returns the surname second (verified in
+  -- beta). Other clients return nil there for the player.
+  local name, surname = UnitName("player")
+  if surname == "" then surname = nil end
+  local fullName = surname and (name .. " " .. surname) or name
   local realm = GetRealmName()
-  local key = name .. "-" .. realm
+  local key = fullName .. "-" .. realm -- Forever only guarantees full names are unique
+
+  if surname then MigrateToSurname(name, surname, realm, key) end
 
   local char = ns.db.chars[key] or {}
   char.seq = char.seq or 0
@@ -93,6 +119,7 @@ local function InitChar()
   ns.player = {
     key = key,
     name = name,
+    surname = surname, -- nil outside Forever
     realm = realm,
     class = select(2, UnitClass("player")), -- "WARRIOR", not localized
   }
@@ -123,6 +150,7 @@ function ns:Emit(eventType, data, isTest)
     seq = char.seq,
     ts = time(),
     char = self.player.name,
+    surname = self.player.surname, -- nil leaves the field out
     realm = self.player.realm,
     class = self.player.class,
     level = level,

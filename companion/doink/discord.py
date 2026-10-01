@@ -9,6 +9,7 @@ import urllib.request
 from datetime import UTC, datetime
 
 from . import __version__
+from .parser import char_key, full_name
 
 log = logging.getLogger(__name__)
 
@@ -55,13 +56,13 @@ def _field(name: str, value) -> dict:
 # ------------------------------------------------------------------ embeds
 
 def _level_up(event: dict, data: dict) -> dict:
-    return {"title": f"{event['char']} reached level {data.get('level', '?')}"}
+    return {"title": f"{full_name(event)} reached level {data.get('level', '?')}"}
 
 
 def _loot(event: dict, data: dict) -> dict:
     name = data.get("name") or "an item"
     qty = data.get("qty") or 1
-    embed = {"title": f"{event['char']} looted {name}" + (f" ×{qty}" if qty > 1 else "")}
+    embed = {"title": f"{full_name(event)} looted {name}" + (f" ×{qty}" if qty > 1 else "")}
     if isinstance(data.get("item_id"), int):
         embed["url"] = f"{WOWHEAD}/item={data['item_id']}"
     quality = data.get("quality")
@@ -78,13 +79,13 @@ def _death(event: dict, data: dict) -> dict:
     if data.get("subzone"):
         where = f"{data['subzone']}, {where}"
     return {
-        "title": f"{event['char']} died" + (f" to {killer}" if killer else ""),
+        "title": f"{full_name(event)} died" + (f" to {killer}" if killer else ""),
         "description": f"in {where}",
     }
 
 
 def _quest(event: dict, data: dict) -> dict:
-    embed = {"title": f"{event['char']} completed {data.get('title') or 'a quest'}"}
+    embed = {"title": f"{full_name(event)} completed {data.get('title') or 'a quest'}"}
     if isinstance(data.get("quest_id"), int):
         embed["url"] = f"{WOWHEAD}/quest={data['quest_id']}"
     if data.get("xp"):
@@ -93,7 +94,7 @@ def _quest(event: dict, data: dict) -> dict:
 
 
 def _boss_kill(event: dict, data: dict) -> dict:
-    embed = {"title": f"{event['char']} defeated {data.get('name') or 'a boss'}"}
+    embed = {"title": f"{full_name(event)} defeated {data.get('name') or 'a boss'}"}
     fields = []
     if data.get("instance"):
         fields.append(_field("Instance", data["instance"]))
@@ -107,7 +108,7 @@ def _boss_kill(event: dict, data: dict) -> dict:
 def _skill_up(event: dict, data: dict) -> dict:
     skill = data.get("skill") or "a skill"
     rank = data.get("rank", "?")
-    embed = {"title": f"{event['char']} reached {rank} {skill}"}
+    embed = {"title": f"{full_name(event)} reached {rank} {skill}"}
     if data.get("max_rank"):
         embed["description"] = f"{rank} / {data['max_rank']}"
     return embed
@@ -117,7 +118,7 @@ def _generic(event: dict, data: dict) -> dict:
     # Fallback for types without a builder yet (M3), so nothing is lost.
     body = json.dumps(data, indent=2, ensure_ascii=False)[:3900]
     return {
-        "title": f"{event['char']}: {event['type']}",
+        "title": f"{full_name(event)}: {event['type']}",
         "description": f"```json\n{body}\n```",
     }
 
@@ -137,7 +138,7 @@ def build_embed(event: dict) -> dict:
     embed = BUILDERS.get(event["type"], _generic)(event, data)
 
     embed.setdefault("color", CLASS_COLOURS.get(event.get("class"), DEFAULT_COLOUR))
-    footer = f"{event['char']}-{event['realm']}"
+    footer = char_key(event)
     if event.get("test"):
         embed["title"] = "[TEST] " + embed["title"]
         footer += " · test event"

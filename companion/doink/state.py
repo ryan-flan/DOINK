@@ -24,6 +24,14 @@ class State:
         entry = self._chars.get(key)
         return entry["last_seen"] if entry else None
 
+    def rename(self, old: str, new: str) -> bool:
+        """Move ``old``'s entry to ``new`` if ``new`` has none. Returns True if moved."""
+        if old not in self._chars or new in self._chars:
+            return False
+        self._chars[new] = self._chars.pop(old)
+        self.save()
+        return True
+
     def set_last_seen(self, key: str, seq: int) -> None:
         self._chars[key] = {"last_seen": seq}
         self.save()

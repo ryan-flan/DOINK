@@ -56,6 +56,11 @@ class EmbedTest(unittest.TestCase):
         self.assertEqual(embed["title"], "Paul reached 150 Blacksmithing")
         self.assertEqual(embed["description"], "150 / 225")
 
+    def test_surname_in_title_and_footer(self):
+        embed = build_embed(event("level_up", {"level": 10}, surname="Hebbs"))
+        self.assertEqual(embed["title"], "Paul Hebbs reached level 10")
+        self.assertEqual(embed["footer"]["text"], "Paul Hebbs-R")
+
     def test_test_events_are_labelled(self):
         embed = build_embed(event("quest", {"quest_id": 783, "title": "A Threat Within"}, test=True))
         self.assertEqual(embed["title"], "[TEST] Paul completed A Threat Within")

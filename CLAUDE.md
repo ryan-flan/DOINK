@@ -96,6 +96,7 @@ Event JSON schema:
   "seq":   42,
   "ts":    1759300000,
   "char":  "Flano",
+  "surname": "Hebbs",           // optional; Forever only
   "realm": "Whatever",
   "class": "WARRIOR",
   "level": 20,
@@ -106,6 +107,13 @@ Event JSON schema:
 ```
 
 Rules:
+- Forever characters have surnames, and only the **full name** is unique.
+  `char` stays the first name; `surname` is present when the client has one.
+  Character keys everywhere (DB `chars`, `webhooks`, companion `state.json`)
+  are `"<char> <surname>-<realm>"`, or `"<char>-<realm>"` without a surname.
+  Source: `UnitName("player")` returns the surname as its 2nd value on Forever
+  (verified; nil elsewhere). Since v0.3.0; both halves migrate v0.2.0's
+  first-name keys (the addon also stamps `surname` into queued events).
 - Webhook for a character's events: `webhooks["Name-Realm"]`, else
   `webhooks["*"]`, else the companion's `config.toml`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
@@ -287,6 +295,11 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   open handle, not just the directory size. So the combat-log tailer is
   blocked in beta too. Next: check whether both logs fill on logout.
   Until then the pixel bridge is the only realtime path.
+- [x] **Surnames.** `UnitName("player")` and `UnitFullName("player")` both
+  return `"Paul", "Hebbs"` (surname where other clients put the realm);
+  `GetUnitName("player", true)` returns `"Paul Hebbs"`. Related APIs exist
+  but are unverified and unused: `C_PlayerInfo.ShouldDisplaySurname`,
+  `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator`.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
   title resolves (quest 818 "A Solvent Spirit", 625 xp).

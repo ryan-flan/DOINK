@@ -38,10 +38,11 @@ def webhooks_block(**hooks):
     return '["webhooks"] = {\n' + entries + "},\n"
 
 
-def events_file(*seqs, char="Paul", event_type="level_up"):
+def events_file(*seqs, char="Paul", event_type="level_up", surname=None):
+    extra = r'\"surname\":\"%s\",' % surname if surname else ""
     lines = [
-        r'"{\"char\":\"%s\",\"class\":\"MAGE\",\"data\":{\"level\":%d},\"realm\":\"R\",'
-        r'\"seq\":%d,\"ts\":1790870764,\"type\":\"%s\"}",' % (char, s, s, event_type)
+        r'"{%s\"char\":\"%s\",\"class\":\"MAGE\",\"data\":{\"level\":%d},\"realm\":\"R\",'
+        r'\"seq\":%d,\"ts\":1790870764,\"type\":\"%s\"}",' % (extra, char, s, s, event_type)
         for s in seqs
     ]
     return '["events"] = {\n' + "\n".join(lines) + "\n},"
@@ -131,6 +132,24 @@ class ProcessTest(unittest.TestCase):
         ok, _ = self.run_with(events_file(1, 2), state)
         self.assertTrue(ok)
         self.assertEqual(self.webhook.sent[-1][0]["title"], "Paul reached level 2")
+
+    def test_surname_upgrade_carries_history_without_reposting(self):
+        # v0.2.0: posted #1-2 as "Paul-R".
+        state = State(self.config.state_path)
+        self.run_with(events_file(1, 2), state)
+        self.webhook.sent.clear()
+
+        # v0.3.0 addon migrated the entry and stamped the surname into it;
+        # one new event since. Only #3 may post.
+        restarted = State(self.config.state_path)
+        with self.assertLogs("doink", "INFO") as logs:
+            ok, _ = self.run_with(events_file(1, 2, 3, surname="Hebbs"), restarted)
+        self.assertTrue(ok)
+        self.assertEqual([e["title"] for m in self.webhook.sent for e in m],
+                         ["Paul Hebbs reached level 3"])
+        self.assertEqual(restarted.last_seen("Paul Hebbs-R"), 3)
+        self.assertIsNone(restarted.last_seen("Paul-R"))
+        self.assertTrue(any("carried over" in line for line in logs.output))
 
     def test_seq_reset_starts_over(self):
         state = State(self.config.state_path)

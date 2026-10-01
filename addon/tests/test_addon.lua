@@ -31,7 +31,7 @@ SKILL_RANK_UP = "Your skill in %s has increased to %d."
 local now, level = 1000, 9
 time = function() return 1790870000 end
 function GetTime() return now end
-function UnitName() return "Paul" end
+function UnitName() return "Paul", "Hebbs" end -- Forever: surname second
 function UnitGUID() return "Player-1-ABC" end
 function GetRealmName() return "Classic Beta PvE 2" end
 function UnitClass() return "Warrior", "WARRIOR" end
@@ -77,6 +77,24 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
+
+-- SavedVariables as written by v0.2.0, before surnames were known.
+local OLD_KEY, NEW_KEY = "Paul-Classic Beta PvE 2", "Paul Hebbs-Classic Beta PvE 2"
+local OLD_HOOK = "https://discord.com/api/webhooks/9/old"
+DOINKDB = {
+  version = 1,
+  webhooks = { [OLD_KEY] = OLD_HOOK },
+  chars = {
+    [OLD_KEY] = {
+      seq = 2,
+      config = { quest = { enabled = true } },
+      events = {
+        '{"char":"Paul","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}',
+        '{"char":"Paul","realm":"Classic Beta PvE 2","seq":2,"type":"quest"}',
+      },
+    },
+  },
+}
 fire("ADDON_LOADED", "DOINK")
 fire("PLAYER_LOGIN")
 
@@ -105,6 +123,25 @@ local function link(id, name, q)
 end
 
 ------------------------------------------------------------------ tests
+
+test("surname: pre-surname entry migrates to the full-name key", function()
+  eq(DOINKDB.chars[OLD_KEY], nil, "old key gone")
+  local char = DOINKDB.chars[NEW_KEY]
+  assert(char, "new key exists")
+  eq(char.seq, 2, "seq carried over")
+  eq(char.config.quest.enabled, true, "settings carried over")
+  eq(DOINKDB.webhooks[NEW_KEY], OLD_HOOK, "per-char webhook carried over")
+  eq(DOINKDB.webhooks[OLD_KEY], nil, "old webhook key gone")
+  -- Queued events gain the surname and stay otherwise intact.
+  eq(char.events[1], '{"surname":"Hebbs","char":"Paul","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}', "event 1")
+  assert(char.events[2]:find('^{"surname":"Hebbs","char":"Paul"'), char.events[2])
+  DOINKDB.webhooks[NEW_KEY] = nil -- keep the webhook tests below independent
+end)
+
+test("surname: new events carry it, seq continues", function()
+  SlashCmdList.DOINK("test levelup")
+  assert(has('"char":"Paul"') and has('"surname":"Hebbs"') and has('"seq":3,'), last())
+end)
 
 test("FormatToPattern escapes magic and captures", function()
   local p = ns.FormatToPattern("You receive loot: %sx%d.")
@@ -239,7 +276,8 @@ test("reset: back to defaults", function()
   slash("reset skillup")
   eq(ns:GetOption("loot", "min_quality"), 3, "default quality")
   eq(ns:GetOption("skill_up", "milestones_only"), true, "default milestones")
-  assert(not slash("options"):find("(custom)", 1, true))
+  assert(not slash("options loot"):find("(custom)", 1, true))
+  assert(not slash("options skillup"):find("(custom)", 1, true))
 end)
 
 test("webhook: account-wide, per character, clear; never printed in full", function()
@@ -247,12 +285,12 @@ test("webhook: account-wide, per character, clear; never printed in full", funct
   slash("webhook " .. url)
   eq(DOINKDB.webhooks["*"], url, "account")
   slash("webhook here " .. url .. "X")
-  eq(DOINKDB.webhooks["Paul-Classic Beta PvE 2"], url .. "X", "char")
+  eq(DOINKDB.webhooks[NEW_KEY], url .. "X", "char")
   local status = slash("")
   assert(status:find("this character, ending ...ef9X", 1, true), status)
   assert(not status:find("123456", 1, true), "status leaks the URL")
   slash("webhook here clear")
-  eq(DOINKDB.webhooks["Paul-Classic Beta PvE 2"], nil, "char cleared")
+  eq(DOINKDB.webhooks[NEW_KEY], nil, "char cleared")
   assert(slash(""):find("all characters", 1, true))
   assert(slash("webhook https://evil.example/api/webhooks/1/x"):find("doesn't look like", 1, true))
   eq(DOINKDB.webhooks["*"], url, "bad URL ignored")

@@ -11,7 +11,7 @@ from pathlib import Path
 from doink.config import Config, load_config
 from doink.discord import (MAX_EMBEDS_PER_MESSAGE, WebhookError, WebhookPool,
                            build_embed, is_webhook_url)
-from doink.parser import char_key, parse_events, parse_webhooks
+from doink.parser import char_key, legacy_char_key, parse_events, parse_webhooks
 from doink.state import State
 from doink.watcher import Watcher
 
@@ -52,6 +52,9 @@ def process(config: Config, path: Path, state: State, pool: WebhookPool) -> bool
     for key, events in by_char.items():
         events.sort(key=lambda e: e["seq"])
         newest = events[-1]["seq"]
+        legacy = legacy_char_key(events[-1])
+        if legacy != key and state.rename(legacy, key):
+            log.info("%s: carried over posting history from %s", key, legacy)
         last = state.last_seen(key)
 
         if last is not None and newest < last:
