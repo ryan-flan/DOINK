@@ -249,10 +249,11 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   `pcall` can't catch it. Never register it; `addon/tests` guards this.
   Combat-log data must come from the companion reading `WoWCombatLog.txt`.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
-- [ ] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in? ______
-  - [x] `C_QuestLog.GetQuestInfo(783)` → `nil` (quest not in log). Titles
-    rely on the `QUEST_COMPLETE` → `GetTitleText()` fallback; confirm on a
-    real turn-in that the title isn't `Quest #<id>`.
+- [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
+  title resolves (quest 818 "A Solvent Spirit", 625 xp).
+  `C_QuestLog.GetQuestInfo` returns `nil` for quests not in the log.
+- [x] During `PLAYER_LEVEL_UP`, `UnitLevel("player")` still returns the
+  **old** level. Core tracks `ns.knownLevel` from the event for the envelope.
 - [x] `SKILL_RANK_UP` = `Your skill in %s has increased to %d.` (keeps its
   period, unlike the loot strings).
 - [ ] `PLAYER_DEAD` does *not* re-fire on login/reload while dead? ______
