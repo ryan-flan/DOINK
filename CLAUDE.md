@@ -31,6 +31,7 @@ DOINK/
 ├── CLAUDE.md
 ├── README.md
 ├── .gitattributes            # * text=auto eol=lf
+├── addon/tests/test_addon.lua  # offline harness: cd addon && luajit tests/test_addon.lua
 ├── addon/DOINK/              # junctioned into <WoW>/<flavor>/Interface/AddOns/DOINK
 │   ├── DOINK.toc
 │   ├── Core.lua              # init, SavedVariables, queue, slash commands
@@ -98,6 +99,9 @@ Event JSON schema:
 ```
 
 Rules:
+- `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
+- `death.killer` is the source of the last damage to the player within 5s
+  (from the combat log), or the environment type (`"Falling"`), else `null`.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -177,8 +181,9 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
   (handle `\"` and `\\` escapes), `json.loads` each. Skip unparseable entries
   with a warning rather than crashing.
 - Discord: one embed per event, colour by class (use the standard WoW class
-  colours), Wowhead link for items (`https://www.wowhead.com/classic/item=<id>`
-  — verify the Forever Wowhead URL scheme), footer `Char-Realm`. Respect the
+  colours; loot uses item-quality colour instead), Wowhead links for items and
+  quests (`https://www.wowhead.com/forever/item=<id>`, `/quest=<id>`;
+  verified), footer `Char-Realm`. Respect the
   webhook rate limit (~30/min); batch if many events arrive from one reload.
 - `--dry-run` prints embeds to stdout instead of POSTing.
 - Config via `config.toml`: `savedvariables_path`, `webhook_url`, per-type
@@ -238,6 +243,9 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
+- [ ] `QUEST_TURNED_IN` exists, and does `C_QuestLog.GetQuestInfo` give titles? ______
+- [ ] `SKILL_RANK_UP` global text (`/run print(SKILL_RANK_UP)`): ______
+- [ ] `PLAYER_DEAD` does *not* re-fire on login/reload while dead? ______
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
   `You receive loot: |cnIQ1:|Hitem:769::::::::8:1491::::::::::|h[Chunk of Boar Meat]|h|r`
   - Links use the **named-colour** form `|cnIQ<quality>:`, not `|cffRRGGBB`.
