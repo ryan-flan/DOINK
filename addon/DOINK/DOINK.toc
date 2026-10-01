@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: DOINK
 ## Notes: Posts in-game events to Discord via the DOINK companion app.
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: DOINKDB
 
 # Interface from: /run print(select(4, GetBuildInfo()))
