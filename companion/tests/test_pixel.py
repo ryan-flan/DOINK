@@ -139,18 +139,42 @@ class DecodeTest(unittest.TestCase):
         width = 1300
         clean = render(chunks[0], 3, width)
         self.assertIsNotNone(decode_band(clean, width))
+        def flip_block(buf, row, k):
+            # Whole block inverted (a single flipped pixel is recovered by
+            # the sweep sampling beside it, which is the right outcome).
+            for y in range(row * 3, row * 3 + 3):
+                for x in range(k * 3, k * 3 + 3):
+                    i = (y * width + x) * 4
+                    buf[i:i + 3] = bytes([255 - buf[i]] * 3)
+
         # A block in the payload area flipped: payload crc fails.
         damaged = bytearray(clean)
-        y, x = 4, 50 * 3 + 1  # row 1, block 50
-        i = (y * width + x) * 4
-        damaged[i:i + 3] = bytes([255 - damaged[i]] * 3)
+        flip_block(damaged, 1, 50)
         self.assertIsNone(decode_band(damaged, width))
         # A header block flipped: header crc fails.
         damaged = bytearray(clean)
-        x = 40 * 3 + 1  # row 0, a header block
-        i = (1 * width + x) * 4
-        damaged[i:i + 3] = bytes([255 - damaged[i]] * 3)
+        flip_block(damaged, 0, 40)
         self.assertIsNone(decode_band(damaged, width))
+
+    def test_near_integer_fractional_blocks(self):
+        # A strip rescaled by a hair (the death animation, beta 2026-10-02):
+        # block edges sit on an exact 3 px grid for sixty-odd blocks, then
+        # jump a whole pixel. Hard and soft edges, right-aligned like the
+        # bottom-right corner setting.
+        payload = (b'{"char":"Flano","class":"WARRIOR","data":{"environment":"DROWNING","killer":null,'
+                   b'"subzone":"Scuttle Coast","zone":"Durotar"},"level":9,"realm":"Classic Beta PvE 2",'
+                   b'"seq":24,"surname":"Wren","ts":1790963222,"type":"death"}')
+        chunks = encode_chunks(400, 7, payload)
+        width = 3438
+        for block in (2.95, 2.965, 2.98, 3.015, 3.03, 3.05):
+            for soft in (False, True):
+                for rows in chunks:
+                    buf = render(rows, block, width, x0=int(width - 400 * block))
+                    if soft:
+                        soften(buf, width, pixel.BAND_ROWS)
+                    chunk = decode_band(buf, width)
+                    self.assertIsNotNone(chunk, f"block {block} soft={soft}")
+                    self.assertEqual(chunk.payload, rows_payload(rows), f"block {block} soft={soft}")
 
     def test_brightness_gradient_along_the_strip(self):
         # The death screen dims the strip unevenly (beta, 2026-10-02): the

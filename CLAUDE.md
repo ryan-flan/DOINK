@@ -248,11 +248,14 @@ two implementations can't drift apart. Regenerate with
   area into one DIB section; finds the sync at any x with per-block-size
   regexes (±2 px), fits the grid by least squares and keeps refining it from
   every transition along each row (the sync alone can't pin a fractional
-  block width over 400 blocks), calibrates black/white on the sync blocks
-  for the header row, thresholds each payload row **locally** (48 px
-  segments, cut from the min/max of the segment and its neighbours; the
-  death screen dims the strip unevenly and a single cut lost the far end,
-  beta 2026-10-02), checks both CRCs. 8 Hz while WoW is the foreground window, 1 Hz otherwise;
+  block width over 400 blocks; snap tolerance 0.45 block, because a
+  near-integer width such as 3.02 px jumps a whole pixel every sixty-odd
+  blocks), reads each block as the **majority of its central half** (soft
+  edges), calibrates black/white on the sync blocks for the header row,
+  thresholds each payload row locally (48 px segments), checks both CRCs,
+  and if the fitted grid fails, **sweeps** block widths ±0.08 px in 0.01
+  steps and the sync position ±1 px until a grid passes both CRCs (dying
+  rescales the strip slightly; see beta facts). 8 Hz while WoW is the foreground window, 1 Hz otherwise;
   foreground-only (no `PrintWindow`) by design.
 - **Dedupe**: `state.json` gained `missing`: seqs below `last_seen` not yet
   posted. Realtime posts call `mark_posted(key, seq, first_sight_backlog)`;
@@ -499,14 +502,24 @@ fixture included; that's a stand-in for the real name, by decision.)
     named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
   - [ ] Environmental `environmentalType` values unseen; retail uses
     Falling/Drowning/Fatigue/Fire/Lava/Slime, matched case-insensitively.
-- [x] **The death screen dims the strip unevenly** (2026-10-02, verbose
-  reader log): with the player dead, the strip was found at 3.00 px blocks
-  and the header row decoded on every capture, but the two full-width
-  payload chunks failed their CRC every time, for the whole 3 s burst,
-  while a `/doink test death` (not actually dead) posted fine. Reads as a
-  vignette/gradient over the UI layer: bright enough at the sync end, too
-  dark at the far end for one global cut. Fixed with local thresholding
-  in `pixel.py`; a test death can't reproduce it, only a real one can.
+- [x] **Dying rescales the strip by a hair** (2026-10-02). Real deaths
+  never posted in realtime while `/doink test death` did. Verbose reader
+  log, dead: the sync was found 6 px (and once 17 px) left of its alive
+  position with the header fields right but the CRC bits at the row's end
+  wrong; a lossless screenshot minutes after death shows the strip crisp
+  0/255 and decoding fine, so there is no dimming. Reads as a death
+  animation scaling the UI by ~0.5–1.5 % for the first seconds, exactly
+  the strip's 3 s burst. Reproduced offline: the decoder failed on
+  **near-integer block widths** (2.95–3.05 px; 2.9 and 3.1 were fine):
+  such a strip renders on an exact 3 px grid for sixty-odd blocks and then
+  jumps a whole pixel, the old 0.3-block snap tolerance rejected every
+  transition after the jump, and the sampling was half a block off by the
+  end of the row. Fixed in `pixel.py` (0.45 snap, central-half majority
+  sampling, and a sweep of ±0.08 px / ±1 px grids verified by both CRCs
+  when the fit fails); `test_near_integer_fractional_blocks` pins it. The
+  local thresholding added for the dimming theory stays: harmless, and
+  cheap insurance.
+  - [ ] Confirm with a real death on v0.9.1+.
 - [x] **Communities parked**: `C_Club` exists but Battle.net features are
   limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
@@ -559,7 +572,9 @@ fixture included; that's a stand-in for the real name, by decision.)
   useful without the companion, and the README/CurseForge page lead with
   that. See "Announcements".
 - **v0.8.0:** settings page (`Options.lua`, native Settings API).
-- **v0.9.0:** `death.killer` from the death recap.
+- **v0.9.0:** `death.killer` from the death recap, environmental death
+  lines, `file_seen` wipe check. **v0.9.1:** reader copes with a slightly
+  rescaled strip (realtime deaths).
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)

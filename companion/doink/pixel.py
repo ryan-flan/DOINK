@@ -27,6 +27,8 @@ MAX_BLOCKS = 1200
 BLOCK_MIN, BLOCK_MAX = 2, 8    # pixels per block the reader will look for
 BAND_ROWS = ROWS * BLOCK_MAX   # 24: enough for the largest block size
 MIN_CONTRAST = 48              # white minus black, out of 255
+SNAP_TOLERANCE = 0.45          # blocks; how far a transition may sit from the fitted grid
+SWEEP_STEPS = 8                # header-CRC sweep: ±0.01 px steps either side of the fit
 # Forever beta ("WowB.exe") and retail/classic ("Wow.exe") window classes.
 WOW_WINDOW_CLASSES = ("waApplication Window", "GxWindowClass")
 
@@ -185,14 +187,45 @@ def _refine_grid(bits: str, grid: _Grid, limit_blocks: int) -> tuple[float, floa
     end = min(len(bits), int(x0 + (limit_blocks + 1) * block))
     if end <= start:
         return x0, block
-    for match in _TRANSITION.finditer(bits, start, end):
-        t = match.start() + 1
+    # Snap tolerance just under half a block. A block width a hair off an
+    # integer (3.02 px: the strip rescaled by a death animation, beta
+    # 2026-10-02) renders on an exact 3 px grid for sixty-odd blocks and
+    # then jumps a whole pixel, a third of a block; with a 0.3 tolerance
+    # every transition after the jump was rejected, the fit never adapted,
+    # and the sampling was half a block off by the end of the header row.
+    transitions = [m.start() + 1 for m in _TRANSITION.finditer(bits, start, end)]
+    for t in transitions:
         k = (t - x0) / block
         nearest = round(k)
-        if abs(k - nearest) <= 0.3:
+        if abs(k - nearest) <= SNAP_TOLERANCE:
             grid.add(nearest, t)
             x0, block = grid.fit()
+    # Further passes against the settled fit: transitions rejected early,
+    # while the fit was still the sync's rough guess, now snap cleanly, and
+    # each pass reaches further along the row. Stops when a pass gains no
+    # transitions (soft edges at 3.05 px took four).
+    accepted = grid.n
+    for _ in range(8):
+        again = _Grid()
+        for k, t in grid_seed(x0, block):
+            again.add(k, t)
+        for t in transitions:
+            k = (t - x0) / block
+            nearest = round(k)
+            if abs(k - nearest) <= SNAP_TOLERANCE:
+                again.add(nearest, t)
+        fit = again.fit()
+        if fit is None or again.n <= accepted:
+            break
+        accepted = again.n
+        x0, block = fit
     return x0, block
+
+
+def grid_seed(x0: float, block: float) -> list[tuple[float, float]]:
+    """The sync anchors a refined grid started from: its 13 run starts at the
+    current fit's positions, so a re-fit can't wander off the sync."""
+    return [(k, x0 + k * block) for k in _SYNC_RUN_STARTS[1:]]
 
 
 def decode(buf, width: int, stride: int, band_top: int, band_height: int,
@@ -269,72 +302,91 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
 
     def read_bits(r: int, first: int, count: int, gx0: float = x0,
                   gblock: float = block, bits: str | None = None) -> list[int] | None:
-        """Block values of row ``r``: against ``cut`` from the raw pixels,
-        or from an already thresholded scanline ``bits``."""
+        """Block values of row ``r`` from a thresholded scanline ``bits``
+        (the header row's is cut at the sync calibration). Each block is the
+        majority of the pixels in its central half, never one pixel: with a
+        fractional block width the edges are soft and a single sample can
+        land on a grey edge pixel."""
+        if row_y(r) >= band_height:
+            return None
+        if bits is None:
+            bits = line(row_y(r)).translate(_cut_table(int(cut))).decode("ascii")
         out = []
         for k in range(first, first + count):
-            if bits is not None:
-                x = int(gx0 + (k + 0.5) * gblock)
-                if not 0 <= x < len(bits) or row_y(r) >= band_height:
-                    return None
-                out.append(1 if bits[x] == "1" else 0)
-                continue
-            v = sample(r, k, gx0, gblock)
-            if v is None:
+            a = gx0 + k * gblock
+            lo = int(a + 0.25 * gblock + 0.5)
+            hi = max(lo, int(a + 0.75 * gblock - 0.5))
+            if lo < 0 or hi >= len(bits):
                 return None
-            out.append(1 if v > cut else 0)
+            span = bits[lo:hi + 1]
+            out.append(1 if span.count("1") * 2 > len(span) else 0)
         return out
 
-    header_bits = read_bits(0, len(SYNC), (HEADER_BYTES + 1) * 8)
-    if header_bits is None:
-        reject("header runs off the edge")
-        return None
-    header = bytes(_pack(header_bits))
-    if crc8(header[:HEADER_BYTES]) != header[HEADER_BYTES]:
-        reject(f"header crc mismatch (header {header.hex()})")
-        return None
-    if header[0] >> 4 != VERSION:
-        reject(f"version {header[0] >> 4}")
-        return None
-    blocks = (header[1] << 8) | header[2]
-    msg_id = (header[3] << 8) | header[4]
-    index, count, length = header[5], header[6], header[7]
-    payload_crc = (header[8] << 8) | header[9]
-    if not HEADER_BITS <= blocks <= MAX_BLOCKS or count < 1 or index >= count:
-        reject(f"bad header fields (blocks {blocks}, chunk {index}/{count})")
-        return None
-    if length > capacity(blocks):
-        reject(f"payload length {length} over capacity")
-        return None
+    def attempt(gx0: float, gblock: float) -> Chunk | str:
+        """Read the whole chunk on the grid (gx0, gblock); a Chunk, or why not."""
+        header_bits = read_bits(0, len(SYNC), (HEADER_BYTES + 1) * 8, gx0, gblock)
+        if header_bits is None:
+            return "header runs off the edge"
+        header = bytes(_pack(header_bits))
+        if crc8(header[:HEADER_BYTES]) != header[HEADER_BYTES]:
+            return f"header crc mismatch (header {header.hex()})"
+        if header[0] >> 4 != VERSION:
+            return f"version {header[0] >> 4}"
+        blocks = (header[1] << 8) | header[2]
+        msg_id = (header[3] << 8) | header[4]
+        index, count, length = header[5], header[6], header[7]
+        payload_crc = (header[8] << 8) | header[9]
+        if not HEADER_BITS <= blocks <= MAX_BLOCKS or count < 1 or index >= count:
+            return f"bad header fields (blocks {blocks}, chunk {index}/{count})"
+        if length > capacity(blocks):
+            return f"payload length {length} over capacity"
 
-    data_bits = []
-    for i in range(0, length * 8, blocks):
-        row = 1 + i // blocks
-        if row >= ROWS:
-            return None
-        # Each data row re-fits the grid from its own transitions, so a
-        # fractional block width can't drift the sampling off the far blocks.
-        # The row is thresholded locally over the strip's extent, so a
-        # brightness gradient along it (the death screen) can't flip the
-        # far blocks.
-        raw = line(row_y(row))
-        start = max(0, int(x0))
-        end = min(len(raw), int(x0 + blocks * block) + 1)
-        row_bits = _threshold_line_local(raw, start, end, int(cut))
-        row_grid = _Grid()
-        for k, t in zip(_SYNC_RUN_STARTS[1:], (x0 + s * block for s in _SYNC_RUN_STARTS[1:])):
-            row_grid.add(k, t)  # anchor on the header row's grid
-        gx0, gblock = _refine_grid(row_bits, row_grid, blocks)
-        got = read_bits(row, 0, min(blocks, length * 8 - i), gx0, gblock, row_bits)
-        if got is None:
-            reject(f"data row {row} runs off the edge")
-            return None
-        data_bits.extend(got)
-    payload = bytes(_pack(data_bits))
-    if crc16(payload) != payload_crc:
-        reject(f"payload crc mismatch (chunk {index}/{count}, {length} bytes)")
-        return None
-    return Chunk(msg_id, index, count, payload, blocks, block)
+        data_bits = []
+        for i in range(0, length * 8, blocks):
+            row = 1 + i // blocks
+            if row >= ROWS:
+                return "payload overflows the rows"
+            # Each data row re-fits the grid from its own transitions, seeded
+            # with the header row's, so a fractional block width can't drift
+            # the sampling off the far blocks. The row is thresholded locally
+            # over the strip's extent, so a brightness gradient along it
+            # can't flip the far blocks either.
+            raw = line(row_y(row))
+            start = max(0, int(gx0))
+            end = min(len(raw), int(gx0 + blocks * gblock) + 1)
+            row_bits = _threshold_line_local(raw, start, end, int(cut))
+            row_grid = _Grid()
+            for k, t in grid_seed(gx0, gblock):
+                row_grid.add(k, t)
+            rx0, rblock = _refine_grid(row_bits, row_grid, blocks)
+            got = read_bits(row, 0, min(blocks, length * 8 - i), rx0, rblock, row_bits)
+            if got is None:
+                return f"data row {row} runs off the edge"
+            data_bits.extend(got)
+        payload = bytes(_pack(data_bits))
+        if crc16(payload) != payload_crc:
+            return f"payload crc mismatch (chunk {index}/{count}, {length} bytes)"
+        return Chunk(msg_id, index, count, payload, blocks, gblock)
+
+    result = attempt(x0, block)
+    if isinstance(result, Chunk):
+        return result
+    # The fit from the row's transitions can be a few hundredths of a pixel
+    # off when the edges are soft (a rescaled strip; the death animation in
+    # beta, 2026-10-02), which is a whole block by the far end of a row. Both
+    # CRCs together are the ground truth: sweep nearby widths and a pixel of
+    # sync offset either way, and keep the first grid the whole chunk
+    # decodes on. Only runs when the fit failed, on something that already
+    # passed the sync and contrast checks, so it costs nothing on noise.
+    first = result
+    for i in range(1, 2 * SWEEP_STEPS + 1):
+        candidate = block + (0.01 * ((i + 1) // 2)) * (1 if i % 2 else -1)
+        for dx in (0, -1, 1):
+            result = attempt(x0 + dx, candidate)
+            if isinstance(result, Chunk):
+                return result
+    reject(first)
+    return None
 
 
 def _pack(bits: list[int]) -> list[int]:
