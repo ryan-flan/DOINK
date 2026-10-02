@@ -1,34 +1,55 @@
 # DOINK
 
-Discord notifications for **World of Warcraft: Forever**. Level-ups, rare
-loot, deaths, quest turn-ins, boss kills and profession milestones get posted
-to a Discord channel. Inspired by [Dink](https://github.com/pajlads/DinkPlugin)
-for RuneLite. Status: beta, tracking the Forever beta client.
+An addon for **World of Warcraft: Forever** that tells your guild about your
+adventures: level milestones, rare loot, deaths and boss kills, announced in
+guild chat as they happen, with real item links. Optionally, a small
+companion app mirrors everything to a Discord channel too. Inspired by
+[Dink](https://github.com/pajlads/DinkPlugin) for RuneLite. Status: beta,
+tracking the Forever beta client.
 
 ## How it works
 
-WoW addons can't talk to the internet, so DOINK comes in two parts:
+**The addon on its own** watches for events and announces them in chat:
 
-1. **The addon** notices events in game and queues them in its saved data.
-2. **The companion** (`doink.exe`) runs alongside the game, reads that queue
-   and posts each event to your Discord webhook.
+```
+[Guild] Paul Hebbs: Ding! Level 20.
+[Guild] Paul Hebbs: Looted [Thunderfury, Blessed Blade of the Windseeker]!
+[Guild] Paul Hebbs: Ragnaros down! (Molten Core, 40 players)
+```
 
-> **Posts arrive when WoW saves addon data:** on `/reload`, logout, or exit.
-> That's a WoW limitation, not a setting. Play normally and your session posts
-> when you log out, or type `/doink flush` to post right away. There is also
-> an opt-in, experimental **realtime** mode that posts while you play; see
-> [How realtime works](#how-realtime-works-experimental).
+Guild chat by default; officer, party or raid chat if you prefer. Nothing
+leaves the game and there is nothing to install besides the addon.
+
+**With the companion** (`doink.exe`, optional), the same events also go to a
+Discord channel. WoW addons can't talk to the internet, so the addon queues
+events in its saved data and the companion, running alongside the game,
+reads that queue and posts each event to your Discord webhook.
+
+> **Discord posts arrive when WoW saves addon data:** on `/reload`, logout,
+> or exit. That's a WoW limitation, not a setting. Play normally and your
+> session posts when you log out, or type `/doink flush` to post right away.
+> There is also an opt-in, experimental **realtime** mode that posts while
+> you play; see [How realtime works](#how-realtime-works-experimental).
+> Guild chat announcements are always instant.
 
 ## Install
 
 1. Download `DOINK-<version>.zip` from
-   [Releases](https://github.com/ryan-flan/DOINK/releases) and unzip it.
-2. Copy `AddOns\DOINK` into your WoW AddOns folder, e.g.
+   [Releases](https://github.com/ryan-flan/DOINK/releases) (or install
+   **DOINK** from CurseForge) and copy `AddOns\DOINK` into your WoW AddOns
+   folder, e.g.
    `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
    Restart WoW completely (new addons are only picked up on start).
-3. Move the `Companion` folder somewhere permanent that you can write to,
-   e.g. `Documents\DOINK`, and run `doink.exe`. A gold **D** appears in the
-   system tray (click `^` if it's hidden) and the settings window opens.
+2. That's it for guild announcements. `/doink announce test` whispers you a
+   sample of each one so you can see the wording; `/doink announce` shows
+   and changes the rules (see [Announcements](#announcements)).
+
+### Optional: Discord
+
+3. Move the `Companion` folder from the zip somewhere permanent that you can
+   write to, e.g. `Documents\DOINK`, and run `doink.exe`. A gold **D**
+   appears in the system tray (click `^` if it's hidden) and the settings
+   window opens.
 4. In Discord: *Server Settings → Integrations → Webhooks → New Webhook*,
    choose a channel, *Copy Webhook URL*. Paste it into DOINK's settings,
    click **Save**, then **Send test message** to check it.
@@ -39,6 +60,30 @@ says so and lets you choose the folder.
 
 To check the whole loop in game: `/doink test levelup`, then `/doink flush`.
 A `[TEST]` post should appear a few seconds after the reload.
+
+## Announcements
+
+What goes to chat is deliberately stricter than what goes to Discord,
+because guild chat is shared. Defaults:
+
+| Event | Announced by default | Rule values |
+|---|---|---|
+| Level up | milestones: 10, 20 … 60 | `milestones`, `all`, `off` |
+| Loot | epic or better | `any`, `uncommon`, `rare`, `epic`, `legendary`, `off` |
+| Death | yes | `on`, `off` |
+| Boss kill | yes | `on`, `off` |
+| Quest turn-in | no | `on`, `off` |
+| Skill-up | no | `max`, `milestones`, `all`, `off` |
+
+- `/doink announce guild` (default), `officer`, `party`, `raid` or `off`.
+- `/doink announce loot rare`, `/doink announce quest on`, and so on.
+- `/doink announce test` whispers you a sample of every line, with whether
+  the current rules would announce it. `/doink test <type>` events are
+  whispered to you too, never to the guild.
+- Lines go out at most one every two seconds and eight a minute; anything
+  beyond that is dropped and you're told, so a loot burst can't flood
+  anyone. Say, yell and public channels are blocked for addons by Blizzard,
+  so those aren't options.
 
 ### The tray icon and settings
 
@@ -76,7 +121,7 @@ the release's workflow run. Check your download against the `.sha256` file on
 the release page:
 
 ```powershell
-Get-FileHash DOINK-v0.6.0.zip -Algorithm SHA256
+Get-FileHash DOINK-v0.7.0.zip -Algorithm SHA256
 ```
 
 > Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
@@ -147,7 +192,10 @@ strip entirely.
 | `/doink webhook <url>` | Webhook for all your characters |
 | `/doink webhook here <url>` | Webhook for this character only (e.g. one channel per alt) |
 | `/doink webhook [here] clear` | Remove it |
-| `/doink test <type>` | Queue a fake event to check your setup |
+| `/doink announce [channel]` | Show the chat announcement rules, or pick `guild`, `officer`, `party`, `raid`, `off` |
+| `/doink announce <type> <rule>` | Change a rule, e.g. `/doink announce loot rare` |
+| `/doink announce test` | Whisper yourself a sample of every announcement |
+| `/doink test <type>` | Queue a fake event to check your setup (whispered to you, never announced) |
 | `/doink realtime on\|off` | Experimental: show events as a strip for the companion to read live |
 | `/doink realtime test` | Show a test pattern for 10 s |
 | `/doink realtime position <corner>` | `topleft` (default), `topright`, `bottomleft`, `bottomright` |
@@ -157,7 +205,10 @@ strip entirely.
 Settings are per character and take effect immediately. Webhook changes reach
 the companion on the next reload.
 
-## Notifiers
+## Notifiers (Discord)
+
+These decide which events are recorded for Discord; the chat announcement
+rules above are applied on top.
 
 | Type | Posts when | Options (defaults) |
 |---|---|---|
@@ -184,8 +235,11 @@ newest 10 queued events.
 
 ## Known limitations
 
-- Posts normally arrive on `/reload` or logout. Realtime mode is experimental
-  and only reads while WoW is the active window.
+- Discord posts normally arrive on `/reload` or logout (chat announcements
+  are instant). Realtime mode is experimental and only reads while WoW is
+  the active window.
+- Chat announcements can't go to communities yet; Forever has the API, but
+  it's untested until there is a community to test with.
 - Deaths don't say what killed you: Forever blocks addons from reading the
   combat log.
 - Boss kills aren't confirmed in Forever dungeons yet.

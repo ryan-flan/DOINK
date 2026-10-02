@@ -1,8 +1,10 @@
 # DOINK — Discord notifications for World of Warcraft: Forever
 
-DOINK is "Dink for WoW": a WoW addon plus a small companion app that posts
-in-game events (level-ups, rare loot, deaths, quest turn-ins, boss kills,
-skill-ups) to a Discord webhook. Inspiration: https://github.com/pajlads/DinkPlugin
+DOINK is "Dink for WoW": a WoW addon that announces in-game events
+(level-ups, rare loot, deaths, quest turn-ins, boss kills, skill-ups) in
+guild chat, plus an **optional** companion app that mirrors them to a Discord
+webhook. Since v0.7.0 the addon is the product and works alone; Discord is
+the extra. Inspiration: https://github.com/pajlads/DinkPlugin
 
 Target game: **World of Warcraft: Forever** (Blizzard's Classic+, launches
 2026-11-04; beta runs until 2026-10-21). The addon API is the Classic Era API.
@@ -15,9 +17,10 @@ SavedVariables, which the client writes **only on `/reload` or logout**.
 
 Therefore DOINK is two parts:
 
-1. **Addon (Lua)** — detects events, appends them to a queue in SavedVariables.
-2. **Companion (Python, runs on the Windows gaming PC)** — reads the queue and
-   POSTs to Discord.
+1. **Addon (Lua)** — detects events, announces them in chat (`Announce.lua`,
+   needs nothing else) and appends them to a queue in SavedVariables.
+2. **Companion (Python, runs on the Windows gaming PC, optional)** — reads
+   the queue and POSTs to Discord.
 
 The addon is transport-agnostic. The companion decides how it learns about
 events. v1 uses a file watcher; later versions may add a combat-log tailer or a
@@ -37,7 +40,8 @@ DOINK/
 │   ├── DOINK.toc
 │   ├── Core.lua              # init, SavedVariables, queue, slash commands
 │   ├── Json.lua              # minimal JSON encoder (strings, numbers, bools, tables)
-│   ├── Defaults.lua          # default config table
+│   ├── Defaults.lua          # default config table + ns.Choices for string options
+│   ├── Announce.lua          # in-game chat announcements (guild/officer/party/raid)
 │   ├── Transports/Pixel.lua  # realtime strip encoder (experimental, off by default)
 │   └── Notifiers/
 │       ├── LevelUp.lua
@@ -155,6 +159,36 @@ Rules:
 
 Deferred to v1.1 pending beta findings: achievements (vanilla had none; Forever
 may add them), rare mob kills (combat log `UNIT_DIED` + classification).
+
+## Announcements (in-game chat)
+
+`Announce.lua` is registered in `ns.Transports` like the pixel strip: Core
+calls `Send(json, envelope)` for every emitted event and never knows what the
+transport does with it. Rules live in `ns.Defaults.announce` (per-character
+overrides via `ns:GetOption("announce", key)`; allowed string values in
+`ns.Choices.announce`): `channel` guild|officer|party|raid|off, `level_up`
+milestones|all|off, `loot` minimum quality any|uncommon|rare|epic|legendary|off,
+`skill_up` max|milestones|all|off, `death`/`quest`/`boss_kill` booleans.
+Defaults are deliberately stricter than the Discord queue's (milestones,
+epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
+
+- Wording is first person after the chat prefix ("Ding! Level 20.", "Looted
+  <link>!", "Ragnaros down! (Molten Core, 40 players)", "Died in Westfall.").
+  Item links are the raw `|Hitem` link from the loot event and render as
+  links in chat. Quests are plain text (a hand-built quest link could be
+  malformed).
+- **Test events never reach the guild**: anything with `test = true`, and
+  `/doink announce test`, is whispered to the player's **full name**
+  (`UnitName` gives the first name only on Forever; whispering "Paul" fails
+  with "No player named 'Paul'").
+- Rate limit: one line per 2 s via a `C_Timer.After` chain, max 8 per minute,
+  dropped lines are printed to the player. 255-byte chat limit enforced.
+- Verified in beta (2026-10-02): `SendChatMessage` **works from a timer**, i.e.
+  without a hardware event, at least for WHISPER (the server answered). GUILD
+  is the same restriction class in retail. SAY/YELL/CHANNEL are hardware-gated
+  for addons and are not offered. `C_Club` and `C_Club.SendMessage` exist in
+  Forever but are untested (no community to test with); communities are a
+  later option.
 
 ## Pixel transport contract (realtime, experimental)
 
@@ -462,8 +496,12 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 - **v0.6.0:** realtime via the pixel bridge (experimental, opt-in both
   sides). See "Pixel transport contract". Not done: `PrintWindow` capture
   for an alt-tabbed WoW; `Screenshot()`-based capture as a fallback.
-- **Later:** combat-log tailer if the file ever flushes promptly (realtime
-  deaths with killer), options UI (Ace3), rare kills, achievements.
+- **v0.7.0:** in-game chat announcements (`Announce.lua`); the addon is now
+  useful without the companion, and the README/CurseForge page lead with
+  that. See "Announcements".
+- **Later:** community channels via `C_Club` once one exists to test with;
+  combat-log tailer if the file ever flushes promptly (realtime deaths with
+  killer), options UI (Ace3), rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style

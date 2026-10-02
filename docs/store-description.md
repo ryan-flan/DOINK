@@ -1,32 +1,34 @@
-# DOINK: Discord notifications for WoW: Forever
+# DOINK: tell your guild about your adventures
 
-Post your adventures to a Discord channel: level-ups, rare loot, deaths,
-quest turn-ins, boss kills and profession milestones. Inspired by Dink for
-RuneLite.
+Announces your milestones in guild chat as they happen, with real item links:
 
-## ⚠ Needs the free DOINK companion app (Windows)
+```
+[Guild] Paul Hebbs: Ding! Level 20.
+[Guild] Paul Hebbs: Looted [Thunderfury, Blessed Blade of the Windseeker]!
+[Guild] Paul Hebbs: Ragnaros down! (Molten Core, 40 players)
+[Guild] Paul Hebbs: Died in Westfall.
+```
 
-WoW addons can't talk to the internet, so this addon only *records* events.
-The small **DOINK companion** reads them and posts to Discord. Get it from
-GitHub (open source, MIT, no installer, no admin rights):
-
-**https://github.com/ryan-flan/DOINK/releases/latest**
-
-Setup takes a minute: run `doink.exe`, paste your Discord webhook into its
-settings window, click *Send test message*. Full guide and what the companion
-does (and doesn't) on the GitHub page.
-
-## Posts arrive when WoW saves
-
-WoW only writes addon data on `/reload`, logout or exit, so posts arrive
-then: play normally and your session posts when you log out, or type
-`/doink flush` to post right away.
+Level milestones (10, 20 … 60), epic+ loot, boss kills and deaths by default;
+quest turn-ins and skill-ups if you want them. Guild, officer, party or raid
+chat. Rate-limited, so a loot burst can never flood anyone. Nothing leaves the
+game.
 
 ## Commands
 
-- `/doink` status · `/doink options` settings · `/doink set loot min_quality 4`
-- `/doink enable|disable <type>` for level_up, loot, death, quest, boss_kill, skill_up
-- `/doink webhook here <url>` a different Discord channel for this character
-- `/doink test <type>` then `/doink flush` to check your setup
+- `/doink announce test`: whispers you a sample of every announcement
+- `/doink announce guild|officer|party|raid|off`
+- `/doink announce loot rare`, `/doink announce quest on`, `/doink announce level_up all` …
+- `/doink`: status
+
+## Optional: mirror everything to Discord
+
+With the free **DOINK companion** (Windows, open source, MIT) the same events
+also post to a Discord channel as rich embeds with Wowhead links. WoW addons
+can't talk to the internet, so the companion does it from outside the game.
+Setup takes a minute: run `doink.exe`, paste your webhook into its settings
+window, click *Send test message*.
+
+**https://github.com/ryan-flan/DOINK/releases/latest**
 
 Source, issues and the companion: https://github.com/ryan-flan/DOINK
