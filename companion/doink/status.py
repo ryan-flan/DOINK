@@ -21,6 +21,7 @@ class Status:
         # on_notice(text): something worth a plain (non-warning) notification,
         # currently only "a newer version is available". Set by main.py.
         self.on_notice: Callable[[str], None] = lambda text: None
+        self.notify_updates = False  # config update_notify; the tray badge is the default signal
         self._lock = threading.Lock()
         self._update = None          # updates.UpdateInfo from the last check
         self._update_told: str | None = None  # version the user was notified about
@@ -101,16 +102,17 @@ class Status:
     # ---------------------------------------------------------- updates
 
     def update_checked(self, info) -> None:
-        """Result of an update check (updates.UpdateInfo). Notifies once per
-        newer version seen this session."""
+        """Result of an update check (updates.UpdateInfo). The tray badge
+        follows it; a notification only with notify_updates, once per newer
+        version seen this session."""
         with self._lock:
             self._update = info
-            tell = info.newer and info.latest != self._update_told
+            tell = self.notify_updates and info.newer and info.latest != self._update_told
             if tell:
                 self._update_told = info.latest
         if tell:
             self.on_notice(f"DOINK v{info.latest} is available (you have v{info.current}). "
-                           "Open settings for the download link.")
+                           "Right-click the tray icon to update.")
         self.on_change(None)
 
     def update(self):

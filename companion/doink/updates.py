@@ -1,22 +1,39 @@
-"""Checks GitHub Releases for a newer companion.
+"""Checks GitHub Releases for a newer companion, and installs one on request.
 
 One GET to ``https://api.github.com/repos/ryan-flan/DOINK/releases/latest``
 30 s after start-up and then once a day (``update_check = false`` in
 config.toml turns it off; the tray menu and settings window can still ask
-by hand). Nothing but the user agent is sent, nothing is downloaded or
-installed: a newer version is shown in the settings window and the tray,
-with a link to the releases page, and that is all.
+by hand). Nothing but the user agent is sent and nothing is downloaded by
+itself: a newer version puts an orange badge on the tray icon and an
+"Update to vX" entry in its menu.
+
+Choosing that runs ``Updater``: it downloads ``DOINK-vX.zip`` and its
+``.sha256`` from the release (github.com only), verifies the hash, unpacks
+the ``Companion`` folder into ``update/`` next to the exe, writes a small
+batch script that waits for this process to exit, swaps ``doink.exe`` and
+``_internal`` over, deletes the staging folder and starts the new exe, and
+then the companion quits. ``config.toml``, ``state.json`` and ``doink.log``
+are never touched. A running exe can't be overwritten on Windows, hence
+the hand-off.
 """
 
+import hashlib
 import json
 import logging
+import os
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import __version__
 
@@ -24,11 +41,13 @@ log = logging.getLogger(__name__)
 
 LATEST_URL = "https://api.github.com/repos/ryan-flan/DOINK/releases/latest"
 RELEASES_URL = "https://github.com/ryan-flan/DOINK/releases"
+DOWNLOAD_PREFIX = "https://github.com/ryan-flan/DOINK/releases/download/"
 USER_AGENT = f"DOINK-companion/{__version__} (+https://github.com/ryan-flan/DOINK)"
 TIMEOUT = 10.0
 FIRST_CHECK_DELAY = 30.0        # seconds after start-up
 CHECK_INTERVAL = 24 * 3600.0    # then daily
 RETRY_INTERVAL = 3600.0         # after a failed check
+MAX_ZIP_BYTES = 200 * 1024 * 1024
 
 
 @dataclass
@@ -37,10 +56,16 @@ class UpdateInfo:
     latest: str
     url: str
     checked_at: float
+    zip_url: str | None = None     # the release's DOINK-vX.zip, on github.com
+    sha256_url: str | None = None  # its .sha256
 
     @property
     def newer(self) -> bool:
         return is_newer(self.latest, self.current)
+
+    @property
+    def installable(self) -> bool:
+        return self.newer and bool(self.zip_url and self.sha256_url)
 
 
 def parse_version(text: str) -> tuple[int, ...] | None:
@@ -82,7 +107,134 @@ def fetch_latest(opener=urllib.request.urlopen, current: str = __version__) -> U
     url = data.get("html_url") if isinstance(data.get("html_url"), str) else RELEASES_URL
     if not url.startswith("https://github.com/"):
         url = RELEASES_URL
-    return UpdateInfo(current=current, latest=tag.lstrip("v"), url=url, checked_at=time.time())
+    zip_url = sha_url = None
+    for asset in data.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        name, link = asset.get("name"), asset.get("browser_download_url")
+        if not (isinstance(name, str) and isinstance(link, str) and link.startswith(DOWNLOAD_PREFIX)):
+            continue
+        if name == f"DOINK-{tag}.zip":
+            zip_url = link
+        elif name == f"DOINK-{tag}.zip.sha256":
+            sha_url = link
+    return UpdateInfo(current=current, latest=tag.lstrip("v"), url=url, checked_at=time.time(),
+                      zip_url=zip_url, sha256_url=sha_url)
+
+
+# ------------------------------------------------------------------ install
+
+class UpdateError(Exception):
+    """Shown to the user as-is."""
+
+
+class Updater:
+    """Downloads, verifies and stages a release, then hands the file swap to
+    a script that runs after this process exits."""
+
+    def __init__(self, app_dir: Path, opener=urllib.request.urlopen,
+                 launch=subprocess.Popen, pid: int | None = None):
+        self.app_dir = Path(app_dir)
+        self.stage = self.app_dir / "update"
+        self._opener = opener
+        self._launch = launch
+        self._pid = os.getpid() if pid is None else pid
+
+    def _get(self, url: str, progress: Callable[[str], None], what: str) -> bytes:
+        if not url.startswith(DOWNLOAD_PREFIX):
+            raise UpdateError("Refusing to download from anywhere but GitHub.")
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        chunks, got = [], 0
+        try:
+            with self._opener(request, timeout=30) as response:
+                while True:
+                    chunk = response.read(256 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    got += len(chunk)
+                    if got > MAX_ZIP_BYTES:
+                        raise UpdateError("The download is far larger than a DOINK release.")
+                    progress(f"Downloading {what}… {got / 1048576:.1f} MB")
+        except urllib.error.URLError as e:
+            raise UpdateError(f"Download failed: {e.reason if hasattr(e, 'reason') else e}") from None
+        except OSError as e:
+            raise UpdateError(f"Download failed: {e}") from None
+        return b"".join(chunks)
+
+    def download(self, info: UpdateInfo, progress: Callable[[str], None] = lambda s: None) -> Path:
+        """Fetch and verify the release; returns the staged Companion folder."""
+        if not info.installable:
+            raise UpdateError("This release has no companion download to install.")
+        if self.stage.exists():
+            shutil.rmtree(self.stage, ignore_errors=True)
+        self.stage.mkdir(parents=True)
+
+        data = self._get(info.zip_url, progress, f"v{info.latest}")
+        expected = self._get(info.sha256_url, progress, "checksum").decode("utf-8", "replace")
+        expected = expected.strip().split()[0].lower() if expected.strip() else ""
+        actual = hashlib.sha256(data).hexdigest()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected) or actual != expected:
+            raise UpdateError("The download's checksum doesn't match the one published with "
+                              "the release, so it wasn't installed.")
+        progress("Verified. Unpacking…")
+
+        zip_path = self.stage / "release.zip"
+        zip_path.write_bytes(data)
+        companion = self.stage / "Companion"
+        companion.mkdir()
+        count = 0
+        with zipfile.ZipFile(zip_path) as zf:
+            for member in zf.infolist():
+                parts = Path(member.filename).parts
+                # DOINK-vX/Companion/<...>: only that folder, and nothing that
+                # could escape it.
+                if len(parts) < 3 or parts[1] != "Companion" or member.is_dir():
+                    continue
+                rel = Path(*parts[2:])
+                if rel.is_absolute() or ".." in rel.parts:
+                    raise UpdateError("The release zip contains an unexpected path.")
+                target = companion / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                count += 1
+        zip_path.unlink()
+        if not (companion / "doink.exe").is_file():
+            raise UpdateError("The release zip has no doink.exe in it.")
+        log.info("update: staged v%s (%d files) in %s", info.latest, count, companion)
+        return companion
+
+    def script(self, companion: Path) -> str:
+        """The batch script that swaps the files once this process is gone."""
+        app, stage, pid = self.app_dir, self.stage, self._pid
+        return "\r\n".join([
+            "@echo off",
+            "rem DOINK self-update: waits for the old companion to exit, swaps the files, restarts it.",
+            ":wait",
+            f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul',
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto wait",
+            ")",
+            f'if exist "{app / "_internal"}" rmdir /s /q "{app / "_internal"}"',
+            f'xcopy "{companion}" "{app}" /E /I /Y /Q >nul',
+            f'rmdir /s /q "{stage}"',
+            f'start "" "{app / "doink.exe"}"',
+            "",
+        ])
+
+    def apply(self, companion: Path) -> None:
+        """Write and launch the swap script. The caller quits right after."""
+        if sys.platform != "win32":
+            raise UpdateError("Installing updates only works for the Windows doink.exe build.")
+        fd, path = tempfile.mkstemp(prefix="doink-update-", suffix=".cmd")
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(self.script(companion))
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        self._launch(["cmd.exe", "/c", path], creationflags=flags, close_fds=True,
+                     cwd=str(self.app_dir))
+        log.info("update: hand-off script started (%s); exiting for the swap", path)
 
 
 class UpdateChecker:

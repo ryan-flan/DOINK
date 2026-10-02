@@ -202,6 +202,7 @@ class Tray:
             raise OSError(ctypes.get_last_error(), "CreateWindowExW failed")
 
         self._hicon = self._load_icon()
+        self._hicon_update = self._load_icon(asset("doink-update.ico"))  # orange badge
         self._show(NIM_ADD)
 
         msg = wintypes.MSG()
@@ -209,9 +210,9 @@ class Tray:
             TranslateMessage(ctypes.byref(msg))
             DispatchMessageW(ctypes.byref(msg))
 
-    def _load_icon(self):
+    def _load_icon(self, path: Path | None = None):
         size = GetSystemMetrics(SM_CXSMICON)
-        icon = LoadImageW(None, str(icon_path()), IMAGE_ICON, size, size, LR_LOADFROMFILE)
+        icon = LoadImageW(None, str(path or icon_path()), IMAGE_ICON, size, size, LR_LOADFROMFILE)
         return icon or LoadIconW(None, IDI_APPLICATION)
 
     def _show(self, action: int) -> None:
@@ -221,7 +222,8 @@ class Tray:
         nid.uID = 1
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP
         nid.uCallbackMessage = WM_TRAY
-        nid.hIcon = self._hicon
+        update = self.status.update()
+        nid.hIcon = self._hicon_update if update is not None and update.newer else self._hicon
         nid.szTip = self.status.summary()
         if self._balloon and action != NIM_DELETE:
             nid.uFlags |= NIF_INFO
@@ -269,7 +271,10 @@ class Tray:
         AppendMenuW(menu, MF_SEPARATOR, 0, None)
         AppendMenuW(menu, MF_STRING, ID_SETTINGS, "Settings…")
         SetMenuDefaultItem(menu, ID_SETTINGS, 0)  # bold, like a double-click default
-        AppendMenuW(menu, MF_STRING, ID_UPDATES, "Check for updates")
+        if update is not None and update.newer:
+            AppendMenuW(menu, MF_STRING, ID_UPDATES, f"Update to v{update.latest}…")
+        else:
+            AppendMenuW(menu, MF_STRING, ID_UPDATES, "Check for updates")
         AppendMenuW(menu, MF_STRING, ID_LOG, "Open log")
         AppendMenuW(menu, MF_STRING, ID_FOLDER, "Open DOINK folder")
         if autostart.available():

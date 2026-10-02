@@ -41,6 +41,7 @@ class Config:
     realtime: bool = False  # experimental screen reader; opt-in
     wowhead: bool = True    # look up looted items on Wowhead for icon + stats
     update_check: bool = True  # daily GET to GitHub for the latest release version
+    update_notify: bool = False  # also pop a Windows notification (the tray badge always shows)
 
 
 def _read(path: Path) -> dict:
@@ -84,6 +85,7 @@ def load_config(path: Path, dry_run: bool = False, require_paths: bool = True) -
         realtime=bool(raw.get("realtime", False)),
         wowhead=bool(raw.get("wowhead", True)),
         update_check=bool(raw.get("update_check", True)),
+        update_notify=bool(raw.get("update_notify", False)),
     )
 
 

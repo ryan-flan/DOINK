@@ -34,10 +34,15 @@
 # embeds with no network traffic beyond Discord.
 # wowhead = true
 
-# Once a day, ask GitHub for the latest release version and show it in the
-# settings window and tray if it is newer. Nothing is downloaded or
-# installed. false = never check (the "Check for updates" button still works).
+# Once a day, ask GitHub for the latest release version. If it is newer the
+# tray icon gets an orange dot and the menu offers "Update to vX.Y.Z", which
+# downloads the release from GitHub, verifies its checksum and restarts DOINK.
+# Nothing is downloaded until you choose that. false = never check (the
+# "Check for updates" button still works).
 # update_check = true
+
+# Also show a Windows notification when a newer version is found.
+# update_notify = false
 
 # Notifier on/off switches and filters live in the game now:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>

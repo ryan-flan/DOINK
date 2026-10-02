@@ -14,7 +14,7 @@ from .parser import parse_webhooks
 from .runner import RealtimeWorker, run
 from .state import State
 from .status import Status
-from .updates import RELEASES_URL, UpdateChecker, UpdateInfo
+from .updates import RELEASES_URL, UpdateChecker, UpdateError, UpdateInfo, Updater
 
 log = logging.getLogger("doink")
 
@@ -39,6 +39,7 @@ class App:
         self._rt_worker: RealtimeWorker | None = None
         self._updates = UpdateChecker(self.status.update_checked)
         self._updates_started = False
+        self.status.notify_updates = self.config.update_notify
 
     # ---------------------------------------------------------- workers
 
@@ -79,6 +80,27 @@ class App:
             raise SettingsError("Couldn't reach GitHub to check. Try again later, or see "
                                 + RELEASES_URL)
         return info
+
+    @staticmethod
+    def update_installable() -> bool:
+        return sys.platform == "win32" and bool(getattr(sys, "frozen", False))
+
+    def install_update(self, info: UpdateInfo, progress=lambda text: None) -> None:
+        """Download, verify and stage ``info``, then launch the swap script.
+        On return the caller must quit so the script can replace the files.
+        Raises SettingsError with a message for the user."""
+        if not self.update_installable():
+            raise SettingsError("Installing updates only works for the Windows doink.exe build.")
+        updater = Updater(self.config_path.parent)
+        try:
+            companion = updater.download(info, progress)
+            progress("Restarting DOINK…")
+            self.stop()  # workers down first: no half-written state.json during the swap
+            updater.apply(companion)
+        except UpdateError as e:
+            raise SettingsError(str(e)) from None
+        except OSError as e:
+            raise SettingsError(f"Update failed: {e}") from None
 
     def restart(self) -> None:
         self.stop()

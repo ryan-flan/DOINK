@@ -13,7 +13,7 @@ import tkinter as tk
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
 from .app import App, SettingsError
@@ -78,7 +78,8 @@ class SettingsWindow:
         self._visible = False
         self._styled_title_bar = False
         self._checking_updates = False
-        self._update_url: str | None = None
+        self._update_info = None
+        self._progress = ""
 
         root.title("DOINK")
         root.configure(bg=BG)
@@ -348,26 +349,68 @@ class SettingsWindow:
                           MUTED)
 
     def _refresh_update(self, info) -> None:
-        """The link button next to the version: a download link when a newer
-        release is out, otherwise an invitation to check."""
+        """The button next to the version: install a newer release (or open
+        its page where installing isn't possible), otherwise check."""
         if self._checking_updates:
             return
+        self._update_info = info
         if info is None:
             self.update_btn.configure(text="Check for updates")
-            self._update_url = None
         elif info.newer:
-            self.update_btn.configure(text=f"v{info.latest} available — download")
-            self._update_url = info.url
+            if info.installable and self.app.update_installable():
+                self.update_btn.configure(text=f"Update to v{info.latest}")
+            else:
+                self.update_btn.configure(text=f"v{info.latest} available — download")
         else:
             when = time.strftime("%H:%M", time.localtime(info.checked_at))
             self.update_btn.configure(text=f"Up to date (checked {when})")
-            self._update_url = None
 
     def _update_action(self) -> None:
-        if self._update_url:
-            webbrowser.open(self._update_url)
+        info = self._update_info
+        if info is not None and info.newer:
+            if info.installable and self.app.update_installable():
+                self.install_update()
+            else:
+                webbrowser.open(info.url)
         else:
             self.check_updates()
+
+    def install_update(self) -> None:
+        """Confirm, then download/verify/stage off the UI thread, then quit
+        so the hand-off script can swap the files and restart DOINK."""
+        info = self._update_info or self.app.status.update()
+        if self._checking_updates or info is None or not info.installable:
+            return
+        if not messagebox.askyesno(
+                "Update DOINK",
+                f"Download and install DOINK v{info.latest} now?\n\n"
+                "The release is downloaded from GitHub and checked against its published "
+                "checksum, then DOINK restarts. Your settings and posting history are kept.",
+                parent=self.root):
+            return
+        self._checking_updates = True
+        self._progress = f"Downloading v{info.latest}…"
+        self.update_btn.configure(text=self._progress)
+
+        def progress(text: str) -> None:
+            self._progress = text  # read by the poller on the UI thread
+
+        def poll_progress() -> None:
+            if self._checking_updates:
+                self.update_btn.configure(text=self._progress)
+                self.root.after(200, poll_progress)
+
+        def done(error: Exception | None) -> None:
+            self._checking_updates = False
+            if error:
+                self.update_btn.configure(text=f"Update to v{info.latest}")
+                messagebox.showerror("Update DOINK", str(error), parent=self.root)
+                return
+            self.update_btn.configure(text="Restarting…")
+            self.root.after(300, self.root.quit)  # main.py shuts down; the script takes over
+
+        poll_progress()
+        self._in_background(lambda: self.app.install_update(info, progress), done)
 
     def check_updates(self) -> None:
         """A check now, off the UI thread; the button shows the outcome."""
@@ -380,7 +423,6 @@ class SettingsWindow:
             self._checking_updates = False
             if error:
                 self.update_btn.configure(text="Couldn't check; try later")
-                self._update_url = None
                 self.root.after(5000, lambda: self._refresh_update(self.app.status.update()))
             else:
                 self._refresh_update(self.app.status.update())

@@ -210,12 +210,16 @@ Windows notification once. **Right-click** for Settings, Check for updates,
 Open log, Open DOINK folder, Start with Windows and Quit. Closing the
 settings window keeps DOINK running in the tray.
 
-**Updates.** DOINK checks GitHub once a day for a newer release and tells
-you once, with a notification and a download link next to the version in
-the settings window. It never downloads or installs anything itself: get
-the new zip, quit DOINK, replace `doink.exe` and `_internal`, start it
-again. Your settings and posting history live in separate files and are
-kept. The addon updates through CurseForge or Wago like any other addon.
+**Updates.** DOINK checks GitHub once a day for a newer release. When
+there is one, the tray icon gets an orange dot and the menu offers
+**Update to vX.Y.Z**; the settings window shows the same next to the
+version. Choosing it downloads the release zip from GitHub, checks it
+against the checksum published with the release, swaps `doink.exe` and
+`_internal` and restarts DOINK. Nothing is downloaded until you choose
+that, and your settings and posting history are kept. Add
+`update_notify = true` to `config.toml` if you'd also like a Windows
+notification. The addon updates through CurseForge or Wago like any other
+addon.
 
 **One channel per character?** Set a webhook in game with
 `/doink webhook here <url>` on that character. In-game webhooks take priority
@@ -260,9 +264,10 @@ newest 10 queued events.
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
   day one HTTPS request to GitHub for the latest release's version number
-  (`update_check = false` turns that off). Nothing is downloaded or
-  installed by itself: a newer version shows in the settings window and the
-  tray with a link. No telemetry. It doesn't listen on any port.
+  (`update_check = false` turns that off). A newer version is only
+  downloaded, from GitHub and checksum-verified, when you choose "Update"
+  in the tray menu or settings window. No telemetry. It doesn't listen on
+  any port.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.

@@ -391,14 +391,23 @@ two implementations can't drift apart. Regenerate with
   writes the raw bands it failed on, replayable with `pixel.decode`. The Windows CI job runs a
   1000-capture leak test. Status updates from the reader never notify the
   tray except on an on/off change.
-- Update check (`updates.py`, since v0.11.0): one GET to the GitHub
-  releases API 30 s after start and then daily (`update_check = false`
-  disables; "Check for updates" in the tray menu and settings window still
-  works by hand). Result lives in `Status.update()`; the tray shows it in
-  the tooltip and menu, the settings window as a link button next to the
-  version, and `Status.on_notice` pops one plain (NIIF_INFO) notification
-  per newer version per session. Nothing is downloaded. Only `github.com`
-  links are ever opened. Console mode doesn't check.
+- Updates (`updates.py`, since v0.11.0): one GET to the GitHub releases
+  API 30 s after start and then daily (`update_check = false` disables;
+  "Check for updates" in the tray menu and settings window still works by
+  hand). Result lives in `Status.update()`: the tray swaps to
+  `doink-update.ico` (orange dot, drawn by `make_icon.py`, bundled by
+  `release.yml`) and its menu offers "Update to vX…"; the settings window
+  shows the same button next to the version. Notifications only with
+  `update_notify = true` (`Status.notify_updates`, NIIF_INFO, once per
+  version per session). **Installing** (`Updater`): downloads the
+  release's `DOINK-vX.zip` + `.sha256` (github.com download URLs only,
+  from the API's `assets`), verifies the hash, unpacks only
+  `DOINK-vX/Companion/` into `update/` next to the exe (path-escape
+  checked), writes a cmd script to `%TEMP%` that waits for our PID to
+  exit, deletes `_internal`, `xcopy`s the staged folder over, removes
+  `update/` and starts the new exe; then the app quits. config.toml,
+  state.json and doink.log are never touched. Windows frozen build only.
+  Console mode doesn't check.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the

@@ -69,7 +69,7 @@ class TrayTest(unittest.TestCase):
 
     def test_assets_ship(self):
         from doink import tray
-        for name in ("doink.ico", "doink-48.png"):
+        for name in ("doink.ico", "doink-update.ico", "doink-48.png"):
             self.assertTrue(tray.asset(name).is_file(), tray.asset(name))
 
 

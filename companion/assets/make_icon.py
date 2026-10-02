@@ -10,8 +10,19 @@ from pathlib import Path
 
 BG = (0x1E, 0x21, 0x24)   # dark slate
 FG = (0xF2, 0xB8, 0x3C)   # gold
+BADGE = (0xF0, 0x6A, 0x1A)  # orange: "an update is available" dot (doink-update.ico)
 SUPERSAMPLE = 4           # samples per pixel per axis, for smooth edges
 SIZES = (16, 24, 32, 48, 256)
+
+
+def in_badge(u: float, v: float) -> bool:
+    """Orange dot in the bottom-right corner."""
+    return (u - 0.76) ** 2 + (v - 0.76) ** 2 <= 0.22 ** 2
+
+
+def in_badge_ring(u: float, v: float) -> bool:
+    """Dark ring around the dot so it reads against the gold D."""
+    return (u - 0.76) ** 2 + (v - 0.76) ** 2 <= 0.28 ** 2
 
 
 def in_background(u: float, v: float) -> bool:
@@ -32,14 +43,14 @@ def in_letter(u: float, v: float) -> bool:
     return outer and not inner
 
 
-def render(size: int) -> list[list[tuple[int, int, int, int]]]:
+def render(size: int, badge: bool = False) -> list[list[tuple[int, int, int, int]]]:
     """Rows top to bottom of (r, g, b, a)."""
     n = SUPERSAMPLE
     rows = []
     for py in range(size):
         row = []
         for px in range(size):
-            bg = fg = 0
+            bg = fg = dot = ring = 0
             for sy in range(n):
                 for sx in range(n):
                     u = (px + (sx + 0.5) / n) / size
@@ -47,9 +58,20 @@ def render(size: int) -> list[list[tuple[int, int, int, int]]]:
                     if in_background(u, v):
                         bg += 1
                         fg += in_letter(u, v)
+                    if badge:
+                        dot += in_badge(u, v)
+                        ring += in_badge_ring(u, v)
             t = fg / bg if bg else 0.0
             colour = tuple(round(b + (f - b) * t) for b, f in zip(BG, FG))
-            row.append((*colour, round(255 * bg / (n * n))))
+            alpha = bg / (n * n)
+            if badge and ring:
+                # Ring paints dark over whatever is there, then the dot on top.
+                r = ring / (n * n)
+                colour = tuple(round(c + (b - c) * r) for c, b in zip(colour, BG))
+                alpha = max(alpha, r)
+                d = dot / (n * n)
+                colour = tuple(round(c + (o - c) * d) for c, o in zip(colour, BADGE))
+            row.append((*colour, round(255 * alpha)))
         rows.append(row)
     return rows
 
@@ -76,18 +98,24 @@ def png_entry(rows) -> bytes:
             + chunk(b"IEND", b""))
 
 
-def main() -> None:
-    images = [png_entry(render(s)) if s >= 256 else bmp_entry(render(s)) for s in SIZES]
+def ico(badge: bool) -> bytes:
+    images = [png_entry(render(s, badge)) if s >= 256 else bmp_entry(render(s, badge))
+              for s in SIZES]
     out = struct.pack("<HHH", 0, 1, len(images))
     offset = 6 + 16 * len(images)
     for size, data in zip(SIZES, images):
         dim = 0 if size >= 256 else size  # 0 means 256 in an icon directory
         out += struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(data), offset)
         offset += len(data)
-    out += b"".join(images)
-    path = Path(__file__).with_name("doink.ico")
-    path.write_bytes(out)
-    print(f"wrote {path} ({len(out):,} bytes)")
+    return out + b"".join(images)
+
+
+def main() -> None:
+    for name, badge in (("doink.ico", False), ("doink-update.ico", True)):
+        path = Path(__file__).with_name(name)
+        data = ico(badge)
+        path.write_bytes(data)
+        print(f"wrote {path} ({len(data):,} bytes)")
 
     # Tk can't show .ico in a window body; the settings header uses this.
     png = Path(__file__).with_name("doink-48.png")

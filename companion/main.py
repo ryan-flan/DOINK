@@ -86,7 +86,11 @@ def run_tray(args) -> int:
                 window.show()
             elif command == "updates":
                 window.show()
-                window.check_updates()
+                update = status.update()
+                if update is not None and update.installable:
+                    window.install_update()
+                else:
+                    window.check_updates()
             elif command == "quit":
                 root.quit()
                 return
