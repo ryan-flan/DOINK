@@ -59,6 +59,7 @@ def run_tray(args) -> int:
 
     commands: queue.Queue[str] = queue.Queue()
     icon = tray.Tray(status, log_path, app_dir(), command=commands.put)
+    status.on_notice = icon.inform
     threading.Thread(target=icon.run, name="tray", daemon=True).start()
     log.info("DOINK companion started")
     app.start()
@@ -83,6 +84,9 @@ def run_tray(args) -> int:
                 break
             if command == "settings":
                 window.show()
+            elif command == "updates":
+                window.show()
+                window.check_updates()
             elif command == "quit":
                 root.quit()
                 return
@@ -91,7 +95,7 @@ def run_tray(args) -> int:
     poll_commands()
     root.mainloop()
 
-    app.stop()
+    app.shutdown()
     icon.quit()
     log.info("DOINK companion stopped")
     return 0

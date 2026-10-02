@@ -14,6 +14,7 @@ from .parser import parse_webhooks
 from .runner import RealtimeWorker, run
 from .state import State
 from .status import Status
+from .updates import RELEASES_URL, UpdateChecker, UpdateInfo
 
 log = logging.getLogger("doink")
 
@@ -36,10 +37,15 @@ class App:
         self._worker: threading.Thread | None = None
         self._rt_stop: threading.Event | None = None
         self._rt_worker: RealtimeWorker | None = None
+        self._updates = UpdateChecker(self.status.update_checked)
+        self._updates_started = False
 
     # ---------------------------------------------------------- workers
 
     def start(self) -> None:
+        if self.config.update_check and not self._updates_started:
+            self._updates.start()  # once per process; restart() must not spawn another
+            self._updates_started = True
         if self.config.savedvariables_paths:
             self._stop = threading.Event()
             self._worker = threading.Thread(target=self._work, args=(self.config, self._stop),
@@ -57,6 +63,22 @@ class App:
             self._stop.set()
             self._worker.join(timeout=5)
             self._stop = self._worker = None
+
+    def shutdown(self) -> None:
+        """Process exit: everything, including the daily update check."""
+        self.stop()
+        self._updates.stop()
+
+    # ---------------------------------------------------------- updates
+
+    def check_updates(self) -> UpdateInfo:
+        """A check right now, regardless of update_check. Raises
+        SettingsError if GitHub couldn't be reached."""
+        info = self._updates.check_now()
+        if info is None:
+            raise SettingsError("Couldn't reach GitHub to check. Try again later, or see "
+                                + RELEASES_URL)
+        return info
 
     def restart(self) -> None:
         self.stop()

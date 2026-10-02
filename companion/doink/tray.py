@@ -117,7 +117,7 @@ WM_STATUS = WM_APP + 2  # Status changed (posted from the worker thread)
 
 NIM_ADD, NIM_MODIFY, NIM_DELETE = 0, 1, 2
 NIF_MESSAGE, NIF_ICON, NIF_TIP, NIF_INFO = 0x01, 0x02, 0x04, 0x10
-NIIF_WARNING = 0x02
+NIIF_INFO, NIIF_WARNING = 0x01, 0x02
 MF_STRING, MF_GRAYED, MF_CHECKED, MF_SEPARATOR = 0x0000, 0x0001, 0x0008, 0x0800
 TPM_RIGHTBUTTON, TPM_NONOTIFY, TPM_RETURNCMD = 0x0002, 0x0080, 0x0100
 IMAGE_ICON, LR_LOADFROMFILE, SM_CXSMICON = 1, 0x0010, 49
@@ -125,7 +125,7 @@ IDI_APPLICATION = 32512
 MB_ICONINFORMATION, MB_ICONERROR = 0x40, 0x10
 ERROR_ALREADY_EXISTS = 183
 
-ID_SETTINGS, ID_LOG, ID_FOLDER, ID_AUTOSTART, ID_QUIT = 1, 2, 3, 4, 9
+ID_SETTINGS, ID_LOG, ID_FOLDER, ID_AUTOSTART, ID_UPDATES, ID_QUIT = 1, 2, 3, 4, 5, 9
 
 _mutex = None  # held for the life of the process
 
@@ -157,9 +157,10 @@ class Tray:
         self.status = status
         self.log_path = log_path
         self.folder = folder
-        self.command = command  # "settings" | "quit"; called from the tray thread
+        self.command = command  # "settings" | "updates" | "quit"; called from the tray thread
         self.hwnd = None
         self._balloon: str | None = None
+        self._balloon_flags = NIIF_WARNING
         self._wndproc = WNDPROC(self._proc)  # keep a reference: Windows calls it
         self._taskbar_created = RegisterWindowMessageW("TaskbarCreated")
 
@@ -169,7 +170,13 @@ class Tray:
         """Status.on_change hook: refresh the tooltip, and pop a notification
         for a new problem."""
         if new_error:
-            self._balloon = new_error
+            self._balloon, self._balloon_flags = new_error, NIIF_WARNING
+        if self.hwnd:
+            PostMessageW(self.hwnd, WM_STATUS, 0, 0)
+
+    def inform(self, text: str) -> None:
+        """Status.on_notice hook: a plain notification (an update is out)."""
+        self._balloon, self._balloon_flags = text, NIIF_INFO
         if self.hwnd:
             PostMessageW(self.hwnd, WM_STATUS, 0, 0)
 
@@ -220,7 +227,7 @@ class Tray:
             nid.uFlags |= NIF_INFO
             nid.szInfoTitle = "DOINK"
             nid.szInfo = self._balloon[:255]
-            nid.dwInfoFlags = NIIF_WARNING
+            nid.dwInfoFlags = self._balloon_flags
             self._balloon = None
         if not Shell_NotifyIconW(action, ctypes.byref(nid)) and action == NIM_ADD:
             log.warning("couldn't add the tray icon (no taskbar yet?)")
@@ -253,11 +260,16 @@ class Tray:
 
     def _menu(self) -> None:
         menu = CreatePopupMenu()
-        AppendMenuW(menu, MF_GRAYED, 0, f"DOINK v{__version__}")
+        update = self.status.update()
+        version = f"DOINK v{__version__}"
+        if update is not None and update.newer:
+            version += f"  (v{update.latest} available)"
+        AppendMenuW(menu, MF_GRAYED, 0, version)
         AppendMenuW(menu, MF_GRAYED, 0, self.status.summary().removeprefix("DOINK: "))
         AppendMenuW(menu, MF_SEPARATOR, 0, None)
         AppendMenuW(menu, MF_STRING, ID_SETTINGS, "Settings…")
         SetMenuDefaultItem(menu, ID_SETTINGS, 0)  # bold, like a double-click default
+        AppendMenuW(menu, MF_STRING, ID_UPDATES, "Check for updates")
         AppendMenuW(menu, MF_STRING, ID_LOG, "Open log")
         AppendMenuW(menu, MF_STRING, ID_FOLDER, "Open DOINK folder")
         if autostart.available():
@@ -276,6 +288,8 @@ class Tray:
 
         if command == ID_SETTINGS:
             self.command("settings")
+        elif command == ID_UPDATES:
+            self.command("updates")
         elif command == ID_LOG:
             self.open(self.log_path)
         elif command == ID_FOLDER:

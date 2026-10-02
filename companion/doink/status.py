@@ -18,7 +18,12 @@ class Status:
         # on_change(new_error): new_error is set only when a *new* problem
         # appears, so the tray notifies once rather than on every retry.
         self.on_change = on_change or (lambda new_error: None)
+        # on_notice(text): something worth a plain (non-warning) notification,
+        # currently only "a newer version is available". Set by main.py.
+        self.on_notice: Callable[[str], None] = lambda text: None
         self._lock = threading.Lock()
+        self._update = None          # updates.UpdateInfo from the last check
+        self._update_told: str | None = None  # version the user was notified about
         self._watching = 0
         self._last_post: tuple[float, str] | None = None
         self._recent: deque[tuple[float, str, str, bool]] = deque(maxlen=RECENT_MAX)
@@ -93,6 +98,26 @@ class Status:
         with self._lock:
             return dict(self._realtime)
 
+    # ---------------------------------------------------------- updates
+
+    def update_checked(self, info) -> None:
+        """Result of an update check (updates.UpdateInfo). Notifies once per
+        newer version seen this session."""
+        with self._lock:
+            self._update = info
+            tell = info.newer and info.latest != self._update_told
+            if tell:
+                self._update_told = info.latest
+        if tell:
+            self.on_notice(f"DOINK v{info.latest} is available (you have v{info.current}). "
+                           "Open settings for the download link.")
+        self.on_change(None)
+
+    def update(self):
+        """The last update check's UpdateInfo, or None if none has run."""
+        with self._lock:
+            return self._update
+
     # ---------------------------------------------------------- summary
 
     def summary(self) -> str:
@@ -107,4 +132,6 @@ class Status:
                 text = f"DOINK: watching {self._watching} {files}, nothing posted yet"
             if self._realtime["enabled"]:
                 text += " · realtime"
+            if self._update is not None and self._update.newer:
+                text += f" · v{self._update.latest} available"
         return text if len(text) <= TOOLTIP_MAX else text[:TOOLTIP_MAX - 1] + "…"

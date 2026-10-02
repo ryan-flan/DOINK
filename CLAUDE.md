@@ -391,6 +391,14 @@ two implementations can't drift apart. Regenerate with
   writes the raw bands it failed on, replayable with `pixel.decode`. The Windows CI job runs a
   1000-capture leak test. Status updates from the reader never notify the
   tray except on an on/off change.
+- Update check (`updates.py`, since v0.11.0): one GET to the GitHub
+  releases API 30 s after start and then daily (`update_check = false`
+  disables; "Check for updates" in the tray menu and settings window still
+  works by hand). Result lives in `Status.update()`; the tray shows it in
+  the tooltip and menu, the settings window as a link button next to the
+  version, and `Status.on_notice` pops one plain (NIIF_INFO) notification
+  per newer version per session. Nothing is downloaded. Only `github.com`
+  links are ever opened. Console mode doesn't check.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the

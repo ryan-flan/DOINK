@@ -34,5 +34,10 @@
 # embeds with no network traffic beyond Discord.
 # wowhead = true
 
+# Once a day, ask GitHub for the latest release version and show it in the
+# settings window and tray if it is newer. Nothing is downloaded or
+# installed. false = never check (the "Check for updates" button still works).
+# update_check = true
+
 # Notifier on/off switches and filters live in the game now:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>

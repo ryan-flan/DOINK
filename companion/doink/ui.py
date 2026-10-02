@@ -77,6 +77,8 @@ class SettingsWindow:
         self._open_folder = open_folder
         self._visible = False
         self._styled_title_bar = False
+        self._checking_updates = False
+        self._update_url: str | None = None
 
         root.title("DOINK")
         root.configure(bg=BG)
@@ -158,8 +160,10 @@ class SettingsWindow:
         ttk.Label(header, text="DOINK", style="Title.TLabel").grid(row=0, column=1, sticky="w")
         ttk.Label(header, text=f"v{__version__}", style="Muted.TLabel").grid(
             row=0, column=2, sticky="sw", padx=(8, 0), pady=(0, 4))
+        self.update_btn = ttk.Button(header, style="Link.TButton", command=self._update_action)
+        self.update_btn.grid(row=0, column=3, sticky="sw", padx=(10, 0), pady=(0, 3))
         self.status_label = ttk.Label(header, wraplength=WRAP - 60, font=SMALL)
-        self.status_label.grid(row=1, column=1, columnspan=2, sticky="w")
+        self.status_label.grid(row=1, column=1, columnspan=3, sticky="w")
         row += 1
 
         # Discord webhook.
@@ -292,6 +296,7 @@ class SettingsWindow:
         self.paths.configure(text="\n".join(lines))
 
         self._refresh_realtime(status.realtime())
+        self._refresh_update(status.update())
 
         recent = status.recent()
         if recent:
@@ -341,6 +346,46 @@ class SettingsWindow:
         else:
             self._message(self.rt_addon, "Addon: /doink realtime on in game turns the strip on.",
                           MUTED)
+
+    def _refresh_update(self, info) -> None:
+        """The link button next to the version: a download link when a newer
+        release is out, otherwise an invitation to check."""
+        if self._checking_updates:
+            return
+        if info is None:
+            self.update_btn.configure(text="Check for updates")
+            self._update_url = None
+        elif info.newer:
+            self.update_btn.configure(text=f"v{info.latest} available — download")
+            self._update_url = info.url
+        else:
+            when = time.strftime("%H:%M", time.localtime(info.checked_at))
+            self.update_btn.configure(text=f"Up to date (checked {when})")
+            self._update_url = None
+
+    def _update_action(self) -> None:
+        if self._update_url:
+            webbrowser.open(self._update_url)
+        else:
+            self.check_updates()
+
+    def check_updates(self) -> None:
+        """A check now, off the UI thread; the button shows the outcome."""
+        if self._checking_updates:
+            return
+        self._checking_updates = True
+        self.update_btn.configure(text="Checking…")
+
+        def done(error: Exception | None) -> None:
+            self._checking_updates = False
+            if error:
+                self.update_btn.configure(text="Couldn't check; try later")
+                self._update_url = None
+                self.root.after(5000, lambda: self._refresh_update(self.app.status.update()))
+            else:
+                self._refresh_update(self.app.status.update())
+
+        self._in_background(self.app.check_updates, done)
 
     def _refresh_overrides(self) -> None:
         hooks = self.app.game_webhooks()

@@ -206,9 +206,16 @@ A `[TEST]` post should appear a few seconds after the reload.
 **Left-click** the tray icon for settings: webhook, WoW folder, Start with
 Windows, and your recent posts. Hover for the last post or the current
 problem; if something goes wrong (no webhook, Discord unreachable) you get a
-Windows notification once. **Right-click** for Settings, Open log, Open DOINK
-folder, Start with Windows and Quit. Closing the settings window keeps DOINK
-running in the tray.
+Windows notification once. **Right-click** for Settings, Check for updates,
+Open log, Open DOINK folder, Start with Windows and Quit. Closing the
+settings window keeps DOINK running in the tray.
+
+**Updates.** DOINK checks GitHub once a day for a newer release and tells
+you once, with a notification and a download link next to the version in
+the settings window. It never downloads or installs anything itself: get
+the new zip, quit DOINK, replace `doink.exe` and `_internal`, start it
+again. Your settings and posting history live in separate files and are
+kept. The addon updates through CurseForge or Wago like any other addon.
 
 **One channel per character?** Set a webhook in game with
 `/doink webhook here <url>` on that character. In-game webhooks take priority
@@ -249,10 +256,13 @@ newest 10 queued events.
 - **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
 - **Writes** only inside its own folder: `config.toml` (your settings),
   `state.json` (what it has already posted), `doink.log` (capped at ~2 MB).
-- **Network:** HTTPS posts to your Discord webhook, and one small HTTPS
-  request to Wowhead per looted item (its id only) to fetch the icon and
-  tooltip for the loot embed; `wowhead = false` in `config.toml` turns that
-  off. No telemetry, no update checks. It doesn't listen on any port.
+- **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
+  to Wowhead per looted item (its id only) for the loot embed's icon and
+  tooltip (`wowhead = false` in `config.toml` turns that off); and once a
+  day one HTTPS request to GitHub for the latest release's version number
+  (`update_check = false` turns that off). Nothing is downloaded or
+  installed by itself: a newer version shows in the settings window and the
+  tray with a link. No telemetry. It doesn't listen on any port.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
