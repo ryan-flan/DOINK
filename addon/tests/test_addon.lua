@@ -43,6 +43,23 @@ WorldFrame = CreateFrame("Frame")
 UIParent = CreateFrame("Frame")
 function GetPhysicalScreenSize() return 1920, 1080 end
 
+-- Chat and timers, for Announce.lua.
+local chat = {}          -- every SendChatMessage call: { line, chatType, target }
+local inGuild, inGroup, inRaid = false, false, false
+function SendChatMessage(msg, chatType, _, target) chat[#chat + 1] = { msg, chatType, target } end
+function IsInGuild() return inGuild end
+function IsInGroup() return inGroup end
+function IsInRaid() return inRaid end
+function GetUnitName() return "Paul Hebbs" end
+local timers = {}
+C_Timer = { After = function(seconds, fn) timers[#timers + 1] = { seconds, fn } end }
+local function runTimers() -- run everything scheduled, including what that schedules
+  while #timers > 0 do
+    local t = table.remove(timers, 1)
+    t[2]()
+  end
+end
+
 local function fire(event, ...)
   for _, f in ipairs(frames) do
     if f.events[event] then f.onEvent(f, event, ...) end
@@ -101,7 +118,7 @@ local ns = {}
 for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
-    "Transports/Pixel.lua" }) do
+    "Announce.lua", "Transports/Pixel.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
 
@@ -459,6 +476,134 @@ test("realtime: fixture matches (shared with the companion's decoder tests)", fu
   local f = assert(io.open(path, "r"), "fixture missing; run with DOINK_WRITE_FIXTURE=1")
   local expected = f:read("*a"); f:close()
   eq(text, expected, "fixture")
+end)
+
+------------------------------------------------------------------ announce
+
+local Announce = ns.Transports.Announce
+
+local function announceReset()
+  runTimers()
+  Announce._test.reset()
+  chat = {}
+  timers = {}
+end
+
+local function lastChat() return chat[#chat] end
+
+test("announce: level milestones go to guild chat by default, other levels don't", function()
+  announceReset()
+  inGuild = true
+  fire("PLAYER_LEVEL_UP", 19)
+  eq(#chat, 0, "19 not announced")
+  fire("PLAYER_LEVEL_UP", 20)
+  eq(#chat, 1, "20 announced")
+  eq(lastChat()[1], "Ding! Level 20.", "wording"); eq(lastChat()[2], "GUILD", "channel")
+  runTimers()
+  fire("PLAYER_LEVEL_UP", 60)
+  eq(lastChat()[1], "Ding! Level 60 - max level!", "max level wording")
+end)
+
+test("announce: loot needs epic by default; rule rare lets blues through, with the link", function()
+  announceReset()
+  slash("reset loot") -- make sure the queue's own rare threshold is default
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2140, "Carving Knife", 3))
+  eq(#chat, 0, "rare not announced by default")
+  assert(slash("announce loot rare"):find("announce loot: rare", 1, true))
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2140, "Carving Knife", 3))
+  eq(lastChat()[1], "Looted " .. link(2140, "Carving Knife", 3) .. "!", "link kept intact")
+  runTimers()
+  slash("set loot min_quality 0")
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(4875, "Broken Boar Tusk", 0) .. "x2")
+  eq(#chat, 1, "poor quality stack not announced even though queued")
+  slash("reset loot")
+  slash("announce loot epic")
+end)
+
+test("announce: deaths and boss kills yes, quests off unless asked", function()
+  announceReset()
+  fire("PLAYER_DEAD")
+  eq(lastChat()[1], "Died in Elwynn Forest.", "death")
+  runTimers()
+  fire("QUEST_TURNED_IN", 33, 450, 75)
+  eq(#chat, 1, "quest not announced by default")
+  slash("announce quest on")
+  fire("QUEST_COMPLETE")
+  fire("QUEST_TURNED_IN", 33, 450, 75)
+  eq(lastChat()[1], "Completed quest: Wolves Across the Border.", "quest wording")
+  slash("announce quest off")
+  runTimers()
+  fire("ENCOUNTER_END", 1144, "Edwin VanCleef", 1, 5, 1)
+  eq(lastChat()[1], "Edwin VanCleef down! (Deadmines, 5 players)", "boss wording")
+end)
+
+test("announce: nothing without a guild; party and raid routing", function()
+  announceReset()
+  inGuild = false
+  fire("PLAYER_LEVEL_UP", 30)
+  eq(#chat, 0, "no guild, no line")
+  assert(slash(""):find("guild (not in a guild)", 1, true))
+  slash("announce party")
+  fire("PLAYER_LEVEL_UP", 30)
+  eq(#chat, 0, "not grouped")
+  inGroup = true
+  fire("PLAYER_LEVEL_UP", 30)
+  eq(lastChat()[2], "PARTY", "party chat")
+  runTimers()
+  slash("announce raid")
+  inRaid = true
+  fire("PLAYER_LEVEL_UP", 40)
+  eq(lastChat()[2], "RAID", "raid chat")
+  inGroup, inRaid = false, false
+  slash("announce guild")
+  inGuild = true
+end)
+
+test("announce: test events are whispered to you, never the guild", function()
+  announceReset()
+  slash("test levelup")
+  eq(lastChat()[2], "WHISPER", "whisper"); eq(lastChat()[3], "Paul Hebbs", "full name")
+  assert(lastChat()[1]:find("^%[test%] Ding! Level"), lastChat()[1])
+  runTimers()
+  slash("announce test")
+  runTimers()
+  local lines = {}
+  for _, c in ipairs(chat) do lines[#lines + 1] = c[1] end
+  local all = table.concat(lines, "\n")
+  assert(all:find("Thunderfury", 1, true) and all:find("would announce)", 1, true), all)
+  assert(all:find("Completed quest: A Threat Within. (would not announce)", 1, true), all)
+  for _, c in ipairs(chat) do eq(c[2], "WHISPER", "all whispers") end
+end)
+
+test("announce: one line every 2s, at most 8 a minute, dropped lines are reported", function()
+  announceReset()
+  for lvl = 10, 50, 10 do fire("PLAYER_LEVEL_UP", lvl) end
+  eq(#chat, 1, "first line sent at once, the rest wait")
+  eq(#timers, 1, "a 2s timer is pending"); eq(timers[1][1], 2, "gap")
+  runTimers()
+  eq(#chat, 5, "all five out after the timers")
+  printed = {}
+  for lvl = 10, 50, 10 do fire("PLAYER_LEVEL_UP", lvl) end
+  runTimers()
+  eq(#chat, 8, "capped at 8 in the same minute")
+  assert(table.concat(printed, "\n"):find("announcement dropped", 1, true), "player told")
+  now = now + 61
+  fire("PLAYER_LEVEL_UP", 60)
+  runTimers()
+  eq(#chat, 9, "new minute, new budget")
+end)
+
+test("announce: off silences everything, including tests; bad input shows usage", function()
+  announceReset()
+  slash("announce off")
+  fire("PLAYER_LEVEL_UP", 20)
+  slash("test levelup")
+  runTimers()
+  eq(#chat, 0, "silent")
+  assert(slash("announce loot shiny"):find("usage", 1, true))
+  assert(slash("announce bogus"):find("usage", 1, true))
+  slash("announce guild")
+  assert(slash(""):find("announce: guild; level_up milestones, loot epic, death on, quest off, boss_kill on, skill_up off", 1, true))
 end)
 
 print = io.write

@@ -6,9 +6,10 @@ local MAX_EVENTS = 500
 
 -- Notifier files (loaded after this one) register themselves here.
 ns.Notifiers = {}
--- Transports carry events out of the game faster than SavedVariables can.
--- Core never knows how; it just hands them the JSON. Each exposes
--- Send(json), SetEnabled(bool), OnLogin() and Status().
+-- Transports do something with each event the moment it happens: announce
+-- it in chat, show it to the companion. Core never knows what; it hands
+-- them the JSON and the envelope. Each exposes Send(json, envelope),
+-- OnLogin() and Status().
 ns.Transports = {}
 
 local frame = CreateFrame("Frame")
@@ -175,7 +176,7 @@ function ns:Emit(eventType, data, isTest)
   self:Debug("emit %s", json)
   for _, transport in pairs(ns.Transports) do
     -- A transport bug must never cost the queued event above.
-    xpcall(function() transport.Send(json) end, geterrorhandler())
+    xpcall(function() transport.Send(json, envelope) end, geterrorhandler())
   end
   return envelope
 end
@@ -283,6 +284,9 @@ local HELP = {
   "/doink options [type] - show settings",
   "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
   "/doink reset <type> - back to defaults",
+  "/doink announce [guild|officer|party|raid|off] - where to announce in chat",
+  "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on",
+  "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
   "/doink realtime on|off|test|position <corner> - post without reloading (experimental)",
   "/doink test <type> [count] - emit a fake event",
@@ -311,14 +315,20 @@ local function ParseMoney(text)
   return copper
 end
 
--- Options take their type from the default, so Defaults.lua is the schema.
-local function ParseValue(default, text)
+-- Options take their type from the default, so Defaults.lua is the schema;
+-- string options must be one of ns.Choices.
+local function ParseValue(default, text, choices)
   if type(default) == "boolean" then
     text = text:lower()
     if text == "on" or text == "true" or text == "yes" or text == "1" then return true end
     if text == "off" or text == "false" or text == "no" or text == "0" then return false end
   elseif type(default) == "number" then
     return tonumber(text) or ParseMoney(text)
+  elseif type(default) == "string" then
+    text = text:lower()
+    for _, choice in ipairs(choices or {}) do
+      if choice == text then return choice end
+    end
   end
 end
 
@@ -368,6 +378,7 @@ commands[""] = function()
   ns:Print("v%s - %s", GetMeta(ADDON, "Version") or "?", ns.player.key)
   ns:Print("queue %d/%d, last seq %d, debug %s",
     #char.events, MAX_EVENTS, char.seq, DOINKDB.debug and "on" or "off")
+  ns:Print("announce: %s", ns.Transports.Announce.Status())
   ns:Print("webhook: %s", WebhookStatus())
   ns:Print("realtime (experimental): %s", ns.Transports.Pixel.Status())
   for _, notifier in ipairs(SortedNotifiers()) do
@@ -507,6 +518,44 @@ commands.webhook = function(args)
   else
     ns:Print("that doesn't look like a Discord webhook URL "
       .. "(https://discord.com/api/webhooks/...)")
+  end
+end
+
+local function AnnounceUsage()
+  ns:Print("usage: /doink announce guild|officer|party|raid|off, "
+    .. "/doink announce <type> <rule>, /doink announce test")
+  ns:Print("rules: level_up milestones|all|off, loot any|uncommon|rare|epic|legendary|off, "
+    .. "skill_up max|milestones|all|off, death|quest|boss_kill on|off")
+end
+
+commands.announce = function(args)
+  local announce = ns.Transports.Announce
+  local sub, rest = args:match("^(%S*)%s*(.-)$")
+  sub = sub:lower()
+
+  if sub == "" then
+    ns:Print("announce: %s", announce.Status())
+    AnnounceUsage()
+  elseif sub == "test" then
+    announce.Test()
+    ns:Print("whispering you a sample of each announcement")
+  elseif ParseValue("", sub, ns.Choices.announce.channel) then
+    ns:SetOption("announce", "channel", sub)
+    ns:Print("announcements %s", sub == "off" and "off" or ("go to " .. sub .. " chat"))
+  else
+    local notifier = FindNotifier(sub)
+    if not notifier then
+      AnnounceUsage()
+      return
+    end
+    local default = ns.Defaults.announce[notifier.type]
+    local value = ParseValue(default, rest, ns.Choices.announce[notifier.type])
+    if value == nil then
+      AnnounceUsage()
+      return
+    end
+    ns:SetOption("announce", notifier.type, value)
+    ns:Print("announce %s: %s", notifier.type, FormatValue(notifier.type, value))
   end
 end
 
