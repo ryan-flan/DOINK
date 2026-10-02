@@ -161,6 +161,32 @@ class ProcessTest(unittest.TestCase):
         self.run_with(events_file(1), state)  # SavedVariables wiped
         self.assertEqual(self.webhook.sent[0][0]["title"], "Flano reached level 1")
         self.assertEqual(state.last_seen("Flano-R"), 1)
+        self.assertEqual(state.file_seen("Flano-R"), 1)
+
+    def test_realtime_ahead_of_the_file_is_not_a_reset(self):
+        # Seen live (2026-10-02): a realtime post of #22 followed by a
+        # companion restart, with the file still at #21, re-posted ten events.
+        state = State(self.config.state_path)
+        self.run_with(events_file(*range(12, 22)), state)
+        self.webhook.sent.clear()
+        post_events(self.config, "Flano-R", [self.event(22)], state, self.webhook, Status(),
+                    {}, first_sight_backlog=10, realtime=True)
+        self.webhook.sent.clear()
+        with self.assertNoLogs("doink", "WARNING"):
+            ok, _ = self.run_with(events_file(*range(12, 22)), state)  # restart, same file
+        self.assertTrue(ok)
+        self.assertEqual(self.webhook.sent, [], "nothing re-posted")
+        self.assertEqual(state.last_seen("Flano-R"), 22)
+        self.assertEqual(state.file_seen("Flano-R"), 21)
+
+    def test_state_from_before_file_seen_learns_it_without_resetting(self):
+        self.config.state_path.write_text(
+            json.dumps({"Flano-R": {"last_seen": 22, "missing": []}}), encoding="utf-8")
+        state = State(self.config.state_path)
+        with self.assertNoLogs("doink", "WARNING"):
+            self.run_with(events_file(20, 21), state)
+        self.assertEqual(self.webhook.sent, [])
+        self.assertEqual(state.file_seen("Flano-R"), 21)
 
     def event(self, seq, char="Flano"):
         return {"char": char, "class": "MAGE", "data": {"level": seq}, "realm": "R",

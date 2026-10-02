@@ -1,9 +1,13 @@
 """What has been posted per character, persisted so restarts never re-post.
 
-Per character: ``last_seen``, the highest seq posted, and ``missing``, seqs
-below it that haven't been posted yet. Gaps appear when the realtime path
+Per character: ``last_seen``, the highest seq posted, ``missing``, seqs
+below it that haven't been posted yet, and ``file_seen``, the highest seq
+the SavedVariables file has ever shown. Gaps appear when the realtime path
 delivers an event the reader didn't catch the predecessors of; the
-SavedVariables pass fills them in later.
+SavedVariables pass fills them in later. ``file_seen`` is what a
+"SavedVariables wiped" check compares against: ``last_seen`` runs ahead of
+the file whenever realtime posted something the file hasn't been written
+with yet, and that is normal, not a wipe.
 """
 
 import json
@@ -31,11 +35,29 @@ class State:
                 raise SystemExit(f"can't read state file {path}: {e}")
         for entry in self._chars.values():
             entry.setdefault("missing", [])  # entries written before v0.6.0
+            entry.setdefault("file_seen", None)  # before v0.9.0: unknown, learnt next pass
 
     def last_seen(self, key: str) -> int | None:
         with self._lock:
             entry = self._chars.get(key)
             return entry["last_seen"] if entry else None
+
+    def file_seen(self, key: str) -> int | None:
+        """Highest seq the SavedVariables file has shown for ``key``, or None
+        if no file pass has recorded one yet."""
+        with self._lock:
+            entry = self._chars.get(key)
+            return entry.get("file_seen") if entry else None
+
+    def mark_file(self, key: str, newest: int) -> None:
+        """A file pass saw seqs up to ``newest``."""
+        with self._lock:
+            entry = self._chars.get(key)
+            if entry is None:
+                return  # nothing posted or baselined yet; the next pass records it
+            if entry.get("file_seen") != newest:
+                entry["file_seen"] = newest
+                self.save()
 
     def missing(self, key: str) -> set[int]:
         with self._lock:
@@ -60,7 +82,8 @@ class State:
             entry = self._chars.get(key)
             if entry is None:
                 low = max(1, seq - first_sight_backlog + 1) if first_sight_backlog else seq
-                self._chars[key] = {"last_seen": seq, "missing": list(range(low, seq))}
+                self._chars[key] = {"last_seen": seq, "missing": list(range(low, seq)),
+                                    "file_seen": None}
             else:
                 missing = set(entry["missing"])
                 last = entry["last_seen"]
@@ -79,7 +102,8 @@ class State:
         with self._lock:
             entry = self._chars.get(key)
             last = max(seq, entry["last_seen"]) if entry else seq
-            self._chars[key] = {"last_seen": last, "missing": []}
+            file_seen = entry.get("file_seen") if entry else None
+            self._chars[key] = {"last_seen": last, "missing": [], "file_seen": file_seen}
             self.save()
 
     def prune_missing(self, key: str, present: set[int], newest: int) -> None:

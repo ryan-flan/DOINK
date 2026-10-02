@@ -55,6 +55,17 @@ class StateTest(unittest.TestCase):
         self.assertIn(1999, s.missing("Flano-R"))
         self.assertNotIn(2, s.missing("Flano-R"))
 
+    def test_file_seen_is_separate_from_last_seen(self):
+        s = State(self.path)
+        s.mark_file("Flano-R", 5)
+        self.assertIsNone(s.file_seen("Flano-R"), "nothing known about the char yet")
+        s.mark_posted("Flano-R", 22)        # realtime
+        s.mark_file("Flano-R", 21)          # the file is behind
+        self.assertEqual(s.last_seen("Flano-R"), 22)
+        self.assertEqual(State(self.path).file_seen("Flano-R"), 21)
+        s.baseline("Flano-R", 30)
+        self.assertEqual(s.file_seen("Flano-R"), 21, "baseline keeps it")
+
     def test_persists_and_reads_pre_060_format(self):
         self.path.write_text(json.dumps({"Flano-R": {"last_seen": 10}}), encoding="utf-8")
         s = State(self.path)

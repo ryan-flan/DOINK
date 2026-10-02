@@ -91,9 +91,13 @@ def process(config: Config, path: Path, state: State, pool: WebhookPool,
             log.info("%s: carried over posting history from %s", key, legacy)
         last = state.last_seen(key)
 
-        if last is not None and newest < last:
-            log.warning("%s: newest seq %d is below last seen %d. "
-                        "SavedVariables reset? Starting over.", key, newest, last)
+        # A wipe shows as the file going backwards. Compare with what the
+        # file last showed, never with last_seen: realtime posts run ahead
+        # of the file until the next /reload, and that is the normal case.
+        file_seen = state.file_seen(key)
+        if file_seen is not None and newest < file_seen:
+            log.warning("%s: newest seq %d is below the %d the file showed before. "
+                        "SavedVariables reset? Starting over.", key, newest, file_seen)
             state.forget(key)
             last = None
 
@@ -114,6 +118,7 @@ def process(config: Config, path: Path, state: State, pool: WebhookPool,
             state.baseline(key, newest)  # older ones were skipped on purpose
         else:
             state.prune_missing(key, {e["seq"] for e in events}, newest)
+        state.mark_file(key, newest)
     return ok
 
 

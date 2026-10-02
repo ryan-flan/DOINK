@@ -333,8 +333,11 @@ two implementations can't drift apart. Regenerate with
   messages, and 429 `retry_after` is respected. State is saved after each
   message.
 - First time a character is seen, post at most `max_backlog` (default 10) of
-  its queued events. If the newest seq is below `last_seen` (SavedVariables
-  wiped), treat the character as new.
+  its queued events. If the newest seq in the file is below `file_seen`
+  (the highest seq a previous file pass showed; SavedVariables wiped), treat
+  the character as new. Never compare with `last_seen` for this: realtime
+  posts run ahead of the file until the next `/reload`, and a companion
+  restart in that window once re-posted ten events (2026-10-02).
 - **Two modes.** `python3 main.py` (WSL/dev) is a console app. The packaged
   Windows build (`doink.exe`, `--noconsole`) and `--tray` run as a tray app
   with three threads: Tk owns the main thread (settings window), the tray
