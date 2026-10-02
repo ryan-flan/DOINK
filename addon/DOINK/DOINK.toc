@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: DOINK
 ## Notes: Announces your level-ups, rare loot, deaths and boss kills in guild chat. The optional companion app mirrors them to Discord.
-## Version: 0.9.2
+## Version: 0.9.3
 ## SavedVariables: DOINKDB
 
 # Interface from: /run print(select(4, GetBuildInfo()))
