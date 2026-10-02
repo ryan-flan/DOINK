@@ -1,9 +1,10 @@
-# DOINK: announces your character's milestones in guild chat
+# DOINK: your milestones in guild chat, and in Discord
 
-DOINK is an addon for **World of Warcraft: Forever**. It watches for six
-kinds of in-game event (level-ups, loot, deaths, quest turn-ins, boss kills
-and profession skill-ups) and announces the ones you choose in guild,
-officer, party or raid chat the moment they happen, with real item links:
+DOINK is an addon for **World of Warcraft: Forever** that tells your guild
+about your adventures. It watches for six kinds of in-game event (level-ups,
+loot, deaths, quest turn-ins, boss kills and profession skill-ups) and
+announces the ones you choose in guild, officer, party or raid chat the
+moment they happen, with real item links:
 
 ```
 [Guild] [Flano]: Ding! Level 20.
@@ -12,12 +13,20 @@ officer, party or raid chat the moment they happen, with real item links:
 [Guild] [Flano]: Killed by Defias Pillager in Westfall.
 ```
 
+**Discord too.** The free, open-source
+[DOINK companion](https://github.com/ryan-flan/DOINK/releases) mirrors the
+same events to a Discord channel of your choice as class-coloured embeds
+with Wowhead links, so your guild's Discord sees every ding, epic and boss
+kill even when nobody is online, and an experimental realtime mode posts
+them within a second of them happening. It's a separate download for
+Windows; the addon works fully without it. See
+[Discord mirroring](#discord-mirroring-with-the-doink-companion).
+
 No dependencies and no libraries: install it and it works. Settings are on
 a normal options page (Esc → Options → AddOns → DOINK) and can also be set
-with `/doink` commands. Optionally, a separate open-source companion program
-can mirror the same events to a Discord channel (see "Optional Discord
-mirroring"). Inspired by [Dink](https://github.com/pajlads/DinkPlugin) for
-RuneLite. Status: beta, tracking the Forever beta client.
+with `/doink` commands. Inspired by
+[Dink](https://github.com/pajlads/DinkPlugin) for RuneLite. Status: beta,
+tracking the Forever beta client.
 
 ## Install
 
@@ -116,12 +125,24 @@ the settings page or by command; the two are the same settings.
 - Boss-kill announcements rely on `ENCOUNTER_END`, which hasn't been
   confirmed in Forever dungeons during the beta.
 
-## Optional Discord mirroring (separate download)
+## Discord mirroring with the DOINK companion
+
+Everything the addon announces can also land in Discord:
+
+> **Flano Wren looted Thunderfury, Blessed Blade of the Windseeker**
+> Vendor value: 12g 34s
+> Flano Wren-Whatever
+
+(an embed in the item's quality colour, with the item name linking to
+Wowhead; level-ups and deaths use your class colour)
 
 WoW addons cannot access the network, so Discord posting is done by a
-separate program, the **DOINK companion**, downloaded from the
-[GitHub releases page](https://github.com/ryan-flan/DOINK/releases) (not
-from the addon sites). It is not required for anything above.
+separate, optional program, the **DOINK companion**. Download
+`DOINK-<version>.zip` from the
+[GitHub releases page](https://github.com/ryan-flan/DOINK/releases): it
+contains the companion (`Companion\doink.exe`) and a copy of the addon.
+The companion is not on the addon sites and is not required for anything
+above.
 
 What it is: a Windows program (`doink.exe`, Python packaged with
 PyInstaller, source in this repository, MIT) that sits in the system tray.
