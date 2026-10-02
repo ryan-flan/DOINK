@@ -283,10 +283,47 @@ test("no notifier registers events protected in Forever", function()
   end
 end)
 
-test("death: zone and subzone, killer unknown", function()
+test("death: zone and subzone, killer unknown without a death recap", function()
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
+  local n = count()
   fire("PLAYER_DEAD")
+  eq(count(), n + 1, "emitted at once, no timer")
   assert(has('"type":"death"') and has('"zone":"Elwynn Forest"'), last())
   assert(has('"subzone":null') and has('"killer":null'), last())
+end)
+
+test("death: killer is the newest death recap hit", function()
+  local recap = {}
+  DeathRecap_HasEvents = function() return #recap > 0 end
+  DeathRecap_GetEvents = function() return recap end
+  recap = { { sourceName = "Kobold Vermin", amount = 3, timestamp = 5 },
+            { sourceName = "Hogger", amount = 40, timestamp = 7 },
+            { sourceName = "Kobold Vermin", amount = 2, timestamp = 6 } }
+  fire("PLAYER_DEAD")
+  assert(has('"killer":"Hogger"'), last())
+
+  recap = { { environmentalType = "FALLING", amount = 999 } }
+  ACTION_ENVIRONMENTAL_DAMAGE_FALLING = "Falling"
+  fire("PLAYER_DEAD")
+  assert(has('"killer":"Falling"'), last())
+
+  -- Recap empty at PLAYER_DEAD, filled shortly after: one 0.5 s retry.
+  recap = {}
+  local n = count()
+  timers = {}
+  fire("PLAYER_DEAD")
+  eq(count(), n, "waits for the recap")
+  eq(#timers, 1, "one retry scheduled"); eq(timers[1][1], 0.5, "retry delay")
+  recap = { { sourceName = "Defias Pillager" } }
+  runTimers()
+  eq(count(), n + 1, "emitted after the retry")
+  assert(has('"killer":"Defias Pillager"'), last())
+
+  -- Still empty after the retry: emit anyway with killer null.
+  recap = {}
+  fire("PLAYER_DEAD"); runTimers()
+  assert(has('"killer":null'), last())
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
 end)
 
 test("quest: title from reward screen when log lookup fails", function()

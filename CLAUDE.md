@@ -131,9 +131,11 @@ Rules:
   `webhooks["*"]`, else the companion's `config.toml`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
-- `death.killer` is always `null` from the addon for now (see beta facts:
-  the combat log is protected). Reserved for the companion's combat-log
-  tailer to fill in.
+- `death.killer` comes from the client's death recap
+  (`DeathRecap_GetEvents()`, present in Forever): the attacker of the newest
+  hit, or the localised environmental cause ("Falling"). `null` when the
+  recap is empty (the notifier retries once after 0.5 s) or the API is
+  absent. The combat log is protected, so there is no other source.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -473,6 +475,21 @@ fixture included; that's a stand-in for the real name, by decision.)
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
   a reload in between produced exactly three events (2026-10-02). No guard
   needed. Deaths post via realtime within ~1 s.
+- [x] **Death recap exists** (2026-10-02): `DeathRecap_HasEvents()`,
+  `DeathRecap_GetEvents()` (no id needed for the latest death) and
+  `GetDeathRecapLink` are functions; `GetDeathRecap` is not. After a real
+  death the events table held ten entries, each with `sourceName`
+  ("Clattering Scorpid"), `amount`, and `spellName` on the poison tick;
+  `environmentalType` was nil for all of them. `C_DeathInfo` only has corpse
+  and graveyard helpers (`GetCorpseMapPosition`, `GetDeathReleasePosition`,
+  `GetSelfResurrectOptions`, `GetGraveyardsForMap`, `UseSelfResurrectOption`).
+  - [ ] Whether entries carry `timestamp` and which index is the killing
+    blow: unverified; the notifier takes the newest by timestamp, else the
+    last entry.
+  - [ ] Whether the recap is already filled when `PLAYER_DEAD` fires
+    (the notifier retries once after 0.5 s if not).
+- [x] **Communities parked**: `C_Club` exists but Battle.net features are
+  limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
   `You receive loot: |cnIQ1:|Hitem:769::::::::8:1491::::::::::|h[Chunk of Boar Meat]|h|r`
   - Links use the **named-colour** form `|cnIQ<quality>:`, not `|cffRRGGBB`.
@@ -523,9 +540,9 @@ fixture included; that's a stand-in for the real name, by decision.)
   useful without the companion, and the README/CurseForge page lead with
   that. See "Announcements".
 - **v0.8.0:** settings page (`Options.lua`, native Settings API).
-- **Later:** community channels via `C_Club` once one exists to test with;
-  combat-log tailer if the file ever flushes promptly (realtime deaths with
-  killer), rare kills, achievements.
+- **v0.9.0:** `death.killer` from the death recap.
+- **Later:** community channels via `C_Club` once one exists to test with
+  (parked: Battle.net is limited in the beta); rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style

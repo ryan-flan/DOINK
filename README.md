@@ -243,8 +243,8 @@ newest 10 queued events.
   the active window.
 - Chat announcements can't go to communities yet; Forever has the API, but
   it's untested until there is a community to test with.
-- Deaths don't say what killed you: Forever blocks addons from reading the
-  combat log.
+- The killer in a death line comes from the client's death recap. If the
+  recap is empty when you die, the line is just "Died in <zone>."
 - Boss kills aren't confirmed in Forever dungeons yet.
 
 ## Development
