@@ -106,12 +106,14 @@ addon has used for years. We can't speak for Blizzard, which is why it's
 opt-in and labelled experimental.
 
 **Cost.** Each look copies two thin bands of the window (about 250 KB) into a
-buffer that is allocated once and reused, and decodes them in place; on a
-3440-pixel-wide window that's roughly a millisecond, so well under 1% of one
-CPU core. The companion measures its own capture time, memory and Windows
-handle count while realtime is on, shows them in the settings window, and
-**turns realtime off by itself** if captures get slow or memory climbs. The
-normal posting path is unaffected either way.
+buffer that is allocated once and reused, and decodes them in place.
+Measured on the author's PC with a 3438×1408 window: about 8 looks a second,
+roughly 1% of one CPU core, 46 MB of memory, and a flat handle count; each
+look takes ~15 ms of waiting on the graphics driver but only ~1 ms of CPU.
+The companion measures its own capture cost, memory and Windows handle count
+while realtime is on, shows them in the settings window, and **turns
+realtime off by itself** if captures start costing real CPU or memory
+climbs. The normal posting path is unaffected either way.
 
 **Reliability.** Realtime is best effort on top of the normal path. If the
 companion misses a strip (WoW was behind another window, or something

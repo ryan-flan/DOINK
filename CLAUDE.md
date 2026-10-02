@@ -298,10 +298,15 @@ two implementations can't drift apart. Regenerate with
   (`tests/test_windows.py`).
 - Realtime reading has a budget: capture only the two bands, allocate the
   buffer once, no per-pixel Python objects, decode ≈ 1 ms per capture at
-  3421 px (≈ 5 ms on pure noise). `ResourceMeter` samples capture time,
+  3421 px (≈ 5 ms on pure noise). Measured live (2026-10-02, 3438×1408
+  window): 7.6 captures/s, 16.7 ms wall per capture (BitBlt waiting on the
+  GPU) but ~1 ms CPU, 1.25% CPU, 46 MB, 54 GDI handles, flat. `ResourceMeter`
+  samples CPU time per capture (not wall time: the GPU wait isn't cost),
   working set and GDI handle count; `RealtimeWorker` stops itself (and says
-  why in the settings window) if captures average > 25 ms or memory/handles
-  grow > 50 MB / 50 past the first sample. The Windows CI job runs a
+  why in the settings window) if captures average > 25 ms CPU or
+  memory/handles grow > 50 MB / 50 past the first sample. Diagnostics: `-v`
+  logs every rejected strip candidate with the reason; `DOINK_DUMP_BANDS=<dir>`
+  writes the raw bands it failed on, replayable with `pixel.decode`. The Windows CI job runs a
   1000-capture leak test. Status updates from the reader never notify the
   tray except on an on/off change.
 - Trust is a feature: autostart is off by default and writes exactly one
