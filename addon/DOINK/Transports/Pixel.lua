@@ -232,8 +232,7 @@ end
 
 ------------------------------------------------------------------ API
 
--- Queues a message (the event's JSON string) for display.
-function Pixel.Send(message, repeats)
+local function Queue(message, repeats)
   if not Settings().enabled then return end
   Build()
   if #outbox >= OUTBOX_MAX then table.remove(outbox, 1) end
@@ -244,6 +243,12 @@ function Pixel.Send(message, repeats)
     acc = 0
     Advance()
   end
+end
+
+-- Transport entry point: Core passes (json, envelope); only the JSON is
+-- shown. (The envelope used to land in the repeat count. Never again.)
+function Pixel.Send(message, envelope)
+  Queue(message)
 end
 
 -- Tells the companion which character and addon version it's looking at.
@@ -266,7 +271,7 @@ function Pixel.Hello(isTest)
     local chunks = #Pixel.Encode(N, 0, message)
     repeats = math.ceil(TEST_SECONDS / (CHUNK_SECONDS * chunks))
   end
-  Pixel.Send(message, repeats)
+  Queue(message, repeats)
 end
 
 function Pixel.SetEnabled(on)

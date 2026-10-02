@@ -434,6 +434,16 @@ test("realtime: on builds the strip, says hello, cycles, then hides", function()
   eq(#T.outbox(), 0, "outbox drained")
 end)
 
+test("realtime: an emitted event cycles 4 times and hides (regression: envelope in 'left')", function()
+  slash("test death")
+  local msg = T.outbox()[#T.outbox()]
+  eq(msg.left, 4, "repeat count is a number, not the envelope")
+  local chunks = #msg.chunks
+  for _ = 1, chunks * 4 * 2 do T.advance(0.25) end -- generous: outbox may hold the hello too
+  assert(not T.frame():IsShown(), "hidden after the showings")
+  eq(#T.outbox(), 0, "drained")
+end)
+
 test("realtime: emitted events are queued, outbox is capped at 8", function()
   slash("test levelup 10")
   eq(#T.outbox(), 8, "capped")
