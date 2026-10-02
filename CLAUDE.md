@@ -636,6 +636,13 @@ fixture included; that's a stand-in for the real name, by decision.)
   11 rounded corners). **v0.9.4–v0.9.5:** Wago Addons uploads.
 - **v0.10.0:** loot embeds enriched from Wowhead (icon thumbnail, tooltip
   lines), `wowhead` config flag.
+- **v0.11.x:** update check with an orange tray badge and one-click
+  self-update (`updates.py`). v0.11.0's build failed its leak test (the
+  checker's first fetch landed inside it; tests now disable the checker),
+  v0.11.1 shipped, v0.11.2 exposed the detached-launch bug, v0.11.3 fixed
+  it, and v0.11.3 → v0.11.4 was the first successful live self-update
+  (2026-10-03 00:45). Wago answered 403 to the v0.11.3 upload (rate limit
+  after a burst of releases, presumably); v0.11.4 uploaded fine.
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
