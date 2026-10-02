@@ -138,8 +138,8 @@ the settings page or by command; the two are the same settings.
   (the same data as the "Death Recap" button). Addons cannot read the
   combat log in Forever, so if the recap is empty the line omits the killer.
 - Announcements can't be sent to Blizzard Communities yet.
-- Boss-kill announcements rely on `ENCOUNTER_END`, which hasn't been
-  confirmed in Forever dungeons during the beta.
+- Boss kills are detected through `ENCOUNTER_END`, verified in Forever
+  dungeons during the beta. Raids haven't been tested yet.
 
 ## Discord mirroring with the DOINK companion
 

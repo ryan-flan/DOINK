@@ -491,7 +491,15 @@ fixture included; that's a stand-in for the real name, by decision.)
 - [x] **Window class** of the Forever beta client (`WowB.exe`) is
   `waApplication Window` (title "World of Warcraft"), not retail's
   `GxWindowClass`. `pixel.find_wow_window` tries both.
-- [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
+- [x] `ENCOUNTER_END` fires in Forever dungeons (2026-10-02, Shadowfang
+  Keep): `ENCOUNTER_START 2748 "Rethilgore" 1 5` on the pull, then
+  `ENCOUNTER_END 2748 "Rethilgore" 1 5 1 <table>` on the kill. The trailing
+  table (printed as `table: 00000258C1CC77F0`) is new; contents unknown and
+  unused. The boss-kill announcement and Discord embed both arrived.
+  `BOSS_KILL` was registered too but didn't show in the screenshot.
+- [x] Another player's stack loot line: `Grakkor Highmountain receives
+  loot: [Medium Leather]x2` (no space before `x2`), consistent with
+  `LOOT_ITEM_SELF_MULTIPLE`; a self-loot stack is still unseen.
 - [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
   title resolves (quest 818 "A Solvent Spirit", 625 xp).
   `C_QuestLog.GetQuestInfo` returns `nil` for quests not in the log.
