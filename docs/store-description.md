@@ -1,48 +1,9 @@
 # DOINK: announces your character's milestones in guild chat
 
-DOINK is a small, self-contained addon for World of Warcraft: Forever. It
-watches for six kinds of in-game event (level-ups, loot, deaths, quest
+DOINK watches for six kinds of in-game event (level-ups, loot, deaths, quest
 turn-ins, boss kills and profession skill-ups) and announces the ones you
 choose in guild, officer, party or raid chat the moment they happen, with
-real item links. It has no dependencies, no libraries, no configuration
-window to set up, and it makes no network connections (addons can't).
-
-Optionally, a separate open-source companion program for Windows (not part
-of this package, see "Optional Discord mirroring" below) can mirror the
-same events to a Discord channel.
-
-Source code, issue tracker and the companion: https://github.com/ryan-flan/DOINK
-(MIT license). Every CurseForge file is built from a tagged commit of that
-repository by GitHub Actions using the BigWigs packager.
-
-## What is in the package
-
-One folder, `DOINK`, 12 files, about 1,500 lines of Lua, no third-party code:
-
-| File | Purpose |
-|---|---|
-| `DOINK.toc` | Addon manifest. `## Interface: 16001`, `## SavedVariables: DOINKDB`. |
-| `Core.lua` | Startup, saved-variables handling, the `/doink` slash command, event dispatch. |
-| `Defaults.lua` | Default settings and the allowed values for each setting. |
-| `Announce.lua` | Chat announcements: wording, rules, rate limiting. |
-| `Json.lua` | A minimal JSON encoder used to store events for the optional companion. |
-| `Notifiers/LevelUp.lua` | Listens to `PLAYER_LEVEL_UP`. |
-| `Notifiers/Loot.lua` | Listens to `CHAT_MSG_LOOT` and `GET_ITEM_INFO_RECEIVED`. |
-| `Notifiers/Death.lua` | Listens to `PLAYER_DEAD`. |
-| `Notifiers/Quest.lua` | Listens to `QUEST_COMPLETE` and `QUEST_TURNED_IN`. |
-| `Notifiers/BossKill.lua` | Listens to `ENCOUNTER_END`. |
-| `Notifiers/SkillUp.lua` | Listens to `CHAT_MSG_SKILL`. |
-| `Transports/Pixel.lua` | The optional, off-by-default "realtime" strip for the companion (see below). Creates nothing unless enabled. |
-
-The addon registers only the events listed above (plus `ADDON_LOADED` and
-`PLAYER_LOGIN`). It does not register the combat log event, which Forever
-protects, and it does not hook or replace any Blizzard function.
-
-## Chat announcements (the main feature)
-
-When an event happens, DOINK sends one line to the chat channel you chose,
-through the normal `SendChatMessage` API, so it appears exactly like a line
-you typed yourself:
+real item links:
 
 ```
 [Guild] [Paul Hebbs]: Ding! Level 20.
@@ -50,6 +11,12 @@ you typed yourself:
 [Guild] [Paul Hebbs]: Ragnaros down! (Molten Core, 40 players)
 [Guild] [Paul Hebbs]: Died in Westfall.
 ```
+
+No dependencies, no libraries, no setup window: install it and it works.
+Optionally, a separate open-source companion program can mirror the same
+events to a Discord channel (see "Optional Discord mirroring").
+
+## Announcements
 
 Every event type, what triggers it, the exact wording, and the default rule:
 
@@ -75,7 +42,10 @@ not in a guild (or group) nothing is sent and `/doink` says so. Say, yell and
 public channels such as General are not offered: Blizzard only allows addons
 to send those in response to a key press.
 
-Safety against spam, built in and not configurable:
+Lines are sent through the normal `SendChatMessage` API, so they appear
+exactly like a line you typed yourself.
+
+### Built-in protection against spam (not configurable)
 
 - At most one line every two seconds, and at most eight lines per minute. If
   more events happen than that (a chest full of epics), the extra lines are
@@ -109,22 +79,22 @@ realtime state, and which event types are enabled.
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
 | `/doink realtime on` / `off` / `test` / `position <corner>` | Only for the Discord companion's experimental realtime mode |
 
-## What the addon stores
+## Compatibility
 
-Everything is kept in one saved variable, `DOINKDB`, written by the game to
-`WTF\Account\<account>\SavedVariables\DOINK.lua` on `/reload` and logout:
+- Built for World of Warcraft: Forever (beta client 1.60.1, Interface
+  16001). It uses the Classic-era API only.
+- Chat patterns are built from the game's own strings (`LOOT_ITEM_SELF`,
+  `SKILL_RANK_UP`), so loot and skill detection work on any client language.
+- Forever surnames are supported: characters are tracked by full name, and
+  whispers use the full name.
 
-- Per character: your settings (only the ones you changed), a counter, and a
-  ring buffer of the last 500 events as JSON text (type, time, character,
-  realm, class, level, and event details such as item id and name). This
-  buffer exists for the optional companion; the addon itself never reads it
-  back.
-- Account-wide: the debug flag, the realtime settings (off by default), and
-  any Discord webhook URL you set with `/doink webhook`. If you never set
-  one, nothing is stored there.
+## Known limitations
 
-The addon does not store chat, names of other players, or anything about
-other characters. It reads nothing from disk (addons can't).
+- Deaths don't say what killed you: Forever does not let addons read the
+  combat log.
+- Announcements can't be sent to Blizzard Communities yet.
+- Boss-kill announcements rely on `ENCOUNTER_END`, which hasn't been
+  confirmed in Forever dungeons during the beta.
 
 ## Optional Discord mirroring (separate download)
 
@@ -152,29 +122,65 @@ unless you turn this on, and `/doink realtime off` removes it. Full details,
 including exactly what the companion reads from the screen, are in the
 README on GitHub under "How realtime works".
 
-## Compatibility and testing
+## How it works: what is in the package
 
-- Built for World of Warcraft: Forever (beta client 1.60.1, Interface
-  16001). It uses the Classic-era API only.
-- Chat patterns are built from the game's own strings (`LOOT_ITEM_SELF`,
-  `SKILL_RANK_UP`), so loot and skill detection work on any client language.
-- Forever surnames are supported: characters are tracked by full name, and
-  whispers use the full name.
-- The repository includes an automated test suite for the addon (run
-  outside the game against a stub of the WoW API) that covers every
-  notifier, the announcement rules, the rate limiter and the slash commands,
-  and it runs on every change.
+One folder, `DOINK`, 12 files, about 1,500 lines of Lua, no third-party code:
 
-## Known limitations
+| File | Purpose |
+|---|---|
+| `DOINK.toc` | Addon manifest. `## Interface: 16001`, `## SavedVariables: DOINKDB`. |
+| `Core.lua` | Startup, saved-variables handling, the `/doink` slash command, event dispatch. |
+| `Defaults.lua` | Default settings and the allowed values for each setting. |
+| `Announce.lua` | Chat announcements: wording, rules, rate limiting. |
+| `Json.lua` | A minimal JSON encoder used to store events for the optional companion. |
+| `Notifiers/LevelUp.lua` | Listens to `PLAYER_LEVEL_UP`. |
+| `Notifiers/Loot.lua` | Listens to `CHAT_MSG_LOOT` and `GET_ITEM_INFO_RECEIVED`. |
+| `Notifiers/Death.lua` | Listens to `PLAYER_DEAD`. |
+| `Notifiers/Quest.lua` | Listens to `QUEST_COMPLETE` and `QUEST_TURNED_IN`. |
+| `Notifiers/BossKill.lua` | Listens to `ENCOUNTER_END`. |
+| `Notifiers/SkillUp.lua` | Listens to `CHAT_MSG_SKILL`. |
+| `Transports/Pixel.lua` | The optional, off-by-default "realtime" strip for the companion. Creates nothing unless enabled. |
 
-- Deaths don't say what killed you: Forever does not let addons read the
-  combat log.
-- Announcements can't be sent to Blizzard Communities yet.
-- Boss-kill announcements rely on `ENCOUNTER_END`, which hasn't been
-  confirmed in Forever dungeons during the beta.
+The addon registers only the events listed above (plus `ADDON_LOADED` and
+`PLAYER_LOGIN`). It does not register the combat log event, which Forever
+protects, and it does not hook or replace any Blizzard function. It makes
+no network connections (addons can't) and reads nothing from disk.
 
-## Support
+## How it works: what the addon stores
 
-Bugs and requests: https://github.com/ryan-flan/DOINK/issues. The changelog
-for each version is generated from the commit history and attached to every
-file.
+Everything is kept in one saved variable, `DOINKDB`, written by the game to
+`WTF\Account\<account>\SavedVariables\DOINK.lua` on `/reload` and logout:
+
+- Per character: your settings (only the ones you changed), a counter, and a
+  ring buffer of the last 500 events as JSON text (type, time, character,
+  realm, class, level, and event details such as item id and name). This
+  buffer exists for the optional companion; the addon itself never reads it
+  back.
+- Account-wide: the debug flag, the realtime settings (off by default), and
+  any Discord webhook URL you set with `/doink webhook`. If you never set
+  one, nothing is stored there.
+
+The addon does not store chat, names of other players, or anything about
+other characters.
+
+## Development, source and AI use
+
+Source code, issue tracker and the companion: https://github.com/ryan-flan/DOINK
+(MIT license). Every CurseForge file is built from a tagged commit of that
+repository by GitHub Actions using the BigWigs packager, so the uploaded
+zip matches the public source exactly. The changelog for each version is
+generated from the commit history and attached to every file.
+
+The repository includes an automated test suite for the addon (run outside
+the game against a stub of the WoW API) covering every notifier, the
+announcement rules, the rate limiter and the slash commands; it runs on
+every change.
+
+**AI use disclaimer:** this addon and its companion were written with the
+help of an AI assistant (Anthropic's Claude), working under the direction of
+the developer, who decided what to build, reviewed the code, and tested each
+release in the Forever beta client. Every WoW API behaviour the addon relies
+on was verified in the game rather than assumed, and the full source is
+public for anyone to review.
+
+Bugs and requests: https://github.com/ryan-flan/DOINK/issues.
