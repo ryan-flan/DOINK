@@ -17,6 +17,7 @@ from .parser import (char_key, decode_message, full_name, legacy_char_key,
 from .state import State
 from .status import Status
 from .watcher import Watcher
+from .wowhead import ItemCache
 
 log = logging.getLogger("doink")
 
@@ -27,6 +28,17 @@ REALTIME_IDLE_INTERVAL = 1.0          # WoW not running, minimized or behind ano
 
 def webhook_for(key: str, game_hooks: dict[str, str], config: Config) -> str:
     return game_hooks.get(key) or game_hooks.get("*") or config.webhook_url
+
+
+ITEMS = ItemCache()  # one per process: both the file pass and realtime share it
+
+
+def item_for(event: dict, config: Config):
+    """Wowhead details for a loot event (icon, stats), or None: lookups off,
+    not loot, no id, or Wowhead unreachable. Never raises."""
+    if not config.wowhead or event.get("type") != "loot":
+        return None
+    return ITEMS.lookup((event.get("data") or {}).get("item_id"))
 
 
 def post_events(config: Config, key: str, events: list[dict], state: State,
@@ -51,7 +63,7 @@ def post_events(config: Config, key: str, events: list[dict], state: State,
     for chunk in itertools.batched(events, MAX_EMBEDS_PER_MESSAGE):
         webhook = pool.get(url or "dry-run")
         try:
-            webhook.send([build_embed(e) for e in chunk])
+            webhook.send([build_embed(e, item_for(e, config)) for e in chunk])
         except WebhookError as e:
             log.error("%s: post failed: %s", key, e)
             status.failed(f"posting to Discord failed: {e}")

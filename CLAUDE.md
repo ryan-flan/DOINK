@@ -325,6 +325,15 @@ two implementations can't drift apart. Regenerate with
   quests (`https://www.wowhead.com/forever/item=<id>`, `/quest=<id>`;
   verified), footer `Char-Realm`. Respect the
   webhook rate limit (~30/min); batch if many events arrive from one reload.
+- Loot embeds are enriched from Wowhead (`wowhead.py`, since v0.10.0):
+  `https://nether.wowhead.com/forever/tooltip/item/<id>?locale=0` returns
+  `{name, quality, icon, tooltip (HTML), spells}` (404 for unknown ids);
+  the icon is `https://wow.zamimg.com/images/wow/icons/large/<icon>.jpg`.
+  The tooltip HTML becomes description lines (name, sell price and stack
+  size dropped), the icon the thumbnail. One GET per item per session,
+  misses cached too, 5 s timeout, never raises; `wowhead = false` in
+  config.toml disables it. The README's network statement names Wowhead;
+  keep it accurate.
 - `--dry-run` prints embeds to stdout instead of POSTing.
 - Zero config is the goal: `config.toml` is optional and so is every key in
   it (`savedvariables_path`, `webhook_url`, `dry_run`, `poll_interval`,
@@ -600,8 +609,11 @@ fixture included; that's a stand-in for the real name, by decision.)
   that. See "Announcements".
 - **v0.8.0:** settings page (`Options.lua`, native Settings API).
 - **v0.9.0:** `death.killer` from the death recap, environmental death
-  lines, `file_seen` wipe check. **v0.9.1:** reader copes with a slightly
-  rescaled strip (realtime deaths).
+  lines, `file_seen` wipe check. **v0.9.1–v0.9.3:** realtime deaths
+  (decoder hardening; the real fix was the 12 px corner inset for Windows
+  11 rounded corners). **v0.9.4–v0.9.5:** Wago Addons uploads.
+- **v0.10.0:** loot embeds enriched from Wowhead (icon thumbnail, tooltip
+  lines), `wowhead` config flag.
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)

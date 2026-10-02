@@ -29,5 +29,10 @@
 # /doink realtime on in game. See README, "How realtime works".
 # realtime = false
 
+# Loot embeds fetch the item's icon and tooltip from Wowhead (one small
+# request per item per session; only the item id is sent). false = plain
+# embeds with no network traffic beyond Discord.
+# wowhead = true
+
 # Notifier on/off switches and filters live in the game now:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>

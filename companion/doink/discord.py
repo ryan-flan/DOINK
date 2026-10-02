@@ -59,15 +59,24 @@ def _level_up(event: dict, data: dict) -> dict:
     return {"title": f"{full_name(event)} reached level {data.get('level', '?')}"}
 
 
-def _loot(event: dict, data: dict) -> dict:
-    name = data.get("name") or "an item"
+def _loot(event: dict, data: dict, item=None) -> dict:
+    """``item`` is an optional wowhead.ItemInfo: adds the icon as a
+    thumbnail and the tooltip's lines as the description."""
+    name = data.get("name") or (item.name if item else None) or "an item"
     qty = data.get("qty") or 1
     embed = {"title": f"{full_name(event)} looted {name}" + (f" ×{qty}" if qty > 1 else "")}
     if isinstance(data.get("item_id"), int):
         embed["url"] = f"{WOWHEAD}/item={data['item_id']}"
     quality = data.get("quality")
+    if not isinstance(quality, int) and item is not None:
+        quality = item.quality
     if isinstance(quality, int) and 0 <= quality < len(QUALITY_COLOURS):
         embed["color"] = QUALITY_COLOURS[quality]
+    if item is not None:
+        if item.icon_url:
+            embed["thumbnail"] = {"url": item.icon_url}
+        if item.lines:
+            embed["description"] = "\n".join(item.lines)
     if data.get("vendor_value"):
         embed["fields"] = [_field("Vendor value", format_money(data["vendor_value"]))]
     return embed
@@ -158,9 +167,14 @@ def connection_test_embed() -> dict:
     }
 
 
-def build_embed(event: dict) -> dict:
+def build_embed(event: dict, item=None) -> dict:
+    """``item``: a wowhead.ItemInfo for loot events, when the lookup is on
+    and succeeded; ignored for every other type."""
     data = event.get("data") or {}
-    embed = BUILDERS.get(event["type"], _generic)(event, data)
+    if event["type"] == "loot":
+        embed = _loot(event, data, item)
+    else:
+        embed = BUILDERS.get(event["type"], _generic)(event, data)
 
     embed.setdefault("color", CLASS_COLOURS.get(event.get("class"), DEFAULT_COLOUR))
     footer = char_key(event)

@@ -39,6 +39,7 @@ class Config:
     poll_interval: float = 2.0
     max_backlog: int = 10
     realtime: bool = False  # experimental screen reader; opt-in
+    wowhead: bool = True    # look up looted items on Wowhead for icon + stats
 
 
 def _read(path: Path) -> dict:
@@ -80,6 +81,7 @@ def load_config(path: Path, dry_run: bool = False, require_paths: bool = True) -
         poll_interval=float(raw.get("poll_interval", 2.0)),
         max_backlog=int(raw.get("max_backlog", 10)),
         realtime=bool(raw.get("realtime", False)),
+        wowhead=bool(raw.get("wowhead", True)),
     )
 
 

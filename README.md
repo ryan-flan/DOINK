@@ -150,12 +150,15 @@ announcements need nothing extra.
 
 Everything the addon announces can also land in Discord:
 
-> **Flano Wren looted Thunderfury, Blessed Blade of the Windseeker**
-> Vendor value: 12g 34s
+> **Flano Wren looted Wolfmaster Cape**
+> Item Level 27 · Binds when picked up · Back · 22 Armor · +3 Stamina ·
+> Requires Level 22 · Equip: +10 Attack Power.
+> Vendor value: 12s 15c
 > Flano Wren-Whatever
 
-(an embed in the item's quality colour, with the item name linking to
-Wowhead; level-ups and deaths use your class colour)
+(an embed in the item's quality colour, with the item's icon, its tooltip
+from Wowhead and the name linking to Wowhead; level-ups and deaths use your
+class colour)
 
 WoW addons cannot access the network, so Discord posting is done by a
 separate, optional program, the **DOINK companion**. Download
@@ -246,8 +249,10 @@ newest 10 queued events.
 - **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
 - **Writes** only inside its own folder: `config.toml` (your settings),
   `state.json` (what it has already posted), `doink.log` (capped at ~2 MB).
-- **Network:** only HTTPS posts to your Discord webhook. No telemetry, no
-  update checks. It doesn't listen on any port.
+- **Network:** HTTPS posts to your Discord webhook, and one small HTTPS
+  request to Wowhead per looted item (its id only) to fetch the icon and
+  tooltip for the loot embed; `wowhead = false` in `config.toml` turns that
+  off. No telemetry, no update checks. It doesn't listen on any port.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
