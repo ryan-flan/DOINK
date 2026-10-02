@@ -184,8 +184,9 @@ epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
 - Rate limit: one line per 2 s via a `C_Timer.After` chain, max 8 per minute,
   dropped lines are printed to the player. 255-byte chat limit enforced.
 - Verified in beta (2026-10-02): `SendChatMessage` **works from a timer**, i.e.
-  without a hardware event, at least for WHISPER (the server answered). GUILD
-  is the same restriction class in retail. SAY/YELL/CHANNEL are hardware-gated
+  without a hardware event: WHISPER (server answered) and a real PARTY
+  announcement from a live event both delivered. GUILD is the same
+  restriction class in retail; not yet seen live (no guild on the test char). SAY/YELL/CHANNEL are hardware-gated
   for addons and are not offered. `C_Club` and `C_Club.SendMessage` exist in
   Forever but are untested (no community to test with); communities are a
   later option.
