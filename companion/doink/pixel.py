@@ -346,6 +346,7 @@ class ResourceMeter:
         self.max_gdi_growth = max_gdi_growth
         self.sample_every = sample_every
         self._durations: deque[float] = deque(maxlen=64)
+        self._cpu: deque[float] = deque(maxlen=64)
         self._count = 0
         self._window_start = (time.monotonic(), time.process_time(), 0)
         self._cpu_pct = 0.0
@@ -353,8 +354,12 @@ class ResourceMeter:
         self.baseline: tuple[float | None, int | None] | None = None  # (ws_mb, gdi)
         self.latest: tuple[float | None, int | None] = (None, None)
 
-    def record(self, seconds: float) -> None:
+    def record(self, seconds: float, cpu_seconds: float | None = None) -> None:
+        """``seconds`` is wall time (latency: includes waiting for the GPU
+        inside BitBlt, ~15 ms here); ``cpu_seconds`` is what the capture
+        actually cost this process, and is what the safety valve judges."""
         self._durations.append(seconds)
+        self._cpu.append(seconds if cpu_seconds is None else cpu_seconds)
         self._count += 1
         wall0, cpu0, count0 = self._window_start
         wall = time.monotonic()
@@ -377,15 +382,19 @@ class ResourceMeter:
     def avg_ms(self) -> float:
         return sum(self._durations) / len(self._durations) * 1000 if self._durations else 0.0
 
+    @property
+    def avg_cpu_ms(self) -> float:
+        return sum(self._cpu) / len(self._cpu) * 1000 if self._cpu else 0.0
+
     def snapshot(self) -> dict:
         ws_mb, gdi = self.latest
-        return {"avg_ms": round(self.avg_ms, 2), "cpu_pct": round(self._cpu_pct, 2),
-                "rate_hz": round(self._rate, 1), "ws_mb": ws_mb, "gdi": gdi,
-                "captures": self._count}
+        return {"avg_ms": round(self.avg_ms, 2), "avg_cpu_ms": round(self.avg_cpu_ms, 2),
+                "cpu_pct": round(self._cpu_pct, 2), "rate_hz": round(self._rate, 1),
+                "ws_mb": ws_mb, "gdi": gdi, "captures": self._count}
 
     def should_stop(self) -> str | None:
-        if len(self._durations) >= self.WARMUP and self.avg_ms > self.max_avg_ms:
-            return f"screen reading is slow here ({self.avg_ms:.0f} ms per capture)"
+        if len(self._cpu) >= self.WARMUP and self.avg_cpu_ms > self.max_avg_ms:
+            return f"screen reading is costing too much here ({self.avg_cpu_ms:.0f} ms of CPU per capture)"
         if self.baseline:
             ws0, gdi0 = self.baseline
             ws, gdi = self.latest
@@ -615,6 +624,7 @@ class Reader:
 
     def poll(self) -> list[bytes]:
         started = time.perf_counter()
+        cpu_started = time.process_time()
         messages = []
         try:
             grab = self.capture.grab()
@@ -636,7 +646,7 @@ class Reader:
                         messages.append(message)
                     break
         finally:
-            self.meter.record(time.perf_counter() - started)
+            self.meter.record(time.perf_counter() - started, time.process_time() - cpu_started)
         return messages
 
     def _dump(self, grab: "Grab", band_top: int, bottom: bool) -> None:

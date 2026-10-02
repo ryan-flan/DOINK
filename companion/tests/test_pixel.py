@@ -223,13 +223,20 @@ class AssemblerTest(unittest.TestCase):
 
 
 class MeterTest(unittest.TestCase):
-    def test_slow_captures_stop_after_warmup(self):
+    def test_expensive_captures_stop_after_warmup(self):
         m = ResourceMeter(max_avg_ms=25)
         for _ in range(ResourceMeter.WARMUP - 1):
-            m.record(0.100)
+            m.record(0.100, cpu_seconds=0.100)
         self.assertIsNone(m.should_stop(), "not before warm-up")
-        m.record(0.100)
-        self.assertIn("slow", m.should_stop())
+        m.record(0.100, cpu_seconds=0.100)
+        self.assertIn("costing too much", m.should_stop())
+
+    def test_waiting_on_the_gpu_is_not_cost(self):
+        m = ResourceMeter(max_avg_ms=25)
+        for _ in range(ResourceMeter.WARMUP + 5):
+            m.record(0.050, cpu_seconds=0.001)  # 50 ms wall, 1 ms CPU: BitBlt waiting
+        self.assertIsNone(m.should_stop())
+        self.assertAlmostEqual(m.snapshot()["avg_cpu_ms"], 1.0, places=1)
 
     def test_growth_stops(self):
         m = ResourceMeter(max_growth_mb=50, max_gdi_growth=50)

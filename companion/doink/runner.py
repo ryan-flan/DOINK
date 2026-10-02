@@ -206,8 +206,10 @@ class RealtimeWorker(threading.Thread):
                 if reader.window == "foreground" and time.monotonic() - last_report >= 60:
                     # A cost line a minute while reading, for the README numbers
                     # and for anyone's bug report.
-                    log.info("realtime: %s captures/s, %s ms avg, %s%% CPU, %s MB, %s GDI handles",
-                             snapshot["rate_hz"], snapshot["avg_ms"], snapshot["cpu_pct"],
+                    log.info("realtime: %s captures/s, %s ms avg (%s ms CPU), %s%% CPU, %s MB, "
+                             "%s GDI handles",
+                             snapshot["rate_hz"], snapshot["avg_ms"], snapshot["avg_cpu_ms"],
+                             snapshot["cpu_pct"],
                              None if snapshot["ws_mb"] is None else round(snapshot["ws_mb"]),
                              snapshot["gdi"])
                     last_report = time.monotonic()
