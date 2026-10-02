@@ -24,9 +24,17 @@ Windows; the addon works fully without it. See
 
 No dependencies and no libraries: install it and it works. Settings are on
 a normal options page (Esc → Options → AddOns → DOINK) and can also be set
-with `/doink` commands. Inspired by
-[Dink](https://github.com/pajlads/DinkPlugin) for RuneLite. Status: beta,
-tracking the Forever beta client.
+with `/doink` commands. Status: beta, tracking the Forever beta client.
+
+## Credit: Dink
+
+DOINK is heavily inspired by [Dink](https://github.com/pajlads/DinkPlugin),
+the RuneLite plugin by [pajlads](https://github.com/pajlads) that posts your
+Old School RuneScape achievements to Discord. The idea of an addon that
+notices your milestones and tells your friends, the Discord embeds, the
+per-event toggles and the name all come from Dink. DOINK is not affiliated
+with the Dink project; it's a from-scratch WoW take on the same idea, built
+within what a WoW addon is allowed to do. If you play OSRS, go use Dink.
 
 ## Install
 
