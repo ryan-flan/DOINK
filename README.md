@@ -12,9 +12,9 @@ tracking the Forever beta client.
 **The addon on its own** watches for events and announces them in chat:
 
 ```
-[Guild] Paul Hebbs: Ding! Level 20.
-[Guild] Paul Hebbs: Looted [Thunderfury, Blessed Blade of the Windseeker]!
-[Guild] Paul Hebbs: Ragnaros down! (Molten Core, 40 players)
+[Guild] Flano: Ding! Level 20.
+[Guild] Flano: Looted [Thunderfury, Blessed Blade of the Windseeker]!
+[Guild] Flano: Ragnaros down! (Molten Core, 40 players)
 ```
 
 Guild chat by default; officer, party or raid chat if you prefer. Nothing

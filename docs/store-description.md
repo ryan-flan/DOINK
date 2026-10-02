@@ -6,10 +6,10 @@ choose in guild, officer, party or raid chat the moment they happen, with
 real item links:
 
 ```
-[Guild] [Paul Hebbs]: Ding! Level 20.
-[Guild] [Paul Hebbs]: Looted [Thunderfury, Blessed Blade of the Windseeker]!
-[Guild] [Paul Hebbs]: Ragnaros down! (Molten Core, 40 players)
-[Guild] [Paul Hebbs]: Died in Westfall.
+[Guild] [Flano]: Ding! Level 20.
+[Guild] [Flano]: Looted [Thunderfury, Blessed Blade of the Windseeker]!
+[Guild] [Flano]: Ragnaros down! (Molten Core, 40 players)
+[Guild] [Flano]: Died in Westfall.
 ```
 
 No dependencies and no libraries: install it and it works. Settings are on
