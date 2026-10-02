@@ -112,8 +112,9 @@ roughly 1% of one CPU core, 46 MB of memory, and a flat handle count; each
 look takes ~15 ms of waiting on the graphics driver but only ~1 ms of CPU.
 The companion measures its own capture cost, memory and Windows handle count
 while realtime is on, shows them in the settings window, and **turns
-realtime off by itself** if captures start costing real CPU or memory
-climbs. The normal posting path is unaffected either way.
+realtime off by itself** if captures start costing real CPU, handles pile
+up, or memory keeps climbing. The normal posting path is unaffected either
+way.
 
 **Reliability.** Realtime is best effort on top of the normal path. If the
 companion misses a strip (WoW was behind another window, or something

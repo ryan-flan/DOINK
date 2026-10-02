@@ -238,16 +238,34 @@ class MeterTest(unittest.TestCase):
         self.assertIsNone(m.should_stop())
         self.assertAlmostEqual(m.snapshot()["avg_cpu_ms"], 1.0, places=1)
 
-    def test_growth_stops(self):
-        m = ResourceMeter(max_growth_mb=50, max_gdi_growth=50)
-        m.inject(40.0, 100)
+    def test_handle_growth_stops(self):
+        m = ResourceMeter(max_gdi_growth=50)
+        for _ in range(ResourceMeter.BASELINE_SAMPLE):
+            m.inject(40.0, 100)
         self.assertIsNone(m.should_stop())
-        m.inject(80.0, 110)
-        self.assertIsNone(m.should_stop())
-        m.inject(95.0, 110)
-        self.assertIn("memory", m.should_stop())
-        m.inject(45.0, 160)
+        m.inject(40.0, 151)
         self.assertIn("GDI", m.should_stop())
+
+    def test_memory_step_is_tolerated_but_a_steady_climb_stops(self):
+        m = ResourceMeter(max_growth_mb=100)
+        for _ in range(ResourceMeter.BASELINE_SAMPLE):
+            m.inject(45.0, 54)
+        # The settings window opens: +80 MB in one step, then flat.
+        for _ in range(8):
+            m.inject(125.0, 54)
+            self.assertIsNone(m.should_stop(), "a one-off step is not a leak")
+        # Then it climbs 5 samples in a row past the limit: that is one.
+        for ws in (130.0, 136.0, 142.0, 150.0, 158.0):
+            m.inject(ws, 54)
+        self.assertIn("climbing", m.should_stop())
+
+    def test_baseline_waits_for_startup(self):
+        m = ResourceMeter()
+        m.inject(30.0, 50)
+        m.inject(60.0, 50)
+        self.assertIsNone(m.baseline, "first samples are start-up noise")
+        m.inject(90.0, 50)
+        self.assertEqual(m.baseline, (90.0, 50))
 
     def test_snapshot_fields(self):
         m = ResourceMeter()

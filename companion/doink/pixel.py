@@ -334,12 +334,19 @@ class ResourceMeter:
 
     Records each capture+decode duration; samples the process working set
     and GDI handle count every ``sample_every`` captures. ``should_stop``
-    returns a reason once the average capture is slow or memory/handles
-    have grown well past the first sample."""
+    returns a reason once captures cost real CPU, GDI handles have grown,
+    or memory has climbed *steadily* well past the baseline.
+
+    The whole process is measured, so memory is judged on a steady climb
+    (``CLIMB`` consecutive rising samples) and not on its level: opening
+    the settings window adds ~80 MB of Tk in one step, and that must not
+    count as a leak."""
 
     WARMUP = 20
+    BASELINE_SAMPLE = 3  # skip the first samples: the UI is still starting up
+    CLIMB = 5
 
-    def __init__(self, max_avg_ms: float = 25.0, max_growth_mb: float = 50.0,
+    def __init__(self, max_avg_ms: float = 25.0, max_growth_mb: float = 100.0,
                  max_gdi_growth: int = 50, sample_every: int = 50):
         self.max_avg_ms = max_avg_ms
         self.max_growth_mb = max_growth_mb
@@ -348,11 +355,13 @@ class ResourceMeter:
         self._durations: deque[float] = deque(maxlen=64)
         self._cpu: deque[float] = deque(maxlen=64)
         self._count = 0
+        self._samples = 0
         self._window_start = (time.monotonic(), time.process_time(), 0)
         self._cpu_pct = 0.0
         self._rate = 0.0
         self.baseline: tuple[float | None, int | None] | None = None  # (ws_mb, gdi)
         self.latest: tuple[float | None, int | None] = (None, None)
+        self._ws_history: deque[float] = deque(maxlen=self.CLIMB)
 
     def record(self, seconds: float, cpu_seconds: float | None = None) -> None:
         """``seconds`` is wall time (latency: includes waiting for the GPU
@@ -368,15 +377,19 @@ class ResourceMeter:
             self._rate = (self._count - count0) / (wall - wall0)
             self._window_start = (wall, time.process_time(), self._count)
         if self._count % self.sample_every == 1:
-            self.latest = (working_set_mb(), gdi_handles())
-            if self.baseline is None:
-                self.baseline = self.latest
+            self._sample(working_set_mb(), gdi_handles())
+
+    def _sample(self, ws_mb: float | None, gdi: int | None) -> None:
+        self._samples += 1
+        self.latest = (ws_mb, gdi)
+        if ws_mb is not None:
+            self._ws_history.append(ws_mb)
+        if self.baseline is None and self._samples >= self.BASELINE_SAMPLE:
+            self.baseline = self.latest
 
     def inject(self, ws_mb: float | None, gdi: int | None) -> None:
-        """For tests: pretend the next sample read these values."""
-        self.latest = (ws_mb, gdi)
-        if self.baseline is None:
-            self.baseline = self.latest
+        """For tests: pretend a sample read these values."""
+        self._sample(ws_mb, gdi)
 
     @property
     def avg_ms(self) -> float:
@@ -398,10 +411,14 @@ class ResourceMeter:
         if self.baseline:
             ws0, gdi0 = self.baseline
             ws, gdi = self.latest
-            if ws0 is not None and ws is not None and ws - ws0 > self.max_growth_mb:
-                return f"memory grew by {ws - ws0:.0f} MB while reading"
             if gdi0 is not None and gdi is not None and gdi - gdi0 > self.max_gdi_growth:
                 return f"GDI handles grew by {gdi - gdi0} while reading"
+            if ws0 is not None and ws is not None and ws - ws0 > self.max_growth_mb:
+                history = list(self._ws_history)
+                climbing = (len(history) == self.CLIMB
+                            and all(b > a for a, b in zip(history, history[1:])))
+                if climbing:
+                    return f"memory keeps climbing while reading (+{ws - ws0:.0f} MB)"
         return None
 
 

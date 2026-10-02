@@ -303,8 +303,11 @@ two implementations can't drift apart. Regenerate with
   GPU) but ~1 ms CPU, 1.25% CPU, 46 MB, 54 GDI handles, flat. `ResourceMeter`
   samples CPU time per capture (not wall time: the GPU wait isn't cost),
   working set and GDI handle count; `RealtimeWorker` stops itself (and says
-  why in the settings window) if captures average > 25 ms CPU or
-  memory/handles grow > 50 MB / 50 past the first sample. Diagnostics: `-v`
+  why in the settings window) if captures average > 25 ms CPU, GDI handles
+  grow > 50, or the working set is > 100 MB over baseline **and still
+  climbing** (5 rising samples): the whole process is measured and the
+  settings window adds ~80 MB of Tk in one step, which tripped the first
+  version of the valve. Baseline is the 3rd sample, after start-up. Diagnostics: `-v`
   logs every rejected strip candidate with the reason; `DOINK_DUMP_BANDS=<dir>`
   writes the raw bands it failed on, replayable with `pixel.decode`. The Windows CI job runs a
   1000-capture leak test. Status updates from the reader never notify the
