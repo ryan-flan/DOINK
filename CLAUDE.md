@@ -526,7 +526,8 @@ fixture included; that's a stand-in for the real name, by decision.)
   remains: at 19:11 the sync was found 6 px left of the alive position
   with header CRC failures, possibly a transient death animation; the
   sweep handles that case now.
-  - [ ] Confirm with a real death on v0.9.3+.
+  - [x] Confirmed: a real death on v0.9.3 posted via realtime in ~1 s
+    (2026-10-02 20:00).
 - [x] **Communities parked**: `C_Club` exists but Battle.net features are
   limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
