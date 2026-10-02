@@ -393,6 +393,9 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   `GetUnitName("player", true)` returns `"Paul Hebbs"`. Related APIs exist
   but are unverified and unused: `C_PlayerInfo.ShouldDisplaySurname`,
   `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator`.
+- [x] **Window class** of the Forever beta client (`WowB.exe`) is
+  `waApplication Window` (title "World of Warcraft"), not retail's
+  `GxWindowClass`. `pixel.find_wow_window` tries both.
 - [ ] `ENCOUNTER_END` fires in Forever dungeons? ______
 - [x] `QUEST_TURNED_IN` fires with questID/xp on a real turn-in, and the
   title resolves (quest 818 "A Solvent Spirit", 625 xp).

@@ -26,7 +26,8 @@ MAX_BLOCKS = 1200
 BLOCK_MIN, BLOCK_MAX = 2, 8    # pixels per block the reader will look for
 BAND_ROWS = ROWS * BLOCK_MAX   # 24: enough for the largest block size
 MIN_CONTRAST = 48              # white minus black, out of 255
-WOW_WINDOW_CLASS = "GxWindowClass"
+# Forever beta ("WowB.exe") and retail/classic ("Wow.exe") window classes.
+WOW_WINDOW_CLASSES = ("waApplication Window", "GxWindowClass")
 
 # Block counts at which each sync run starts, plus the end: the shape of the
 # sync pattern, used to fit the block width from the observed transitions.
@@ -456,7 +457,11 @@ if sys.platform == "win32":
     SRCCOPY = 0x00CC0020
 
     def find_wow_window() -> int | None:
-        return FindWindowW(WOW_WINDOW_CLASS, None) or None
+        for cls in WOW_WINDOW_CLASSES:
+            hwnd = FindWindowW(cls, None)
+            if hwnd:
+                return hwnd
+        return None
 
 
 @dataclass
