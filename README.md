@@ -122,7 +122,7 @@ the release's workflow run. Check your download against the `.sha256` file on
 the release page:
 
 ```powershell
-Get-FileHash DOINK-v0.7.0.zip -Algorithm SHA256
+Get-FileHash DOINK-v0.8.0.zip -Algorithm SHA256
 ```
 
 > Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
