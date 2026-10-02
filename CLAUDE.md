@@ -449,7 +449,9 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   **old** level. Core tracks `ns.knownLevel` from the event for the envelope.
 - [x] `SKILL_RANK_UP` = `Your skill in %s has increased to %d.` (keeps its
   period, unlike the loot strings).
-- [ ] `PLAYER_DEAD` does *not* re-fire on login/reload while dead? ______
+- [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
+  a reload in between produced exactly three events (2026-10-02). No guard
+  needed. Deaths post via realtime within ~1 s.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):
   `You receive loot: |cnIQ1:|Hitem:769::::::::8:1491::::::::::|h[Chunk of Boar Meat]|h|r`
   - Links use the **named-colour** form `|cnIQ<quality>:`, not `|cffRRGGBB`.
