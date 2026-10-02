@@ -75,7 +75,7 @@ def _loot(event: dict, data: dict) -> dict:
 
 ENVIRONMENT = {  # death.environment -> what happened, third person
     "FALLING": "Forgot they couldn't fly.",
-    "DROWNING": "Forgot to breathe.",
+    "DROWNING": "Forgot they couldn't swim.",
     "FATIGUE": "Swam too far.",
     "FIRE": "Stood in the fire.",
     "LAVA": "Went for a swim in lava.",

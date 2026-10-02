@@ -56,7 +56,7 @@ end
 -- Environmental deaths, keyed by the recap's environmentalType (upper-cased).
 local ENVIRONMENT = {
   FALLING  = "Forgot I couldn't fly.",
-  DROWNING = "Forgot to breathe.",
+  DROWNING = "Forgot I couldn't swim.",
   FATIGUE  = "Swam too far.",
   FIRE     = "Stood in the fire.",
   LAVA     = "Went for a swim in lava.",
