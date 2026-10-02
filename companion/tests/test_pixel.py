@@ -66,6 +66,13 @@ def soften(buf: bytearray, width: int, band_rows: int) -> None:
                 buf[row + x * 4:row + x * 4 + 3] = bytes([v, v, v])
 
 
+def rows_payload(rows: list[str]) -> bytes:
+    """The payload bytes a reference-encoded chunk carries (from its header length)."""
+    header = int(rows[0][len(pixel.SYNC):len(pixel.SYNC) + 80], 2).to_bytes(10, "big")
+    bits = "".join(rows[1:])[:header[7] * 8]
+    return bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8))
+
+
 def decode_band(buf, width, bottom=False, band_rows=pixel.BAND_ROWS):
     return decode(buf, width, width * 4, 0, band_rows, bottom)
 
@@ -144,6 +151,25 @@ class DecodeTest(unittest.TestCase):
         i = (1 * width + x) * 4
         damaged[i:i + 3] = bytes([255 - damaged[i]] * 3)
         self.assertIsNone(decode_band(damaged, width))
+
+    def test_brightness_gradient_along_the_strip(self):
+        # The death screen dims the strip unevenly (beta, 2026-10-02): the
+        # sync and header at the left end read fine, the far end of the
+        # payload rows did not. White falls from 255 to ~75 across the strip.
+        payload = bytes(range(256)) * 2  # full-width rows, long same-bit runs
+        chunks = encode_chunks(400, 3, payload)
+        width = 1300
+        for rows in chunks[:2]:
+            buf = render(rows, 3, width)
+            for y in range(pixel.BAND_ROWS):
+                for x in range(1200):
+                    gain = 1.0 - 0.7 * x / 1200
+                    i = (y * width + x) * 4
+                    v = int(buf[i] * gain)
+                    buf[i:i + 3] = bytes([v, v, v])
+            chunk = decode_band(buf, width)
+            self.assertIsNotNone(chunk, "gradient defeats a single global cut")
+            self.assertEqual(chunk.payload, rows_payload(rows))
 
     def test_multi_chunk_message_decodes_each_chunk(self):
         payload = bytes(range(256)) * 2  # 512 bytes -> 6 chunks of 100

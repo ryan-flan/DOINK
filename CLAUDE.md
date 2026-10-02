@@ -248,8 +248,11 @@ two implementations can't drift apart. Regenerate with
   area into one DIB section; finds the sync at any x with per-block-size
   regexes (±2 px), fits the grid by least squares and keeps refining it from
   every transition along each row (the sync alone can't pin a fractional
-  block width over 400 blocks), calibrates black/white on the sync blocks,
-  checks both CRCs. 8 Hz while WoW is the foreground window, 1 Hz otherwise;
+  block width over 400 blocks), calibrates black/white on the sync blocks
+  for the header row, thresholds each payload row **locally** (48 px
+  segments, cut from the min/max of the segment and its neighbours; the
+  death screen dims the strip unevenly and a single cut lost the far end,
+  beta 2026-10-02), checks both CRCs. 8 Hz while WoW is the foreground window, 1 Hz otherwise;
   foreground-only (no `PrintWindow`) by design.
 - **Dedupe**: `state.json` gained `missing`: seqs below `last_seen` not yet
   posted. Realtime posts call `mark_posted(key, seq, first_sight_backlog)`;
@@ -496,6 +499,14 @@ fixture included; that's a stand-in for the real name, by decision.)
     named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
   - [ ] Environmental `environmentalType` values unseen; retail uses
     Falling/Drowning/Fatigue/Fire/Lava/Slime, matched case-insensitively.
+- [x] **The death screen dims the strip unevenly** (2026-10-02, verbose
+  reader log): with the player dead, the strip was found at 3.00 px blocks
+  and the header row decoded on every capture, but the two full-width
+  payload chunks failed their CRC every time, for the whole 3 s burst,
+  while a `/doink test death` (not actually dead) posted fine. Reads as a
+  vignette/gradient over the UI layer: bright enough at the sync end, too
+  dark at the far end for one global cut. Fixed with local thresholding
+  in `pixel.py`; a test death can't reproduce it, only a real one can.
 - [x] **Communities parked**: `C_Club` exists but Battle.net features are
   limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):

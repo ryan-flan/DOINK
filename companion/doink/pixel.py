@@ -86,14 +86,46 @@ def _sync_regex(block: int) -> re.Pattern:
 _SYNC_PATTERNS = [_sync_regex(b) for b in range(BLOCK_MIN, BLOCK_MAX + 1)]
 
 
+def _cut_table(cut: int) -> bytes:
+    table = _CUT_TABLES.get(cut)
+    if table is None:
+        table = _CUT_TABLES[cut] = bytes(49 if v > cut else 48 for v in range(256))  # '1' / '0'
+    return table
+
+
+_CUT_TABLES: dict[int, bytes] = {}
+
+
 def _threshold_line(line: bytes) -> str | None:
     """Blue-channel scanline -> '0'/'1' string, or None if it's all one shade."""
     lo, hi = min(line), max(line)
     if hi - lo < MIN_CONTRAST:
         return None
-    cut = (hi + lo) // 2
-    table = bytes(49 if v > cut else 48 for v in range(256))  # '1' / '0'
-    return line.translate(table).decode("ascii")
+    return line.translate(_cut_table((hi + lo) // 2)).decode("ascii")
+
+
+LOCAL_SEGMENT = 48  # px; each pixel is cut against its own and the two neighbouring segments
+
+
+def _threshold_line_local(line: bytes, start: int, end: int, fallback_cut: int) -> str:
+    """Like ``_threshold_line`` for ``line[start:end]`` (the strip's extent),
+    but every pixel is cut against the darkest and brightest pixels within
+    about a segment and a half either side of it, not one cut for the whole
+    row. The game dims the screen unevenly when the player is dead (seen in
+    beta: the header at the strip's left end decoded, the far end of the
+    payload rows never did), and a local cut follows that gradient. Where a
+    neighbourhood has no contrast (all padding) ``fallback_cut`` applies.
+    Pixels outside [start, end) are '0'."""
+    region = line[start:end]
+    segments = [region[i:i + LOCAL_SEGMENT] for i in range(0, len(region), LOCAL_SEGMENT)]
+    lows = [min(s) for s in segments]
+    highs = [max(s) for s in segments]
+    out = []
+    for i, segment in enumerate(segments):
+        lo, hi = min(lows[max(0, i - 1):i + 2]), max(highs[max(0, i - 1):i + 2])
+        cut = (lo + hi) // 2 if hi - lo >= MIN_CONTRAST else fallback_cut
+        out.append(segment.translate(_cut_table(cut)))
+    return "0" * start + b"".join(out).decode("ascii") + "0" * (len(line) - end)
 
 
 class _Grid:
@@ -236,9 +268,17 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
     cut = (white + black) / 2
 
     def read_bits(r: int, first: int, count: int, gx0: float = x0,
-                  gblock: float = block) -> list[int] | None:
+                  gblock: float = block, bits: str | None = None) -> list[int] | None:
+        """Block values of row ``r``: against ``cut`` from the raw pixels,
+        or from an already thresholded scanline ``bits``."""
         out = []
         for k in range(first, first + count):
+            if bits is not None:
+                x = int(gx0 + (k + 0.5) * gblock)
+                if not 0 <= x < len(bits) or row_y(r) >= band_height:
+                    return None
+                out.append(1 if bits[x] == "1" else 0)
+                continue
             v = sample(r, k, gx0, gblock)
             if v is None:
                 return None
@@ -274,14 +314,18 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
             return None
         # Each data row re-fits the grid from its own transitions, so a
         # fractional block width can't drift the sampling off the far blocks.
-        row_bits = _threshold_line(line(row_y(row)))
-        gx0, gblock = x0, block
-        if row_bits is not None:
-            row_grid = _Grid()
-            for k, t in zip(_SYNC_RUN_STARTS[1:], (x0 + s * block for s in _SYNC_RUN_STARTS[1:])):
-                row_grid.add(k, t)  # anchor on the header row's grid
-            gx0, gblock = _refine_grid(row_bits, row_grid, blocks)
-        got = read_bits(row, 0, min(blocks, length * 8 - i), gx0, gblock)
+        # The row is thresholded locally over the strip's extent, so a
+        # brightness gradient along it (the death screen) can't flip the
+        # far blocks.
+        raw = line(row_y(row))
+        start = max(0, int(x0))
+        end = min(len(raw), int(x0 + blocks * block) + 1)
+        row_bits = _threshold_line_local(raw, start, end, int(cut))
+        row_grid = _Grid()
+        for k, t in zip(_SYNC_RUN_STARTS[1:], (x0 + s * block for s in _SYNC_RUN_STARTS[1:])):
+            row_grid.add(k, t)  # anchor on the header row's grid
+        gx0, gblock = _refine_grid(row_bits, row_grid, blocks)
+        got = read_bits(row, 0, min(blocks, length * 8 - i), gx0, gblock, row_bits)
         if got is None:
             reject(f"data row {row} runs off the edge")
             return None
