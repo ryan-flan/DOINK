@@ -405,9 +405,14 @@ two implementations can't drift apart. Regenerate with
   `DOINK-vX/Companion/` into `update/` next to the exe (path-escape
   checked), writes a cmd script to `%TEMP%` that waits for our PID to
   exit, deletes `_internal`, `xcopy`s the staged folder over, removes
-  `update/` and starts the new exe; then the app quits. config.toml,
-  state.json and doink.log are never touched. Windows frozen build only.
-  Console mode doesn't check.
+  `update/` and starts the new exe, logging each step to `update.log` in
+  the app folder; then the app quits. config.toml, state.json and
+  doink.log are never touched. Windows frozen build only. The script is
+  launched with `CREATE_NO_WINDOW` and DEVNULL stdio, **never**
+  `DETACHED_PROCESS`: a windowless exe has no console to pass on and a
+  detached cmd.exe simply never ran (first live try, 2026-10-03); it
+  sleeps with `ping`, since `timeout` refuses to run without console
+  input. Console mode doesn't check.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the

@@ -205,35 +205,50 @@ class Updater:
         log.info("update: staged v%s (%d files) in %s", info.latest, count, companion)
         return companion
 
-    def script(self, companion: Path) -> str:
-        """The batch script that swaps the files once this process is gone."""
+    def script(self, companion: Path, restart: bool = True) -> str:
+        """The batch script that swaps the files once this process is gone.
+        It logs every step to ``update.log`` in the app folder. The sleep is
+        a ``ping`` rather than ``timeout``: ``timeout`` refuses to run
+        without console input, and the script gets none."""
         app, stage, pid = self.app_dir, self.stage, self._pid
-        return "\r\n".join([
+        logfile = app / "update.log"
+        lines = [
             "@echo off",
             "rem DOINK self-update: waits for the old companion to exit, swaps the files, restarts it.",
+            f'echo [%date% %time%] update script started, waiting for PID {pid} >> "{logfile}"',
             ":wait",
             f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul',
             "if not errorlevel 1 (",
-            "  timeout /t 1 /nobreak >nul",
+            "  ping -n 2 127.0.0.1 >nul",
             "  goto wait",
             ")",
+            f'echo [%date% %time%] old companion gone >> "{logfile}"',
             f'if exist "{app / "_internal"}" rmdir /s /q "{app / "_internal"}"',
+            f'echo [%date% %time%] removed _internal, errorlevel %errorlevel% >> "{logfile}"',
             f'xcopy "{companion}" "{app}" /E /I /Y /Q >nul',
+            f'echo [%date% %time%] copied new files, errorlevel %errorlevel% >> "{logfile}"',
             f'rmdir /s /q "{stage}"',
-            f'start "" "{app / "doink.exe"}"',
-            "",
-        ])
+        ]
+        if restart:
+            lines += [
+                f'start "" "{app / "doink.exe"}"',
+                f'echo [%date% %time%] started doink.exe, errorlevel %errorlevel% >> "{logfile}"',
+            ]
+        return "\r\n".join(lines + [""])
 
-    def apply(self, companion: Path) -> None:
+    def apply(self, companion: Path, restart: bool = True) -> None:
         """Write and launch the swap script. The caller quits right after."""
         if sys.platform != "win32":
             raise UpdateError("Installing updates only works for the Windows doink.exe build.")
         fd, path = tempfile.mkstemp(prefix="doink-update-", suffix=".cmd")
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(self.script(companion))
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-        self._launch(["cmd.exe", "/c", path], creationflags=flags, close_fds=True,
-                     cwd=str(self.app_dir))
+            f.write(self.script(companion, restart))
+        # Its own hidden console (CREATE_NO_WINDOW), not DETACHED_PROCESS: a
+        # windowless exe has no console to hand down, and a detached cmd.exe
+        # with no console at all never ran the script (beta, 2026-10-03).
+        self._launch(["cmd.exe", "/c", path], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True, cwd=str(self.app_dir))
         log.info("update: hand-off script started (%s); exiting for the swap", path)
 
 

@@ -191,9 +191,12 @@ class UpdaterTest(unittest.TestCase):
 
         script = updater.script(companion)
         self.assertIn('tasklist /FI "PID eq 4242"', script)
+        self.assertIn("ping -n 2 127.0.0.1", script)
+        self.assertNotIn("timeout", script, "timeout needs console input the script never has")
         self.assertIn(f'rmdir /s /q "{self.app_dir / "_internal"}"', script)
         self.assertIn(f'xcopy "{companion}" "{self.app_dir}" /E /I /Y /Q', script)
         self.assertIn(f'start "" "{self.app_dir / "doink.exe"}"', script)
+        self.assertNotIn('start ""', updater.script(companion, restart=False))
         self.assertNotIn("config.toml", script)
         self.assertNotIn("state.json", script)
 
@@ -233,6 +236,26 @@ class UpdaterTest(unittest.TestCase):
         (args,), kwargs = launched[0]
         self.assertEqual(args[:2], ["cmd.exe", "/c"])
         self.assertTrue(Path(args[2]).read_text().startswith("@echo off"))
+        self.assertFalse(kwargs["creationflags"] & 0x8, "not DETACHED_PROCESS: the script needs a console")
+
+    @unittest.skipUnless(sys.platform == "win32", "runs the real cmd.exe hand-off")
+    def test_the_script_really_swaps_the_files(self):
+        import subprocess
+        import time
+        # A PID that is certainly gone, no restart (doink.exe here is a text file).
+        updater = Updater(self.app_dir, opener=self.opener(), pid=4000000000)
+        companion = updater.download(self.info)
+        updater.apply(companion, restart=False)
+        for _ in range(100):
+            if not (self.app_dir / "update").exists():
+                break
+            time.sleep(0.1)
+        self.assertEqual((self.app_dir / "doink.exe").read_bytes(), b"new exe")
+        self.assertEqual((self.app_dir / "_internal" / "new.dll").read_bytes(), b"new")
+        self.assertFalse((self.app_dir / "_internal" / "old.dll").exists(), "old _internal replaced")
+        self.assertFalse((self.app_dir / "update").exists(), "staging removed")
+        self.assertEqual((self.app_dir / "config.toml").read_text(), "webhook_url = \"x\"\n")
+        self.assertIn("copied new files", (self.app_dir / "update.log").read_text())
 
 
 if __name__ == "__main__":
