@@ -145,6 +145,7 @@ end
 -- Shows the next chunk, or hides the strip when the outbox is empty.
 local function Advance()
   if #outbox == 0 then
+    if frame:IsShown() then ns:Debug("pixel: strip hidden, outbox empty") end
     frame:Hide()
     current = nil
     return
@@ -238,6 +239,8 @@ local function Queue(message, repeats)
   if #outbox >= OUTBOX_MAX then table.remove(outbox, 1) end
   msgId = (msgId + 1) % 65536
   outbox[#outbox + 1] = { chunks = Pixel.Encode(N, msgId, message), left = repeats or REPEATS }
+  ns:Debug("pixel: queued msg %d (%d chunks, %d bytes), strip %s", msgId,
+    #outbox[#outbox].chunks, #message, frame:IsShown() and "already showing" or "starting")
   -- A hidden frame gets no OnUpdate, so start the first chunk by hand.
   if not frame:IsShown() then
     acc = 0
