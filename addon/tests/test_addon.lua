@@ -109,6 +109,40 @@ local skills = {
 function GetNumSkillLines() return #skills end
 function GetSkillLineInfo(i) return unpack(skills[i], 1, 7) end
 
+-- The client's Settings API, for Options.lua: records every control.
+local settings = { controls = {}, opened = nil, categories = 0 }
+Settings = {
+  VarType = { Boolean = "boolean", Number = "number", String = "string" },
+  RegisterVerticalLayoutCategory = function(name)
+    settings.categories = settings.categories + 1
+    local layout = { headers = {} }
+    function layout:AddInitializer(init) self.headers[#self.headers + 1] = init end
+    return { name = name, GetID = function() return 42 end }, layout
+  end,
+  RegisterAddOnCategory = function(category) settings.registered = category end,
+  RegisterProxySetting = function(_, variable, varType, name, default, get, set)
+    return { variable = variable, varType = varType, name = name, default = default, get = get, set = set }
+  end,
+  CreateCheckbox = function(_, setting) setting.kind = "checkbox"; settings.controls[#settings.controls + 1] = setting end,
+  CreateDropdown = function(_, setting, options)
+    setting.kind = "dropdown"; setting.options = options()
+    settings.controls[#settings.controls + 1] = setting
+  end,
+  CreateSlider = function(_, setting) setting.kind = "slider"; settings.controls[#settings.controls + 1] = setting end,
+  CreateControlTextContainer = function()
+    local c = { data = {} }
+    function c:Add(value, label) self.data[#self.data + 1] = { value = value, label = label } end
+    function c:GetData() return self.data end
+    return c
+  end,
+  CreateSliderOptions = function(min, max, step)
+    return { min = min, max = max, step = step, SetLabelFormatter = function() end }
+  end,
+  OpenToCategory = function(id) settings.opened = id end,
+}
+function CreateSettingsListSectionHeaderInitializer(title) return title end
+MinimalSliderWithSteppersMixin = { Label = { Right = 1 } }
+
 local printed = {}
 print = function(s) printed[#printed + 1] = s end
 
@@ -118,7 +152,7 @@ local ns = {}
 for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
-    "Announce.lua", "Transports/Pixel.lua" }) do
+    "Announce.lua", "Transports/Pixel.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
 
@@ -614,6 +648,71 @@ test("announce: off silences everything, including tests; bad input shows usage"
   assert(slash("announce bogus"):find("usage", 1, true))
   slash("announce guild")
   assert(slash(""):find("announce: guild; level_up milestones, loot epic, death on, quest off, boss_kill on, skill_up off", 1, true))
+end)
+
+------------------------------------------------------------------ options page
+
+local function control(variable)
+  for _, c in ipairs(settings.controls) do
+    if c.variable == "DOINK_" .. variable then return c end
+  end
+end
+
+test("options: registered once at login with every control and three headers", function()
+  eq(settings.categories, 1, "one category")
+  assert(settings.registered, "added to the AddOns list")
+  eq(#settings.controls, 7 + 10 + 3, "announce 7, discord 10, realtime 3")
+  local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
+  for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
+  eq(kinds.checkbox, 12, "checkboxes"); eq(kinds.dropdown, 7, "dropdowns"); eq(kinds.slider, 1, "slider")
+  for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
+  ns.Options.Register()
+  eq(settings.categories, 1, "registering again is a no-op")
+end)
+
+test("options: controls read and write the same options as the slash commands", function()
+  local channel = control("announce_channel")
+  eq(channel.get(), "guild", "reads current")
+  eq(#channel.options, 5, "five channels"); eq(channel.options[1].label, "Guild chat", "label")
+  channel.set("party")
+  eq(ns:GetOption("announce", "channel"), "party", "writes through")
+  assert(slash("announce"):find("announce: party", 1, true), "slash sees it")
+  slash("announce guild")
+  eq(channel.get(), "guild", "slash change visible to the page")
+
+  local vendor = control("loot_min_vendor_value")
+  eq(vendor.get(), 1, "1g default shown in gold")
+  vendor.set(5)
+  eq(ns:GetOption("loot", "min_vendor_value"), 50000, "stored in copper")
+  slash("reset loot")
+
+  local quality = control("loot_min_quality")
+  eq(quality.options[4].label, "Rare (blue)", "quality labels")
+  quality.set(4); eq(ns:GetOption("loot", "min_quality"), 4, "number dropdown")
+  slash("reset loot")
+
+  local enabled = control("enabled_death")
+  enabled.set(false); eq(ns:GetOption("death", "enabled"), false, "checkbox")
+  enabled.set(true)
+end)
+
+test("options: realtime controls drive the strip", function()
+  local rt = control("realtime_enabled")
+  eq(rt.get(), false, "off by default")
+  rt.set(true)
+  eq(DOINKDB.realtime.enabled, true, "enabled"); assert(T.frame():IsShown(), "hello shown")
+  control("realtime_position").set("bottomright")
+  eq(T.frame().point[1], "BOTTOMRIGHT", "repositioned live")
+  control("realtime_block").set(5)
+  eq(DOINKDB.realtime.block, 5, "block saved")
+  rt.set(false)
+  eq(DOINKDB.realtime.enabled, false, "disabled")
+  DOINKDB.realtime.position, DOINKDB.realtime.block = "topleft", 3
+end)
+
+test("options: /doink config opens the page", function()
+  slash("config")
+  eq(settings.opened, 42, "opened by category id")
 end)
 
 print = io.write

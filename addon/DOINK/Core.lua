@@ -235,6 +235,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
     for _, transport in pairs(ns.Transports) do
       xpcall(transport.OnLogin, geterrorhandler())
     end
+    if ns.Options then
+      xpcall(ns.Options.Register, geterrorhandler())
+    end
   else
     if event == "PLAYER_LEVEL_UP" then
       ns.knownLevel = ... -- before notifiers run, so their Emit sees it
@@ -280,6 +283,7 @@ end
 
 local HELP = {
   "/doink - status",
+  "/doink config - open the settings page (also under Options > AddOns)",
   "/doink enable|disable <type>",
   "/doink options [type] - show settings",
   "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
@@ -427,6 +431,10 @@ commands.dump = function(args)
   for i = math.max(1, #events - n + 1), #events do
     ns:Print("%s", events[i])
   end
+end
+
+commands.config = function()
+  ns.Options.Open()
 end
 
 commands.debug = function()

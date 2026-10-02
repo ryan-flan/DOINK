@@ -21,3 +21,4 @@ Notifiers\BossKill.lua
 Notifiers\SkillUp.lua
 Announce.lua
 Transports\Pixel.lua
+Options.lua
