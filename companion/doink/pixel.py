@@ -716,10 +716,10 @@ class Reader:
     Diagnostics: ``trace`` collects (time, reason) for candidates that
     looked like a strip but failed a check, newest last. With the
     ``DOINK_DUMP_BANDS`` environment variable set to a directory, every
-    band that fails that way is written there as a raw BGRA ``.bin`` (at
-    most ``DUMP_MAX`` files) so the capture can be replayed offline."""
+    band where a strip's CRC failed is written there as a raw BGRA ``.bin``
+    (at most ``DUMP_MAX`` files) so the capture can be replayed offline."""
 
-    DUMP_MAX = 20
+    DUMP_MAX = 60
 
     def __init__(self, capture=None, meter: ResourceMeter | None = None):
         self.capture = capture or Capture()
@@ -750,7 +750,11 @@ class Reader:
                         if reasons:
                             now = time.time()
                             self.trace.extend((now, r) for r in reasons)
-                            self._dump(grab, band_top, bottom)
+                            # Dump only what was a real strip (header or
+                            # payload CRC failed); ground textures throw
+                            # up sync-like noise all day.
+                            if any("crc" in r for r in reasons):
+                                self._dump(grab, band_top, bottom)
                         continue
                     self.strip = (round(chunk.block_px, 2), chunk.blocks)
                     self.last_seen = time.time()
