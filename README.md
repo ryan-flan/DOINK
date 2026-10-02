@@ -128,8 +128,9 @@ game:
 If something external sits in that corner (the Discord overlay's voice widget
 defaults to the top-left), move the strip: `/doink realtime position
 bottomright` (or `topright`, `bottomleft`). Realtime only reads while WoW is
-the active window; events that happen while you're alt-tabbed post at the
-next reload. `/doink realtime off` removes the strip entirely.
+the active window; events that happen while you're alt-tabbed, or with the
+UI hidden (Alt-Z), post at the next reload. `/doink realtime off` removes the
+strip entirely.
 
 ## In-game commands
 

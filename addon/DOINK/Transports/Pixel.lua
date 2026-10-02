@@ -177,7 +177,7 @@ function Pixel.Reposition()
   if not frame then return end
   local corner = CORNERS[Settings().position] or "TOPLEFT"
   frame:ClearAllPoints()
-  frame:SetPoint(corner, WorldFrame, corner, 0, 0)
+  frame:SetPoint(corner, UIParent, corner, 0, 0)
 end
 
 local function Build()
@@ -186,10 +186,12 @@ local function Build()
   B = Settings().block or 3
   N = math.max(MIN_BLOCKS, math.min(MAX_BLOCKS, math.floor(physW / B)))
 
-  -- Parented to WorldFrame so Alt-Z can't hide it; TOOLTIP strata and a
-  -- high level so no in-game frame draws over it; mouse off so it never
-  -- blocks a click on whatever is underneath.
-  frame = CreateFrame("Frame", nil, WorldFrame)
+  -- Parented to UIParent: WorldFrame's children draw beneath every UIParent
+  -- frame whatever their strata (verified in beta: a Details window's
+  -- translucent backdrop dimmed the strip and corrupted it). TOOLTIP strata
+  -- and a high level put it over everything else; Alt-Z hides it along with
+  -- the rest of the UI, which is fine. Mouse off so it never blocks a click.
+  frame = CreateFrame("Frame", nil, UIParent)
   frame:SetFrameStrata("TOOLTIP")
   frame:SetFrameLevel(10000)
   frame:EnableMouse(false)
@@ -199,7 +201,7 @@ local function Build()
     frame:SetIgnoreParentScale(true)
     frame:SetScale(768 / physH)
   else
-    frame:SetScale(768 / physH / WorldFrame:GetEffectiveScale())
+    frame:SetScale(768 / physH / UIParent:GetEffectiveScale())
   end
   frame:SetSize(N * B, ROWS * B)
   Pixel.Reposition()

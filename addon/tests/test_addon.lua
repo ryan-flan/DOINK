@@ -40,6 +40,7 @@ function CreateFrame(_, _, parent)
   return f
 end
 WorldFrame = CreateFrame("Frame")
+UIParent = CreateFrame("Frame")
 function GetPhysicalScreenSize() return 1920, 1080 end
 
 local function fire(event, ...)
@@ -386,7 +387,8 @@ end)
 test("realtime: on builds the strip, says hello, cycles, then hides", function()
   slash("realtime on")
   local f = T.frame()
-  assert(f and f.parent == WorldFrame, "frame parented to WorldFrame")
+  -- UIParent, not WorldFrame: WorldFrame children draw under the whole UI.
+  assert(f and f.parent == UIParent, "frame parented to UIParent")
   eq(f.strata, "TOOLTIP", "strata"); eq(f.mouse, false, "mouse off")
   eq(f.ignoreParentScale, true, "ignores parent scale")
   assert(math.abs(f.scale - 768 / 1080) < 1e-9, "pixel-perfect scale")

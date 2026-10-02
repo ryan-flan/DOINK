@@ -166,9 +166,12 @@ two implementations can't drift apart. Regenerate with
 
 - **Strip**: `ROWS=3` rows × `N` blocks of `B`×`B` px (`B` default 3; `N =
   clamp(floor(screenWidth/B), 104, 400)`). Anchored to a user-chosen corner
-  (`DOINKDB.realtime.position`, default `topleft`), parented to `WorldFrame`,
-  strata `TOOLTIP`, level 10000, mouse disabled, pixel-perfect via
-  `SetIgnoreParentScale(true)` + `SetScale(768/physicalHeight)`.
+  (`DOINKDB.realtime.position`, default `topleft`), parented to **`UIParent`**
+  (children of `WorldFrame` draw beneath every UIParent frame whatever their
+  strata; a Details backdrop dimmed and corrupted the strip in beta), strata
+  `TOOLTIP`, level 10000, mouse disabled, pixel-perfect via
+  `SetIgnoreParentScale(true)` + `SetScale(768/physicalHeight)` (verified:
+  exactly 3.0 px blocks at 3438×1408 windowed). Alt-Z hides it with the UI.
 - **Bits**: 1 bit per block, 1 = white, 0 = black, opaque.
 - **Row 0**: 16-block sync `1010101010110011`, then MSB-first: `version(4)=1,
   flags(4)=0, blocks(16), msg_id(16), chunk_index(8), chunk_count(8),
