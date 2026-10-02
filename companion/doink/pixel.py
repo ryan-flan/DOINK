@@ -11,6 +11,7 @@ watches what the reading costs and tells the worker to stop if it climbs.
 """
 
 import ctypes
+import os
 import re
 import sys
 import time
@@ -163,11 +164,12 @@ def _refine_grid(bits: str, grid: _Grid, limit_blocks: int) -> tuple[float, floa
 
 
 def decode(buf, width: int, stride: int, band_top: int, band_height: int,
-           bottom: bool) -> Chunk | None:
+           bottom: bool, trace: list[str] | None = None) -> Chunk | None:
     """Look for one chunk in a band of ``buf`` (32-bit BGRA rows).
 
     ``band_top``/``band_height`` select the band's rows in ``buf``. With
     ``bottom`` the strip sits against the band's bottom edge, else its top.
+    ``trace``, if given, collects why candidates were rejected.
     """
     if band_height < ROWS * BLOCK_MIN or width < HEADER_BITS * BLOCK_MIN:
         return None
@@ -192,16 +194,22 @@ def decode(buf, width: int, stride: int, band_top: int, band_height: int,
         for match in pattern.finditer(bits):
             grid = _fit_sync(bits, match.start())
             if grid is None:
+                if trace is not None:
+                    trace.append(f"B~{block_guess}: sync-like run at x={match.start()} didn't fit")
                 continue
-            chunk = _decode_at(blue, line, bits, width, band_height, bottom, grid)
+            chunk = _decode_at(blue, line, bits, width, band_height, bottom, grid, trace)
             if chunk is not None:
                 return chunk
     return None
 
 
 def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
-               bottom: bool, grid: _Grid) -> Chunk | None:
+               bottom: bool, grid: _Grid, trace: list[str] | None = None) -> Chunk | None:
     x0, block = _refine_grid(row0_bits, grid, HEADER_BITS)
+
+    def reject(why: str) -> None:
+        if trace is not None:
+            trace.append(f"sync at x={x0:.1f} block={block:.2f}px: {why}")
 
     def row_y(r: int) -> int:
         if bottom:
@@ -219,9 +227,11 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
     whites = [v for k, c in enumerate(SYNC) if c == "1" and (v := sample(0, k)) is not None]
     blacks = [v for k, c in enumerate(SYNC) if c == "0" and (v := sample(0, k)) is not None]
     if len(whites) < 8 or len(blacks) < 6:
+        reject("sync blocks off the edge")
         return None
     white, black = sum(whites) / len(whites), sum(blacks) / len(blacks)
     if white - black < MIN_CONTRAST:
+        reject(f"low contrast (white {white:.0f}, black {black:.0f})")
         return None
     cut = (white + black) / 2
 
@@ -237,19 +247,24 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
 
     header_bits = read_bits(0, len(SYNC), (HEADER_BYTES + 1) * 8)
     if header_bits is None:
+        reject("header runs off the edge")
         return None
     header = bytes(_pack(header_bits))
     if crc8(header[:HEADER_BYTES]) != header[HEADER_BYTES]:
+        reject(f"header crc mismatch (header {header.hex()})")
         return None
     if header[0] >> 4 != VERSION:
+        reject(f"version {header[0] >> 4}")
         return None
     blocks = (header[1] << 8) | header[2]
     msg_id = (header[3] << 8) | header[4]
     index, count, length = header[5], header[6], header[7]
     payload_crc = (header[8] << 8) | header[9]
     if not HEADER_BITS <= blocks <= MAX_BLOCKS or count < 1 or index >= count:
+        reject(f"bad header fields (blocks {blocks}, chunk {index}/{count})")
         return None
     if length > capacity(blocks):
+        reject(f"payload length {length} over capacity")
         return None
 
     data_bits = []
@@ -268,10 +283,12 @@ def _decode_at(blue, line, row0_bits: str, width: int, band_height: int,
             gx0, gblock = _refine_grid(row_bits, row_grid, blocks)
         got = read_bits(row, 0, min(blocks, length * 8 - i), gx0, gblock)
         if got is None:
+            reject(f"data row {row} runs off the edge")
             return None
         data_bits.extend(got)
     payload = bytes(_pack(data_bits))
     if crc16(payload) != payload_crc:
+        reject(f"payload crc mismatch (chunk {index}/{count}, {length} bytes)")
         return None
     return Chunk(msg_id, index, count, payload, blocks, block)
 
@@ -572,7 +589,15 @@ class Capture:
 # ------------------------------------------------------------------ reader
 
 class Reader:
-    """Capture + decode + assemble, with the meter around every poll."""
+    """Capture + decode + assemble, with the meter around every poll.
+
+    Diagnostics: ``trace`` collects (time, reason) for candidates that
+    looked like a strip but failed a check, newest last. With the
+    ``DOINK_DUMP_BANDS`` environment variable set to a directory, every
+    band that fails that way is written there as a raw BGRA ``.bin`` (at
+    most ``DUMP_MAX`` files) so the capture can be replayed offline."""
+
+    DUMP_MAX = 20
 
     def __init__(self, capture=None, meter: ResourceMeter | None = None):
         self.capture = capture or Capture()
@@ -580,6 +605,9 @@ class Reader:
         self.assembler = Assembler()
         self.strip: tuple[float, int] | None = None  # (block_px, blocks) last decoded
         self.last_seen: float | None = None
+        self.trace: deque[tuple[float, str]] = deque(maxlen=50)
+        self._dump_dir = os.environ.get("DOINK_DUMP_BANDS")
+        self._dumped = 0
 
     @property
     def window(self) -> str:
@@ -592,8 +620,14 @@ class Reader:
             grab = self.capture.grab()
             if grab is not None:
                 for band_top, bottom in ((0, False), (grab.band_rows, True)):
-                    chunk = decode(grab.buf, grab.width, grab.stride, band_top, grab.band_rows, bottom)
+                    reasons: list[str] = []
+                    chunk = decode(grab.buf, grab.width, grab.stride, band_top, grab.band_rows,
+                                   bottom, reasons)
                     if chunk is None:
+                        if reasons:
+                            now = time.time()
+                            self.trace.extend((now, r) for r in reasons)
+                            self._dump(grab, band_top, bottom)
                         continue
                     self.strip = (round(chunk.block_px, 2), chunk.blocks)
                     self.last_seen = time.time()
@@ -604,6 +638,20 @@ class Reader:
         finally:
             self.meter.record(time.perf_counter() - started)
         return messages
+
+    def _dump(self, grab: "Grab", band_top: int, bottom: bool) -> None:
+        if not self._dump_dir or self._dumped >= self.DUMP_MAX:
+            return
+        try:
+            os.makedirs(self._dump_dir, exist_ok=True)
+            name = (f"band_{time.strftime('%H%M%S')}_{self._dumped:02d}_"
+                    f"{grab.width}x{grab.band_rows}_{'bottom' if bottom else 'top'}.bin")
+            start = band_top * grab.stride
+            with open(os.path.join(self._dump_dir, name), "wb") as f:
+                f.write(grab.buf[start:start + grab.band_rows * grab.stride])
+            self._dumped += 1
+        except OSError:
+            pass
 
     def close(self) -> None:
         self.capture.close()

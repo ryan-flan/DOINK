@@ -200,6 +200,9 @@ class RealtimeWorker(threading.Thread):
                 if reader.window != last_window:
                     log.info("realtime: WoW window %s", reader.window)
                     last_window = reader.window
+                while reader.trace:
+                    at, reason = reader.trace.popleft()
+                    log.debug("realtime: strip candidate rejected: %s", reason)
                 if reader.window == "foreground" and time.monotonic() - last_report >= 60:
                     # A cost line a minute while reading, for the README numbers
                     # and for anyone's bug report.
