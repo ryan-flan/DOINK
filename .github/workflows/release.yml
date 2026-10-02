@@ -18,6 +18,8 @@ jobs:
   #   CurseForge:   variable CURSEFORGE_PROJECT_ID, secret CF_API_KEY
   #   Wago Addons:  variable WAGO_PROJECT_ID,       secret WAGO_API_TOKEN
   #   WoWInterface: variable WOWI_PROJECT_ID,       secret WOWI_API_TOKEN
+  # A project id stored as a secret instead of a variable works too (ids
+  # aren't secret, but it's an easy mix-up in the GitHub UI).
   addon:
     runs-on: ubuntu-latest
     steps:
@@ -28,9 +30,9 @@ jobs:
         with:
           args: >-
             ${{ github.ref_type != 'tag' && '-d' || '' }}
-            ${{ vars.CURSEFORGE_PROJECT_ID && format('-p {0}', vars.CURSEFORGE_PROJECT_ID) || '' }}
-            ${{ vars.WAGO_PROJECT_ID && format('-a {0}', vars.WAGO_PROJECT_ID) || '' }}
-            ${{ vars.WOWI_PROJECT_ID && format('-w {0}', vars.WOWI_PROJECT_ID) || '' }}
+            ${{ (vars.CURSEFORGE_PROJECT_ID || secrets.CURSEFORGE_PROJECT_ID) && format('-p {0}', vars.CURSEFORGE_PROJECT_ID || secrets.CURSEFORGE_PROJECT_ID) || '' }}
+            ${{ (vars.WAGO_PROJECT_ID || secrets.WAGO_PROJECT_ID) && format('-a {0}', vars.WAGO_PROJECT_ID || secrets.WAGO_PROJECT_ID) || '' }}
+            ${{ (vars.WOWI_PROJECT_ID || secrets.WOWI_PROJECT_ID) && format('-w {0}', vars.WOWI_PROJECT_ID || secrets.WOWI_PROJECT_ID) || '' }}
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
