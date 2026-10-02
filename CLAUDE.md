@@ -222,8 +222,12 @@ two implementations can't drift apart. Regenerate with
 `DOINK_WRITE_FIXTURE=1 luajit tests/test_addon.lua` when the layout changes.
 
 - **Strip**: `ROWS=3` rows × `N` blocks of `B`×`B` px (`B` default 3; `N =
-  clamp(floor(screenWidth/B), 104, 400)`). Anchored to a user-chosen corner
-  (`DOINKDB.realtime.position`, default `topleft`), parented to **`UIParent`**
+  clamp(floor((screenWidth - 24)/B), 104, 400)`). Anchored to a user-chosen
+  corner (`DOINKDB.realtime.position`, default `topleft`) **12 px in from
+  the side edge** and flush with the top/bottom edge: Windows 11 rounds
+  window corners by ~8 px and the GDI capture sees the rounded, blended
+  pixels (beta 2026-10-02: the last block of every full-width chunk read as
+  the desktop behind the corner). Parented to **`UIParent`**
   (children of `WorldFrame` draw beneath every UIParent frame whatever their
   strata; a Details backdrop dimmed and corrupted the strip in beta), strata
   `TOOLTIP`, level 10000, mouse disabled, pixel-perfect via
@@ -502,24 +506,27 @@ fixture included; that's a stand-in for the real name, by decision.)
     named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
   - [ ] Environmental `environmentalType` values unseen; retail uses
     Falling/Drowning/Fatigue/Fire/Lava/Slime, matched case-insensitively.
-- [x] **Dying rescales the strip by a hair** (2026-10-02). Real deaths
-  never posted in realtime while `/doink test death` did. Verbose reader
-  log, dead: the sync was found 6 px (and once 17 px) left of its alive
-  position with the header fields right but the CRC bits at the row's end
-  wrong; a lossless screenshot minutes after death shows the strip crisp
-  0/255 and decoding fine, so there is no dimming. Reads as a death
-  animation scaling the UI by ~0.5–1.5 % for the first seconds, exactly
-  the strip's 3 s burst. Reproduced offline: the decoder failed on
-  **near-integer block widths** (2.95–3.05 px; 2.9 and 3.1 were fine):
-  such a strip renders on an exact 3 px grid for sixty-odd blocks and then
-  jumps a whole pixel, the old 0.3-block snap tolerance rejected every
-  transition after the jump, and the sampling was half a block off by the
-  end of the row. Fixed in `pixel.py` (0.45 snap, central-half majority
-  sampling, and a sweep of ±0.08 px / ±1 px grids verified by both CRCs
-  when the fit fails); `test_near_integer_fractional_blocks` pins it. The
-  local thresholding added for the dimming theory stays: harmless, and
-  cheap insurance.
-  - [ ] Confirm with a real death on v0.9.1+.
+- [x] **Windows 11 rounded corners eat the strip's corner block**
+  (2026-10-02, the real cause of "real deaths never post in realtime").
+  Band dumps from v0.9.2 showed a perfect 0/255 strip, header decoded,
+  payload CRC failing; the payload read as JSON with exactly one bit
+  wrong: the last block of each full-width chunk (`"Scuttle Boast"`,
+  `"ts":17908…`). The GDI capture of the window's bottom-right corner
+  shows the DWM corner rounding (blend values 195/158/74/42/13 over the
+  last ~6 px of the bottom rows); the game's own screenshot has a square
+  corner. So that block reads as the desktop behind the window, and any
+  chunk whose last byte is odd fails deterministically; earlier events
+  passed by luck of content, which is why it looked tied to real deaths
+  (killer/environment text) versus test deaths. Fix: the strip sits 12 px
+  in from the side edge (`EDGE_INSET`), still flush with the top/bottom
+  edge. Two earlier theories left useful hardening in `pixel.py`: local
+  thresholding of payload rows, and near-integer fractional block widths
+  (2.95–3.05 px failed outright before: 0.45 snap tolerance, central-half
+  majority sampling, CRC-verified grid sweep). One unexplained reading
+  remains: at 19:11 the sync was found 6 px left of the alive position
+  with header CRC failures, possibly a transient death animation; the
+  sweep handles that case now.
+  - [ ] Confirm with a real death on v0.9.3+.
 - [x] **Communities parked**: `C_Club` exists but Battle.net features are
   limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):

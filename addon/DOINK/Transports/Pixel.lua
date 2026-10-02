@@ -25,6 +25,13 @@ local CORNERS = {
   bottomleft = "BOTTOMLEFT", bottomright = "BOTTOMRIGHT",
 }
 Pixel.CORNERS = CORNERS
+-- Windows 11 rounds a window's corners by about 8 px, and the companion's
+-- screen capture sees the rounded, blended pixels, not the game's render
+-- (beta, 2026-10-02: the strip's last block read as whatever the desktop
+-- behind the corner was, so every chunk ending in an odd byte failed).
+-- The strip keeps this many pixels clear of the side edge; the rows still
+-- sit flush with the top/bottom edge, which the reader relies on.
+local EDGE_INSET = 12
 
 local band, bxor, lshift, rshift = bit.band, bit.bxor, bit.lshift, bit.rshift
 
@@ -177,15 +184,16 @@ end
 function Pixel.Reposition()
   if not frame then return end
   local corner = CORNERS[Settings().position] or "TOPLEFT"
+  local inset = corner:find("RIGHT") and -EDGE_INSET or EDGE_INSET
   frame:ClearAllPoints()
-  frame:SetPoint(corner, UIParent, corner, 0, 0)
+  frame:SetPoint(corner, UIParent, corner, inset, 0)
 end
 
 local function Build()
   if frame then return end
   local physW, physH = GetPhysicalScreenSize()
   B = Settings().block or 3
-  N = math.max(MIN_BLOCKS, math.min(MAX_BLOCKS, math.floor(physW / B)))
+  N = math.max(MIN_BLOCKS, math.min(MAX_BLOCKS, math.floor((physW - 2 * EDGE_INSET) / B)))
 
   -- Parented to UIParent: WorldFrame's children draw beneath every UIParent
   -- frame whatever their strata (verified in beta: a Details window's
