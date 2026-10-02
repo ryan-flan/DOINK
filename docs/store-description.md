@@ -12,7 +12,9 @@ real item links:
 [Guild] [Paul Hebbs]: Died in Westfall.
 ```
 
-No dependencies, no libraries, no setup window: install it and it works.
+No dependencies and no libraries: install it and it works. Settings are on
+a normal options page (Esc → Options → AddOns → DOINK) and can also be set
+with `/doink` commands.
 Optionally, a separate open-source companion program can mirror the same
 events to a Discord channel (see "Optional Discord mirroring").
 
@@ -64,6 +66,7 @@ realtime state, and which event types are enabled.
 
 | Command | What it does |
 |---|---|
+| `/doink config` | Open the settings page (Esc → Options → AddOns → DOINK) |
 | `/doink announce` | Show the announcement channel and rules |
 | `/doink announce guild` / `officer` / `party` / `raid` / `off` | Choose where announcements go |
 | `/doink announce loot rare` | Change a rule (any event type, values as listed above) |
@@ -124,7 +127,7 @@ README on GitHub under "How realtime works".
 
 ## How it works: what is in the package
 
-One folder, `DOINK`, 12 files, about 1,500 lines of Lua, no third-party code:
+One folder, `DOINK`, 13 files, about 1,700 lines of Lua, no third-party code:
 
 | File | Purpose |
 |---|---|
@@ -132,6 +135,7 @@ One folder, `DOINK`, 12 files, about 1,500 lines of Lua, no third-party code:
 | `Core.lua` | Startup, saved-variables handling, the `/doink` slash command, event dispatch. |
 | `Defaults.lua` | Default settings and the allowed values for each setting. |
 | `Announce.lua` | Chat announcements: wording, rules, rate limiting. |
+| `Options.lua` | The settings page, built on the game's own Settings API. |
 | `Json.lua` | A minimal JSON encoder used to store events for the optional companion. |
 | `Notifiers/LevelUp.lua` | Listens to `PLAYER_LEVEL_UP`. |
 | `Notifiers/Loot.lua` | Listens to `CHAT_MSG_LOOT` and `GET_ITEM_INFO_RECEIVED`. |

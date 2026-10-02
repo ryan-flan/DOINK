@@ -42,6 +42,7 @@ DOINK/
 │   ├── Json.lua              # minimal JSON encoder (strings, numbers, bools, tables)
 │   ├── Defaults.lua          # default config table + ns.Choices for string options
 │   ├── Announce.lua          # in-game chat announcements (guild/officer/party/raid)
+│   ├── Options.lua           # settings page via the client's Settings API (no library)
 │   ├── Transports/Pixel.lua  # realtime strip encoder (experimental, off by default)
 │   └── Notifiers/
 │       ├── LevelUp.lua
@@ -190,6 +191,22 @@ epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
   for addons and are not offered. `C_Club` and `C_Club.SendMessage` exist in
   Forever but are untested (no community to test with); communities are a
   later option.
+
+## Settings page (Options.lua)
+
+Forever has the modern `Settings` API (verified 2026-10-02:
+`RegisterVerticalLayoutCategory`, `RegisterProxySetting`, `CreateDropdown`,
+`CreateSlider` present; legacy `InterfaceOptions_AddCategory` absent). The
+page is registered at `PLAYER_LOGIN` (values are per character) and every
+control is a **proxy setting** onto `ns:GetOption`/`ns:SetOption` (or
+`DOINKDB.realtime` for the account-wide realtime settings), so the page and
+the slash commands can never disagree. `/doink config` opens it. The
+7-argument `RegisterProxySetting(category, variable, type, name, default,
+get, set)` form is what the client accepts. No text input exists in that
+API, so the webhook stays with `/doink webhook` and the companion window
+(decided). Controls are built from spec tables, not positional args: a
+function returning two values is truncated to one when it isn't the last
+argument, which once turned a tooltip into a setter.
 
 ## Pixel transport contract (realtime, experimental)
 
@@ -502,9 +519,10 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 - **v0.7.0:** in-game chat announcements (`Announce.lua`); the addon is now
   useful without the companion, and the README/CurseForge page lead with
   that. See "Announcements".
+- **v0.8.0:** settings page (`Options.lua`, native Settings API).
 - **Later:** community channels via `C_Club` once one exists to test with;
   combat-log tailer if the file ever flushes promptly (realtime deaths with
-  killer), options UI (Ace3), rare kills, achievements.
+  killer), rare kills, achievements.
   (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style

@@ -41,8 +41,9 @@ reads that queue and posts each event to your Discord webhook.
    `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
    Restart WoW completely (new addons are only picked up on start).
 2. That's it for guild announcements. `/doink announce test` whispers you a
-   sample of each one so you can see the wording; `/doink announce` shows
-   and changes the rules (see [Announcements](#announcements)).
+   sample of each one so you can see the wording. Settings live in the
+   game's options (Esc → Options → AddOns → DOINK, or `/doink config`) and
+   in the `/doink` commands (see [Announcements](#announcements)).
 
 ### Optional: Discord
 
@@ -185,6 +186,7 @@ strip entirely.
 | Command | |
 |---|---|
 | `/doink` | Status: queue, webhook, which notifiers are on |
+| `/doink config` | Open the settings page (same as Esc → Options → AddOns → DOINK) |
 | `/doink enable\|disable <type>` | Turn a notifier on or off |
 | `/doink options [type]` | Show settings |
 | `/doink set <type> <option> <value>` | Change a setting, e.g. `/doink set loot min_quality 4` |
@@ -202,8 +204,9 @@ strip entirely.
 | `/doink flush` | Reload now so pending events post |
 | `/doink dump [n]`, `/doink debug` | For troubleshooting |
 
-Settings are per character and take effect immediately. Webhook changes reach
-the companion on the next reload.
+Settings are per character and take effect immediately, whether changed on
+the settings page or by command; the two are the same settings. Webhook
+changes reach the companion on the next reload.
 
 ## Notifiers (Discord)
 
