@@ -14,15 +14,12 @@ local function Location()
   return GetZoneText(), subzone ~= "" and subzone or ns.Json.null
 end
 
-local function Environmental(kind)
-  -- The client has localised names for these ("Falling", "Drowning", ...).
-  local text = _G["ACTION_ENVIRONMENTAL_DAMAGE_" .. string.upper(tostring(kind))]
-  return text or tostring(kind)
-end
-
 -- The killing blow is the newest entry: by timestamp when the client stamps
--- them, otherwise the last one listed.
-local function Killer()
+-- them, otherwise the last one listed. Returns killer, environment: one of
+-- them at most. environment is the recap's environmentalType upper-cased
+-- (FALLING, DROWNING, FATIGUE, FIRE, LAVA, SLIME), so chat and Discord can
+-- word those deaths themselves.
+local function Cause()
   if not (DeathRecap_HasEvents and DeathRecap_GetEvents) then return nil end
   if not DeathRecap_HasEvents() then return nil end
   local events = DeathRecap_GetEvents()
@@ -31,14 +28,15 @@ local function Killer()
   for _, e in ipairs(events) do
     if e.timestamp and (not last.timestamp or e.timestamp > last.timestamp) then last = e end
   end
+  if last.environmentalType then return nil, string.upper(tostring(last.environmentalType)) end
   if last.sourceName and last.sourceName ~= "" then return last.sourceName end
-  if last.environmentalType then return Environmental(last.environmentalType) end
   return nil
 end
 
-local function EmitDeath(killer)
+local function EmitDeath(killer, environment)
   local zone, subzone = Location()
-  ns:Emit("death", { zone = zone, subzone = subzone, killer = killer or ns.Json.null })
+  ns:Emit("death", { zone = zone, subzone = subzone, killer = killer or ns.Json.null,
+                     environment = environment or ns.Json.null })
 end
 
 ns.Notifiers.Death = {
@@ -46,16 +44,16 @@ ns.Notifiers.Death = {
   events = { "PLAYER_DEAD" },
 
   OnEvent = function(event)
-    local killer = Killer()
-    if killer or not (DeathRecap_HasEvents and C_Timer) then
-      return EmitDeath(killer)
+    local killer, environment = Cause()
+    if killer or environment or not (DeathRecap_HasEvents and C_Timer) then
+      return EmitDeath(killer, environment)
     end
     -- The recap may land a moment after PLAYER_DEAD; give it one chance.
-    C_Timer.After(RECAP_RETRY, function() EmitDeath(Killer()) end)
+    C_Timer.After(RECAP_RETRY, function() EmitDeath(Cause()) end)
   end,
 
   Test = function()
     local zone, subzone = Location()
-    return { zone = zone, subzone = subzone, killer = "Hogger" }
+    return { zone = zone, subzone = subzone, killer = "Hogger", environment = ns.Json.null }
   end,
 }

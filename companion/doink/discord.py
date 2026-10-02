@@ -73,14 +73,28 @@ def _loot(event: dict, data: dict) -> dict:
     return embed
 
 
+ENVIRONMENT = {  # death.environment -> what happened, third person
+    "FALLING": "Forgot they couldn't fly.",
+    "DROWNING": "Forgot to breathe.",
+    "FATIGUE": "Swam too far.",
+    "FIRE": "Stood in the fire.",
+    "LAVA": "Went for a swim in lava.",
+    "SLIME": "Took a bath in slime.",
+}
+
+
 def _death(event: dict, data: dict) -> dict:
     killer = data.get("killer")
     where = data.get("zone") or "somewhere"
     if data.get("subzone"):
         where = f"{data['subzone']}, {where}"
+    blunder = ENVIRONMENT.get(data.get("environment") or "")
+    description = f"in {where}"
+    if blunder and not killer:
+        description = f"{blunder} Died in {where}."
     return {
         "title": f"{full_name(event)} died" + (f" to {killer}" if killer else ""),
-        "description": f"in {where}",
+        "description": description,
     }
 
 

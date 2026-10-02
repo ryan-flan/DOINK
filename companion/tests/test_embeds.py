@@ -37,6 +37,14 @@ class EmbedTest(unittest.TestCase):
         self.assertEqual(embed["title"], "Flano died")
         self.assertEqual(embed["description"], "in Westfall")
 
+    def test_death_environmental(self):
+        embed = build_embed(event("death", {"zone": "Thousand Needles", "subzone": None,
+                                            "killer": None, "environment": "FALLING"}))
+        self.assertEqual(embed["title"], "Flano died")
+        self.assertEqual(embed["description"], "Forgot they couldn't fly. Died in Thousand Needles.")
+        embed = build_embed(event("death", {"zone": "X", "killer": None, "environment": "MOON"}))
+        self.assertEqual(embed["description"], "in X", "unknown kinds fall back")
+
     def test_quest(self):
         embed = build_embed(event("quest", {"quest_id": 783, "title": "A Threat Within", "xp": 1200}))
         self.assertEqual(embed["title"], "Flano completed A Threat Within")

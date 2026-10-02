@@ -289,7 +289,7 @@ test("death: zone and subzone, killer unknown without a death recap", function()
   fire("PLAYER_DEAD")
   eq(count(), n + 1, "emitted at once, no timer")
   assert(has('"type":"death"') and has('"zone":"Elwynn Forest"'), last())
-  assert(has('"subzone":null') and has('"killer":null'), last())
+  assert(has('"subzone":null') and has('"killer":null') and has('"environment":null'), last())
 end)
 
 test("death: killer is the newest death recap hit", function()
@@ -302,10 +302,9 @@ test("death: killer is the newest death recap hit", function()
   fire("PLAYER_DEAD")
   assert(has('"killer":"Hogger"'), last())
 
-  recap = { { environmentalType = "FALLING", amount = 999 } }
-  ACTION_ENVIRONMENTAL_DAMAGE_FALLING = "Falling"
+  recap = { { environmentalType = "Falling", amount = 999 } }
   fire("PLAYER_DEAD")
-  assert(has('"killer":"Falling"'), last())
+  assert(has('"killer":null') and has('"environment":"FALLING"'), last())
 
   -- Recap empty at PLAYER_DEAD, filled shortly after: one 0.5 s retry.
   recap = {}
@@ -609,8 +608,17 @@ test("announce: deaths and boss kills yes, quests off unless asked", function()
   fire("PLAYER_DEAD")
   eq(lastChat()[1], "Died in Elwynn Forest.", "death")
   runTimers()
+  local recap = { { sourceName = "Hogger" } }
+  DeathRecap_HasEvents = function() return true end
+  DeathRecap_GetEvents = function() return recap end
+  fire("PLAYER_DEAD"); runTimers()
+  eq(lastChat()[1], "Killed by Hogger in Elwynn Forest.", "killer named")
+  recap = { { environmentalType = "Falling" } }
+  fire("PLAYER_DEAD"); runTimers()
+  eq(lastChat()[1], "Forgot I couldn't fly. Died in Elwynn Forest.", "environmental")
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
   fire("QUEST_TURNED_IN", 33, 450, 75)
-  eq(#chat, 1, "quest not announced by default")
+  eq(#chat, 3, "quest not announced by default")
   slash("announce quest on")
   fire("QUEST_COMPLETE")
   fire("QUEST_TURNED_IN", 33, 450, 75)

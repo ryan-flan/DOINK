@@ -26,7 +26,7 @@ Every event type, what triggers it, the exact wording, and the default rule:
 |---|---|---|---|
 | Level-up | `PLAYER_LEVEL_UP` | `Ding! Level 20.` / `Ding! Level 60 - max level!` | Levels 10, 20, 30, 40, 50 and 60 only |
 | Loot | Your own `You receive loot:` message | `Looted [item link]!` (`x3` appended for stacks) | Epic quality or better |
-| Death | `PLAYER_DEAD`, killer from the client's death recap | `Killed by Defias Pillager in Moonbrook, Westfall.` (or `Died in Moonbrook, Westfall.` when the recap is empty) | Yes |
+| Death | `PLAYER_DEAD`, killer from the client's death recap | `Killed by Defias Pillager in Moonbrook, Westfall.`; falling, drowning, fatigue, fire, lava and slime get their own lines (`Forgot I couldn't fly. Died in Thousand Needles.`); `Died in Moonbrook, Westfall.` when the recap is empty | Yes |
 | Boss kill | `ENCOUNTER_END` with success | `Ragnaros down! (Molten Core, 40 players)` | Yes (kills only, never wipes) |
 | Quest turn-in | `QUEST_TURNED_IN` | `Completed quest: A Threat Within.` | No |
 | Skill-up | `Your skill in X has increased to N.` | `Blacksmithing maxed at 300!` / `Blacksmithing 150/225.` | No |

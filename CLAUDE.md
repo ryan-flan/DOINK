@@ -133,9 +133,12 @@ Rules:
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` comes from the client's death recap
   (`DeathRecap_GetEvents()`, present in Forever): the attacker of the newest
-  hit, or the localised environmental cause ("Falling"). `null` when the
-  recap is empty (the notifier retries once after 0.5 s) or the API is
-  absent. The combat log is protected, so there is no other source.
+  hit. For an environmental death `killer` is `null` and
+  `death.environment` holds the recap's `environmentalType` upper-cased
+  (`FALLING`, `DROWNING`, `FATIGUE`, `FIRE`, `LAVA`, `SLIME`); both chat
+  and Discord word those themselves ("Forgot I couldn't fly."). Both `null`
+  when the recap is empty (the notifier retries once after 0.5 s) or the
+  API is absent. The combat log is protected, so there is no other source.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -144,7 +147,7 @@ Rules:
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
   - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234}`
-  - `death`:     `{"zone": "Westfall", "subzone": "...", "killer": "Defias Pillager"|null}`
+  - `death`:     `{"zone": "Westfall", "subzone": "...", "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
   - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "...", "difficulty": 1, "success": true, "group_size": 5}`
   - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150}`
@@ -486,8 +489,10 @@ fixture included; that's a stand-in for the real name, by decision.)
   - [ ] Whether entries carry `timestamp` and which index is the killing
     blow: unverified; the notifier takes the newest by timestamp, else the
     last entry.
-  - [ ] Whether the recap is already filled when `PLAYER_DEAD` fires
-    (the notifier retries once after 0.5 s if not).
+  - [x] The recap is already filled when `PLAYER_DEAD` fires: a real death
+    named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
+  - [ ] Environmental `environmentalType` values unseen; retail uses
+    Falling/Drowning/Fatigue/Fire/Lava/Slime, matched case-insensitively.
 - [x] **Communities parked**: `C_Club` exists but Battle.net features are
   limited in the beta (single US server), so nothing to test against.
 - [x] `CHAT_MSG_LOOT` self-loot message format sample (raw, with link codes):

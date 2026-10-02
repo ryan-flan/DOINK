@@ -53,6 +53,16 @@ end
 
 ------------------------------------------------------------------ wording
 
+-- Environmental deaths, keyed by the recap's environmentalType (upper-cased).
+local ENVIRONMENT = {
+  FALLING  = "Forgot I couldn't fly.",
+  DROWNING = "Forgot to breathe.",
+  FATIGUE  = "Swam too far.",
+  FIRE     = "Stood in the fire.",
+  LAVA     = "Went for a swim in lava.",
+  SLIME    = "Took a bath in slime.",
+}
+
 -- Reads after the chat prefix: "[Guild] Flano Wren: Ding! Level 20."
 local function Describe(envelope)
   local d, t = envelope.data, envelope.type
@@ -70,6 +80,10 @@ local function Describe(envelope)
     if Value(d.subzone) then where = d.subzone .. ", " .. where end
     if Value(d.killer) then
       return ("Killed by %s in %s."):format(d.killer, where)
+    end
+    local blunder = Value(d.environment) and ENVIRONMENT[d.environment]
+    if blunder then
+      return ("%s Died in %s."):format(blunder, where)
     end
     return ("Died in %s."):format(where)
   elseif t == "quest" then
