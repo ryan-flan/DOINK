@@ -402,6 +402,8 @@ two implementations can't drift apart. Regenerate with
   Windows PATH. From PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && ..."`.
 - Remote: https://github.com/ryan-flan/DOINK (public), default branch `main`.
 - CurseForge project ID: 1721438 (repo variable `CURSEFORGE_PROJECT_ID`).
+  Wago Addons project id: repo variable `WAGO_PROJECT_ID` (8-character id
+  from the Wago developer dashboard).
 
 ## Releases
 
@@ -417,12 +419,17 @@ two implementations can't drift apart. Regenerate with
      **addon-only** zip `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta`
      (`move-folders` lifts `addon/DOINK` to the zip root; ignore rules run
      first, so never ignore `addon/` itself). Interface 16xxx → game type
-     `forever`, game version 1.60.1. On tags it uploads to **CurseForge**
-     (the only store, by choice) when repo **variable**
-     `CURSEFORGE_PROJECT_ID` and **secret** `CF_API_KEY` are set; manual
-     runs pass `-d` and never upload. The store zip never contains
-     `doink.exe`; the CurseForge page (text in `docs/store-description.md`,
-     logo `docs/logo-400.png`) links to GitHub Releases for the companion.
+     `forever`, game version 1.60.1. On tags it uploads to each store whose
+     repo **variable** (project id) and **secret** (API key) are set, and
+     skips the rest: CurseForge (`CURSEFORGE_PROJECT_ID`, `CF_API_KEY`),
+     Wago Addons (`WAGO_PROJECT_ID`, `WAGO_API_TOKEN`; the packager sends
+     game type `forever`), WoWInterface (`WOWI_PROJECT_ID`,
+     `WOWI_API_TOKEN`; wired but unused, no Forever category seen there).
+     Manual runs pass `-d` and never upload. The store zip never contains
+     `doink.exe`; the store pages (text in `docs/store-description.md`, logo
+     `docs/logo-400.png`) link to GitHub Releases for the companion.
+     Secrets go in through the GitHub web UI, never via chat; `gh secret
+     set` through WSL once stored an empty value.
 
 Semver: breaking data-contract changes bump the minor version while < 1.0.
 

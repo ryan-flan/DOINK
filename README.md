@@ -36,7 +36,8 @@ reads that queue and posts each event to your Discord webhook.
 
 1. Download `DOINK-<version>.zip` from
    [Releases](https://github.com/ryan-flan/DOINK/releases) (or install
-   **DOINK** from CurseForge) and copy `AddOns\DOINK` into your WoW AddOns
+   **DOINK** from CurseForge or Wago Addons, including through an addon
+   manager such as WowUp) and copy `AddOns\DOINK` into your WoW AddOns
    folder, e.g.
    `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
    Restart WoW completely (new addons are only picked up on start).

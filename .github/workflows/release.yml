@@ -13,8 +13,11 @@ permissions:
 jobs:
   # The addon alone, via the BigWigs packager (needs >= v2.6.0 for Forever:
   # it maps Interface 16xxx to the "forever" game type). On tags it uploads
-  # to CurseForge when the CURSEFORGE_PROJECT_ID variable and CF_API_KEY
-  # secret are set, and skips silently otherwise. Manual runs never upload.
+  # to each store whose project id variable and API secret are set, and
+  # skips the others silently. Manual runs never upload.
+  #   CurseForge:   variable CURSEFORGE_PROJECT_ID, secret CF_API_KEY
+  #   Wago Addons:  variable WAGO_PROJECT_ID,       secret WAGO_API_TOKEN
+  #   WoWInterface: variable WOWI_PROJECT_ID,       secret WOWI_API_TOKEN
   addon:
     runs-on: ubuntu-latest
     steps:
@@ -26,8 +29,12 @@ jobs:
           args: >-
             ${{ github.ref_type != 'tag' && '-d' || '' }}
             ${{ vars.CURSEFORGE_PROJECT_ID && format('-p {0}', vars.CURSEFORGE_PROJECT_ID) || '' }}
+            ${{ vars.WAGO_PROJECT_ID && format('-a {0}', vars.WAGO_PROJECT_ID) || '' }}
+            ${{ vars.WOWI_PROJECT_ID && format('-w {0}', vars.WOWI_PROJECT_ID) || '' }}
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+          WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: addon-package

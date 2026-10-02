@@ -104,7 +104,7 @@ realtime state, and which event types are enabled.
 
 WoW addons cannot access the network, so Discord posting is done by a
 separate program, the **DOINK companion**, downloaded from the GitHub
-releases page (not from CurseForge). It is not required for anything above.
+releases page (not from this addon site). It is not required for anything above.
 
 What it is: a Windows program (`doink.exe`, Python packaged with
 PyInstaller, source in the same repository, MIT) that sits in the system
@@ -171,7 +171,7 @@ other characters.
 ## Development, source and AI use
 
 Source code, issue tracker and the companion: https://github.com/ryan-flan/DOINK
-(MIT license). Every CurseForge file is built from a tagged commit of that
+(MIT license). Every uploaded file (CurseForge and Wago Addons) is built from a tagged commit of that
 repository by GitHub Actions using the BigWigs packager, so the uploaded
 zip matches the public source exactly. The changelog for each version is
 generated from the commit history and attached to every file.
