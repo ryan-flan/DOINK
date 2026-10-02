@@ -18,9 +18,15 @@ moment they happen, with real item links:
 same events to a Discord channel of your choice as class-coloured embeds
 with Wowhead links, so your guild's Discord sees every ding, epic and boss
 kill even when nobody is online, and an experimental realtime mode posts
-them within a second of them happening. It's a separate download for
-Windows; the addon works fully without it. See
+them within a second of them happening. See
 [Discord mirroring](#discord-mirroring-with-the-doink-companion).
+
+> **Two parts, one optional.** The addon alone does all the guild chat
+> announcements. **Discord posting requires the companion**, a separate
+> Windows program you download from the GitHub releases page and run
+> alongside the game: WoW addons cannot reach the internet, so without the
+> companion nothing goes to Discord. Install the addon from here; get the
+> companion from GitHub if you want Discord.
 
 No dependencies and no libraries: install it and it works. Settings are on
 a normal options page (Esc → Options → AddOns → DOINK) and can also be set
@@ -45,8 +51,10 @@ manager such as WowUp), or download `DOINK-<version>.zip` from
 `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
 Restart WoW completely (new addons are only picked up on start).
 
-That's it. `/doink announce test` whispers you a sample of each
-announcement so you can see the wording.
+That's it for guild chat. `/doink announce test` whispers you a sample of
+each announcement so you can see the wording. For Discord, you also need
+the companion: see
+[Discord mirroring](#discord-mirroring-with-the-doink-companion).
 
 ## Announcements
 
@@ -134,6 +142,11 @@ the settings page or by command; the two are the same settings.
   confirmed in Forever dungeons during the beta.
 
 ## Discord mirroring with the DOINK companion
+
+**Required for Discord.** Nothing in this section works with the addon
+alone. Discord posting needs the DOINK companion running on your Windows
+PC, because WoW addons cannot access the network. The addon's guild chat
+announcements need nothing extra.
 
 Everything the addon announces can also land in Discord:
 
