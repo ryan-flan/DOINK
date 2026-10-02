@@ -136,7 +136,8 @@ class SettingsWindowTest(unittest.TestCase):
         from doink.config import save_settings
 
         folder = Path(tempfile.mkdtemp())
-        save_settings(folder / "config.toml", {"wow_dir": str(folder / "no-wow")})
+        save_settings(folder / "config.toml", {"wow_dir": str(folder / "no-wow"),
+                                               "update_check": False})
         app = App(folder / "config.toml", Status())
         app.start()  # no WoW: the window must explain that, not crash
         app.status.posted("Flano Wren", "level_up")

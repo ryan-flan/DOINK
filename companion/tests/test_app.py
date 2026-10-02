@@ -53,7 +53,9 @@ class AppTest(unittest.TestCase):
         self.dir = Path(tempfile.mkdtemp())
         self.wow = make_wow(self.dir)
         self.config_path = self.dir / "config.toml"
-        save_settings(self.config_path, {"wow_dir": str(self.wow)})
+        # update_check off: tests must never start the daily GitHub check (its
+        # first fetch, 30 s in, once landed inside the Windows leak test).
+        save_settings(self.config_path, {"wow_dir": str(self.wow), "update_check": False})
         self.status = Status()
         self.app = App(self.config_path, self.status)
 
@@ -99,7 +101,7 @@ class AppTest(unittest.TestCase):
         self.assertEqual(self.app.watched, before)
 
     def test_no_wow_found_reports_instead_of_exiting(self):
-        save_settings(self.config_path, {"wow_dir": str(self.dir / "nowhere")})
+        save_settings(self.config_path, {"wow_dir": str(self.dir / "nowhere"), "update_check": False})
         app = App(self.config_path, Status())
         self.assertEqual(app.watched, [])
         app.start()
