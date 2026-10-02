@@ -60,7 +60,7 @@ class TrayTest(unittest.TestCase):
 
         status.watching(1)
         status.failed("test notification")  # balloon path
-        status.posted("Paul Hebbs", "level_up")
+        status.posted("Flano Wren", "level_up")
         time.sleep(0.5)
 
         icon.quit()
@@ -139,7 +139,7 @@ class SettingsWindowTest(unittest.TestCase):
         save_settings(folder / "config.toml", {"wow_dir": str(folder / "no-wow")})
         app = App(folder / "config.toml", Status())
         app.start()  # no WoW: the window must explain that, not crash
-        app.status.posted("Paul Hebbs", "level_up")
+        app.status.posted("Flano Wren", "level_up")
 
         root = tk.Tk()
         try:

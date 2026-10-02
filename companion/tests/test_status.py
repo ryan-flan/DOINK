@@ -11,11 +11,11 @@ class StatusTest(unittest.TestCase):
     def test_summary_progression(self):
         self.status.watching(1)
         self.assertEqual(self.status.summary(), "DOINK: watching 1 file, nothing posted yet")
-        self.status.posted("Paul Hebbs", "level_up, quest")
+        self.status.posted("Flano Wren", "level_up, quest")
         self.assertRegex(self.status.summary(),
-                         r"^DOINK: last post \d\d:\d\d, Paul Hebbs: level_up, quest$")
-        self.status.failed("no webhook for Paul Hebbs")
-        self.assertEqual(self.status.summary(), "DOINK: no webhook for Paul Hebbs")
+                         r"^DOINK: last post \d\d:\d\d, Flano Wren: level_up, quest$")
+        self.status.failed("no webhook for Flano Wren")
+        self.assertEqual(self.status.summary(), "DOINK: no webhook for Flano Wren")
 
     def test_new_errors_notify_once(self):
         self.status.failed("boom")
@@ -29,7 +29,7 @@ class StatusTest(unittest.TestCase):
         self.assertNotIn("boom", self.status.summary())
         self.status.failed("boom")  # same text again is new after clearing
         self.assertEqual([c for c in self.calls if c], ["boom", "boom"])
-        self.status.posted("Paul", "loot")
+        self.status.posted("Flano", "loot")
         self.assertNotIn("boom", self.status.summary())
 
     def test_tooltip_length_limit(self):

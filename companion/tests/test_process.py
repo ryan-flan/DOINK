@@ -41,7 +41,7 @@ def webhooks_block(**hooks):
     return '["webhooks"] = {\n' + entries + "},\n"
 
 
-def events_file(*seqs, char="Paul", event_type="level_up", surname=None):
+def events_file(*seqs, char="Flano", event_type="level_up", surname=None):
     extra = r'\"surname\":\"%s\",' % surname if surname else ""
     lines = [
         r'"{%s\"char\":\"%s\",\"class\":\"MAGE\",\"data\":{\"level\":%d},\"realm\":\"R\",'
@@ -73,8 +73,8 @@ class ProcessTest(unittest.TestCase):
         ok, state = self.run_with(events_file(1, 2, 3))
         self.assertTrue(ok)
         self.assertEqual(len(self.webhook.sent), 1)
-        self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 3")
-        self.assertEqual(state.last_seen("Paul-R"), 3)
+        self.assertEqual(self.webhook.sent[0][0]["title"], "Flano reached level 3")
+        self.assertEqual(state.last_seen("Flano-R"), 3)
 
     def test_batches_ten_per_message(self):
         self.config.max_backlog = 100
@@ -85,14 +85,14 @@ class ProcessTest(unittest.TestCase):
         self.config.max_backlog = 2
         _, state = self.run_with(events_file(*range(1, 50)))
         self.assertEqual([e["title"] for e in self.webhook.sent[0]],
-                         ["Paul reached level 48", "Paul reached level 49"])
-        self.assertEqual(state.last_seen("Paul-R"), 49)
+                         ["Flano reached level 48", "Flano reached level 49"])
+        self.assertEqual(state.last_seen("Flano-R"), 49)
 
     def test_backlog_zero_just_baselines(self):
         self.config.max_backlog = 0
         _, state = self.run_with(events_file(1, 2, 3))
         self.assertEqual(self.webhook.sent, [])
-        self.assertEqual(state.last_seen("Paul-R"), 3)
+        self.assertEqual(state.last_seen("Flano-R"), 3)
 
     def test_webhook_precedence_char_then_account_then_config(self):
         text = (webhooks_block(**{"*": GAME_HOOK, "Alt-R": CHAR_HOOK})
@@ -110,7 +110,7 @@ class ProcessTest(unittest.TestCase):
             ok, state = self.run_with(events_file(1, 2))
         self.assertFalse(ok)
         self.assertEqual(self.webhook.sent, [])
-        self.assertIsNone(state.last_seen("Paul-R"))
+        self.assertIsNone(state.last_seen("Flano-R"))
 
         # Set in game -> next reload posts them.
         ok, _ = self.run_with(webhooks_block(**{"*": GAME_HOOK}) + events_file(1, 2))
@@ -129,15 +129,15 @@ class ProcessTest(unittest.TestCase):
         self.webhook.fail = True
         ok, _ = self.run_with(events_file(1, 2), state)
         self.assertFalse(ok)
-        self.assertEqual(state.last_seen("Paul-R"), 1)
+        self.assertEqual(state.last_seen("Flano-R"), 1)
 
         self.webhook.fail = False
         ok, _ = self.run_with(events_file(1, 2), state)
         self.assertTrue(ok)
-        self.assertEqual(self.webhook.sent[-1][0]["title"], "Paul reached level 2")
+        self.assertEqual(self.webhook.sent[-1][0]["title"], "Flano reached level 2")
 
     def test_surname_upgrade_carries_history_without_reposting(self):
-        # v0.2.0: posted #1-2 as "Paul-R".
+        # v0.2.0: posted #1-2 as "Flano-R".
         state = State(self.config.state_path)
         self.run_with(events_file(1, 2), state)
         self.webhook.sent.clear()
@@ -146,12 +146,12 @@ class ProcessTest(unittest.TestCase):
         # one new event since. Only #3 may post.
         restarted = State(self.config.state_path)
         with self.assertLogs("doink", "INFO") as logs:
-            ok, _ = self.run_with(events_file(1, 2, 3, surname="Hebbs"), restarted)
+            ok, _ = self.run_with(events_file(1, 2, 3, surname="Wren"), restarted)
         self.assertTrue(ok)
         self.assertEqual([e["title"] for m in self.webhook.sent for e in m],
-                         ["Paul Hebbs reached level 3"])
-        self.assertEqual(restarted.last_seen("Paul Hebbs-R"), 3)
-        self.assertIsNone(restarted.last_seen("Paul-R"))
+                         ["Flano Wren reached level 3"])
+        self.assertEqual(restarted.last_seen("Flano Wren-R"), 3)
+        self.assertIsNone(restarted.last_seen("Flano-R"))
         self.assertTrue(any("carried over" in line for line in logs.output))
 
     def test_seq_reset_starts_over(self):
@@ -159,10 +159,10 @@ class ProcessTest(unittest.TestCase):
         self.run_with(events_file(40, 41), state)
         self.webhook.sent.clear()
         self.run_with(events_file(1), state)  # SavedVariables wiped
-        self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 1")
-        self.assertEqual(state.last_seen("Paul-R"), 1)
+        self.assertEqual(self.webhook.sent[0][0]["title"], "Flano reached level 1")
+        self.assertEqual(state.last_seen("Flano-R"), 1)
 
-    def event(self, seq, char="Paul"):
+    def event(self, seq, char="Flano"):
         return {"char": char, "class": "MAGE", "data": {"level": seq}, "realm": "R",
                 "seq": seq, "ts": 1790870764, "type": "level_up"}
 
@@ -170,20 +170,20 @@ class ProcessTest(unittest.TestCase):
         state = State(self.config.state_path)
         status = Status()
         # The reader catches #3 of a character it has never seen.
-        ok = post_events(self.config, "Paul-R", [self.event(3)], state, self.webhook, status,
+        ok = post_events(self.config, "Flano-R", [self.event(3)], state, self.webhook, status,
                          {}, first_sight_backlog=10, realtime=True)
         self.assertTrue(ok)
         self.assertEqual(status.recent()[0][3], True, "marked as a realtime post")
-        self.assertEqual(state.missing("Paul-R"), {1, 2})
+        self.assertEqual(state.missing("Flano-R"), {1, 2})
 
         # The file arrives later with #1-4: only 1, 2 and 4 may post.
         self.webhook.sent.clear()
         ok, _ = self.run_with(events_file(1, 2, 3, 4), state)
         self.assertTrue(ok)
         self.assertEqual([e["title"] for m in self.webhook.sent for e in m],
-                         ["Paul reached level 1", "Paul reached level 2", "Paul reached level 4"])
-        self.assertEqual(state.missing("Paul-R"), set())
-        self.assertEqual(state.last_seen("Paul-R"), 4)
+                         ["Flano reached level 1", "Flano reached level 2", "Flano reached level 4"])
+        self.assertEqual(state.missing("Flano-R"), set())
+        self.assertEqual(state.last_seen("Flano-R"), 4)
 
     def test_realtime_worker_dedupes_and_skips_hello(self):
         state = State(self.config.state_path)
@@ -194,31 +194,31 @@ class ProcessTest(unittest.TestCase):
                                 game_hooks=lambda: {})
         worker.handle_message(json.dumps(self.event(2)).encode())  # already posted from the file
         self.assertEqual(self.webhook.sent, [])
-        worker.handle_message(b'{"type":"hello","char":"Paul","realm":"R","addon":"0.6.0","test":true}')
+        worker.handle_message(b'{"type":"hello","char":"Flano","realm":"R","addon":"0.6.0","test":true}')
         self.assertEqual(self.webhook.sent, [])
-        self.assertEqual(status.realtime()["hello"]["who"], "Paul")
+        self.assertEqual(status.realtime()["hello"]["who"], "Flano")
         self.assertTrue(status.realtime()["hello"]["test"])
         worker.handle_message(json.dumps(self.event(3)).encode())
-        self.assertEqual(self.webhook.sent[0][0]["title"], "Paul reached level 3")
+        self.assertEqual(self.webhook.sent[0][0]["title"], "Flano reached level 3")
         worker.handle_message(json.dumps(self.event(3)).encode())  # the strip repeats it
         self.assertEqual(len(self.webhook.sent), 1)
-        self.assertEqual(state.last_seen("Paul-R"), 3)
+        self.assertEqual(state.last_seen("Flano-R"), 3)
 
 
 class EmbedTest(unittest.TestCase):
     def test_level_up_embed(self):
-        embed = build_embed({"char": "Paul", "realm": "Classic Beta PvE 2", "class": "WARRIOR",
+        embed = build_embed({"char": "Flano", "realm": "Classic Beta PvE 2", "class": "WARRIOR",
                              "seq": 1, "ts": 1790870764, "type": "level_up",
                              "data": {"level": 9}, "test": True})
-        self.assertEqual(embed["title"], "[TEST] Paul reached level 9")
+        self.assertEqual(embed["title"], "[TEST] Flano reached level 9")
         self.assertEqual(embed["color"], 0xC79C6E)
-        self.assertEqual(embed["footer"]["text"], "Paul-Classic Beta PvE 2 · test event")
+        self.assertEqual(embed["footer"]["text"], "Flano-Classic Beta PvE 2 · test event")
         self.assertTrue(embed["timestamp"].endswith("+00:00"))
 
     def test_unknown_type_falls_back(self):
-        embed = build_embed({"char": "Paul", "realm": "R", "seq": 1, "type": "achievement",
+        embed = build_embed({"char": "Flano", "realm": "R", "seq": 1, "type": "achievement",
                              "data": {"name": "Explore Elwynn Forest"}})
-        self.assertEqual(embed["title"], "Paul: achievement")
+        self.assertEqual(embed["title"], "Flano: achievement")
         self.assertIn("Explore Elwynn Forest", embed["description"])
 
 

@@ -67,9 +67,9 @@ jobs:
           Set-Content $sv @'
           DOINKDB = {
           ["chars"] = {
-          ["Paul Hebbs-R"] = {
+          ["Flano Wren-R"] = {
           ["events"] = {
-          "{\"char\":\"Paul\",\"surname\":\"Hebbs\",\"realm\":\"R\",\"seq\":1,\"type\":\"level_up\",\"data\":{\"level\":2}}",
+          "{\"char\":\"Flano\",\"surname\":\"Wren\",\"realm\":\"R\",\"seq\":1,\"type\":\"level_up\",\"data\":{\"level\":2}}",
           },
           },
           },

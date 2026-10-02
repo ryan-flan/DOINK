@@ -77,7 +77,7 @@ class CrcTest(unittest.TestCase):
 
 
 class DecodeTest(unittest.TestCase):
-    PAYLOAD = b'{"char":"Paul","realm":"R","seq":7,"type":"level_up","data":{"level":10}}'
+    PAYLOAD = b'{"char":"Flano","realm":"R","seq":7,"type":"level_up","data":{"level":10}}'
 
     def roundtrip(self, block, width=1300, x0=0, **kw):
         chunks = encode_chunks(400, 0xBEEF, self.PAYLOAD)
@@ -193,7 +193,7 @@ class FixtureTest(unittest.TestCase):
             message = assembler.add(chunk) or message
         self.assertEqual(message, meta["payload"].encode("utf-8"))
         event = decode_message(message)
-        self.assertEqual((event["char"], event["surname"], event["seq"]), ("Paul", "Hebbs", 3))
+        self.assertEqual((event["char"], event["surname"], event["seq"]), ("Flano", "Wren", 3))
 
 
 class AssemblerTest(unittest.TestCase):
@@ -279,12 +279,12 @@ class MeterTest(unittest.TestCase):
 
 class DecodeMessageTest(unittest.TestCase):
     def test_hello_event_and_garbage(self):
-        hello = decode_message(b'{"type":"hello","char":"Paul","realm":"R","addon":"0.6.0"}')
+        hello = decode_message(b'{"type":"hello","char":"Flano","realm":"R","addon":"0.6.0"}')
         self.assertEqual(hello["type"], "hello")
-        event = decode_message(b'{"char":"Paul","realm":"R","seq":1,"type":"death","data":{}}')
+        event = decode_message(b'{"char":"Flano","realm":"R","seq":1,"type":"death","data":{}}')
         self.assertEqual(event["seq"], 1)
         self.assertIsNone(decode_message(b'{"type":"hello"}'))        # no char/realm
-        self.assertIsNone(decode_message(b'{"char":"Paul","realm":"R"}'))  # no seq/type
+        self.assertIsNone(decode_message(b'{"char":"Flano","realm":"R"}'))  # no seq/type
         self.assertIsNone(decode_message(b"\xff\xfe not json"))
 
 

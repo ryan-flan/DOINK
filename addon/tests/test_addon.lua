@@ -50,7 +50,7 @@ function SendChatMessage(msg, chatType, _, target) chat[#chat + 1] = { msg, chat
 function IsInGuild() return inGuild end
 function IsInGroup() return inGroup end
 function IsInRaid() return inRaid end
-function GetUnitName() return "Paul Hebbs" end
+function GetUnitName() return "Flano Wren" end
 local timers = {}
 C_Timer = { After = function(seconds, fn) timers[#timers + 1] = { seconds, fn } end }
 local function runTimers() -- run everything scheduled, including what that schedules
@@ -74,7 +74,7 @@ SKILL_RANK_UP = "Your skill in %s has increased to %d."
 local now, level = 1000, 9
 time = function() return 1790870000 end
 function GetTime() return now end
-function UnitName() return "Paul", "Hebbs" end -- Forever: surname second
+function UnitName() return "Flano", "Wren" end -- Forever: surname second
 function UnitGUID() return "Player-1-ABC" end
 function GetRealmName() return "Classic Beta PvE 2" end
 function UnitClass() return "Warrior", "WARRIOR" end
@@ -160,7 +160,7 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
 end
 
 -- SavedVariables as written by v0.2.0, before surnames were known.
-local OLD_KEY, NEW_KEY = "Paul-Classic Beta PvE 2", "Paul Hebbs-Classic Beta PvE 2"
+local OLD_KEY, NEW_KEY = "Flano-Classic Beta PvE 2", "Flano Wren-Classic Beta PvE 2"
 local OLD_HOOK = "https://discord.com/api/webhooks/9/old"
 DOINKDB = {
   version = 1,
@@ -170,8 +170,8 @@ DOINKDB = {
       seq = 2,
       config = { quest = { enabled = true } },
       events = {
-        '{"char":"Paul","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}',
-        '{"char":"Paul","realm":"Classic Beta PvE 2","seq":2,"type":"quest"}',
+        '{"char":"Flano","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}',
+        '{"char":"Flano","realm":"Classic Beta PvE 2","seq":2,"type":"quest"}',
       },
     },
   },
@@ -214,14 +214,14 @@ test("surname: pre-surname entry migrates to the full-name key", function()
   eq(DOINKDB.webhooks[NEW_KEY], OLD_HOOK, "per-char webhook carried over")
   eq(DOINKDB.webhooks[OLD_KEY], nil, "old webhook key gone")
   -- Queued events gain the surname and stay otherwise intact.
-  eq(char.events[1], '{"surname":"Hebbs","char":"Paul","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}', "event 1")
-  assert(char.events[2]:find('^{"surname":"Hebbs","char":"Paul"'), char.events[2])
+  eq(char.events[1], '{"surname":"Wren","char":"Flano","realm":"Classic Beta PvE 2","seq":1,"type":"level_up"}', "event 1")
+  assert(char.events[2]:find('^{"surname":"Wren","char":"Flano"'), char.events[2])
   DOINKDB.webhooks[NEW_KEY] = nil -- keep the webhook tests below independent
 end)
 
 test("surname: new events carry it, seq continues", function()
   SlashCmdList.DOINK("test levelup")
-  assert(has('"char":"Paul"') and has('"surname":"Hebbs"') and has('"seq":3,'), last())
+  assert(has('"char":"Flano"') and has('"surname":"Wren"') and has('"seq":3,'), last())
 end)
 
 test("FormatToPattern escapes magic and captures", function()
@@ -233,7 +233,7 @@ end)
 
 test("loot: real beta message, below threshold, is ignored", function()
   local n = count()
-  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(769, "Chunk of Boar Meat", 1), "Paul")
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(769, "Chunk of Boar Meat", 1), "Flano")
   eq(count(), n, "events")
 end)
 
@@ -506,8 +506,8 @@ test("realtime: position and block commands", function()
 end)
 
 test("realtime: fixture matches (shared with the companion's decoder tests)", function()
-  local payload = '{"char":"Paul","class":"WARRIOR","data":{"level":10},"level":10,'
-    .. '"realm":"Classic Beta PvE 2","seq":3,"surname":"Hebbs","test":true,'
+  local payload = '{"char":"Flano","class":"WARRIOR","data":{"level":10},"level":10,'
+    .. '"realm":"Classic Beta PvE 2","seq":3,"surname":"Wren","test":true,'
     .. '"ts":1790870000,"type":"level_up"}'
   local chunks = Pixel.Encode(400, 4660, payload)
   local lines = { "msg_id 4660", "blocks 400", "rows 3", "payload " .. payload }
@@ -609,7 +609,7 @@ end)
 test("announce: test events are whispered to you, never the guild", function()
   announceReset()
   slash("test levelup")
-  eq(lastChat()[2], "WHISPER", "whisper"); eq(lastChat()[3], "Paul Hebbs", "full name")
+  eq(lastChat()[2], "WHISPER", "whisper"); eq(lastChat()[3], "Flano Wren", "full name")
   assert(lastChat()[1]:find("^%[test%] Ding! Level"), lastChat()[1])
   runTimers()
   slash("announce test")

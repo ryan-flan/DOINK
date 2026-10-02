@@ -109,7 +109,7 @@ Event JSON schema:
   "seq":   42,
   "ts":    1759300000,
   "char":  "Flano",
-  "surname": "Hebbs",           // optional; Forever only
+  "surname": "Wren",           // optional; Forever only
   "realm": "Whatever",
   "class": "WARRIOR",
   "level": 20,
@@ -180,8 +180,8 @@ epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
   malformed).
 - **Test events never reach the guild**: anything with `test = true`, and
   `/doink announce test`, is whispered to the player's **full name**
-  (`UnitName` gives the first name only on Forever; whispering "Paul" fails
-  with "No player named 'Paul'").
+  (`UnitName` gives the first name only on Forever; whispering "Flano" fails
+  with "No player named 'Flano'").
 - Rate limit: one line per 2 s via a `C_Timer.After` chain, max 8 per minute,
   dropped lines are printed to the player. 255-byte chat limit enforced.
 - Verified in beta (2026-10-02): `SendChatMessage` **works from a timer**, i.e.
@@ -432,6 +432,9 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 
 ## Beta facts to fill in (TODO — do not guess these)
 
+(The test character is called "Flano Wren" throughout this repo, tests and
+fixture included; that's a stand-in for the real name, by decision.)
+
 - [x] Flavor folder name: `_classic_beta_` (`.flavor.info`: `wow_classic_beta`).
   Install: `C:\Program Files (x86)\World of Warcraft\`. Expect a different
   folder at launch.
@@ -452,8 +455,8 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
   header reads `COMBAT_LOG_VERSION,22,...,BUILD_VERSION,1.60.1,PROJECT_ID,18`
   (Forever's project id is 18). Retest the flush timing at launch.
 - [x] **Surnames.** `UnitName("player")` and `UnitFullName("player")` both
-  return `"Paul", "Hebbs"` (surname where other clients put the realm);
-  `GetUnitName("player", true)` returns `"Paul Hebbs"`. Related APIs exist
+  return `"Flano", "Wren"` (surname where other clients put the realm);
+  `GetUnitName("player", true)` returns `"Flano Wren"`. Related APIs exist
   but are unverified and unused: `C_PlayerInfo.ShouldDisplaySurname`,
   `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator`.
 - [x] **Window class** of the Forever beta client (`WowB.exe`) is
@@ -484,7 +487,7 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
     codes use `msg:gsub("\124","\124\124")`.
 - [x] SavedVariables string format: events are written as double-quoted Lua
   strings with `\"` escapes, one per line:
-  `"{\"char\":\"Paul\",...,\"type\":\"level_up\"}",`
+  `"{\"char\":\"Flano\",...,\"type\":\"level_up\"}",`
 
 ## Milestones
 

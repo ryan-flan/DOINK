@@ -84,8 +84,8 @@ local function InitDB()
   ns.db = db
 end
 
--- Before surnames, chars were keyed "Paul-Realm". Move that entry (queue,
--- settings, per-char webhook) to "Paul Hebbs-Realm" and stamp the surname
+-- Before surnames, chars were keyed "Flano-Realm". Move that entry (queue,
+-- settings, per-char webhook) to "Flano Wren-Realm" and stamp the surname
 -- into its queued events, so the companion sees one character, not two.
 local function MigrateToSurname(name, surname, realm, key)
   local oldKey = name .. "-" .. realm

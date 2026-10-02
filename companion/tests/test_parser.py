@@ -2,17 +2,17 @@ import unittest
 
 from doink.parser import char_key, parse_events
 
-# Verbatim from the Forever beta client (1.60.1.70124).
+# As written by the Forever beta client (1.60.1.70124); character renamed.
 REAL_FILE = r'''
 DOINKDB = {
 ["version"] = 1,
 ["chars"] = {
-["Paul-Classic Beta PvE 2"] = {
+["Flano-Classic Beta PvE 2"] = {
 ["config"] = {
 },
 ["seq"] = 1,
 ["events"] = {
-"{\"char\":\"Paul\",\"class\":\"WARRIOR\",\"data\":{\"level\":9},\"level\":8,\"realm\":\"Classic Beta PvE 2\",\"seq\":1,\"test\":true,\"ts\":1790870764,\"type\":\"level_up\"}",
+"{\"char\":\"Flano\",\"class\":\"WARRIOR\",\"data\":{\"level\":9},\"level\":8,\"realm\":\"Classic Beta PvE 2\",\"seq\":1,\"test\":true,\"ts\":1790870764,\"type\":\"level_up\"}",
 },
 },
 },
@@ -20,7 +20,7 @@ DOINKDB = {
 '''
 
 
-def event_line(seq, char="Paul", extra=""):
+def event_line(seq, char="Flano", extra=""):
     return (r'"{\"char\":\"%s\",\"realm\":\"R\",\"seq\":%d,\"type\":\"level_up\"%s}",'
             % (char, seq, extra))
 
@@ -37,12 +37,12 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(event["seq"], 1)
         self.assertEqual(event["data"], {"level": 9})
         self.assertIs(event["test"], True)
-        self.assertEqual(char_key(event), "Paul-Classic Beta PvE 2")
+        self.assertEqual(char_key(event), "Flano-Classic Beta PvE 2")
 
     def test_multiple_chars(self):
         text = wrap(event_line(1), event_line(2)) + wrap(event_line(7, "Alt"))
         self.assertEqual([(e["char"], e["seq"]) for e in parse_events(text)],
-                         [("Paul", 1), ("Paul", 2), ("Alt", 7)])
+                         [("Flano", 1), ("Flano", 2), ("Alt", 7)])
 
     def test_braces_and_escapes_inside_strings(self):
         # A "}" inside a JSON string must not end the block; \\ and \" nest.

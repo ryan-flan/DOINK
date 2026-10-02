@@ -53,7 +53,7 @@ end
 
 ------------------------------------------------------------------ wording
 
--- Reads after the chat prefix: "[Guild] Paul Hebbs: Ding! Level 20."
+-- Reads after the chat prefix: "[Guild] Flano Wren: Ding! Level 20."
 local function Describe(envelope)
   local d, t = envelope.data, envelope.type
   if t == "level_up" then
