@@ -121,6 +121,9 @@ Settings = {
   end,
   RegisterAddOnCategory = function(category) settings.registered = category end,
   RegisterProxySetting = function(_, variable, varType, name, default, get, set)
+    -- The real client rejects a default whose Lua type doesn't match varType.
+    assert(type(default) == varType, variable .. ": default is a " .. type(default) .. ", declared " .. varType)
+    assert(type(get()) == varType, variable .. ": getter returns a " .. type(get()) .. ", declared " .. varType)
     return { variable = variable, varType = varType, name = name, default = default, get = get, set = set }
   end,
   CreateCheckbox = function(_, setting) setting.kind = "checkbox"; settings.controls[#settings.controls + 1] = setting end,

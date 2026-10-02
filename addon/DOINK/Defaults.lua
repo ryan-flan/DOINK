@@ -23,7 +23,7 @@ ns.Defaults = {
     death     = true,
     quest     = false,
     boss_kill = true,
-    skill_up  = false,        -- max | milestones | all | off
+    skill_up  = "off",        -- max | milestones | all | off
   },
 }
 
