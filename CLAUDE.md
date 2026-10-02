@@ -426,8 +426,12 @@ two implementations can't drift apart. Regenerate with
      game type `forever`), WoWInterface (`WOWI_PROJECT_ID`,
      `WOWI_API_TOKEN`; wired but unused, no Forever category seen there).
      Manual runs pass `-d` and never upload. The store zip never contains
-     `doink.exe`; the store pages (text in `docs/store-description.md`, logo
-     `docs/logo-400.png`) link to GitHub Releases for the companion.
+     `doink.exe`; the store pages link to GitHub Releases for the
+     companion. **README.md is the store description**: Wago pulls the
+     GitHub README automatically and the CurseForge page is pasted from it,
+     so it stays features-first, store-neutral, with the "how it works" and
+     AI-use sections at the end (`docs/store-description.md` was folded into
+     it). Logo: `docs/logo-400.png`.
      Secrets go in through the GitHub web UI, never via chat; `gh secret
      set` through WSL once stored an empty value.
 
