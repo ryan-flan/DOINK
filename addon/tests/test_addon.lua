@@ -74,6 +74,13 @@ SKILL_RANK_UP = "Your skill in %s has increased to %d."
 local now, level = 1000, 9
 time = function() return 1790870000 end
 function GetTime() return now end
+
+-- A real death: a minute passes first, because the notifier ignores a
+-- second PLAYER_DEAD within its cooldown (feign death fires it too).
+local function die()
+  now = now + 60
+  fire("PLAYER_DEAD")
+end
 function UnitName() return "Flano", "Wren" end -- Forever: surname second
 function UnitGUID() return "Player-1-ABC" end
 function GetRealmName() return "Classic Beta PvE 2" end
@@ -286,10 +293,43 @@ end)
 test("death: zone and subzone, killer unknown without a death recap", function()
   DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
   local n = count()
-  fire("PLAYER_DEAD")
+  die()
   eq(count(), n + 1, "emitted at once, no timer")
   assert(has('"type":"death"') and has('"zone":"Elwynn Forest"'), last())
   assert(has('"subzone":null') and has('"killer":null') and has('"environment":null'), last())
+end)
+
+test("death: feign death and a second PLAYER_DEAD within 10 s are ignored", function()
+  -- A hunter's saved file held two deaths one second apart (2026-10-03).
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
+  local n = count()
+  die()
+  eq(count(), n + 1, "first death")
+  now = now + 1
+  fire("PLAYER_DEAD")
+  eq(count(), n + 1, "the one-second-later duplicate is dropped")
+  now = now + 9
+  fire("PLAYER_DEAD")
+  eq(count(), n + 2, "ten seconds on it's a new death")
+
+  UnitIsFeignDeath = function() return true end
+  now = now + 60
+  fire("PLAYER_DEAD")
+  eq(count(), n + 2, "feign death is not a death")
+  UnitIsFeignDeath = nil
+
+  -- A pending recap retry also blocks a duplicate, and emits once.
+  local recap = {}
+  DeathRecap_HasEvents = function() return #recap > 0 end
+  DeathRecap_GetEvents = function() return recap end
+  timers = {}
+  die()
+  fire("PLAYER_DEAD")
+  eq(#timers, 1, "one retry, not two")
+  recap = { { sourceName = "Son of Arugal" } }
+  runTimers()
+  eq(count(), n + 3, "one event from the retry")
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
 end)
 
 test("death: killer is the newest death recap hit", function()
@@ -299,18 +339,18 @@ test("death: killer is the newest death recap hit", function()
   recap = { { sourceName = "Kobold Vermin", amount = 3, timestamp = 5 },
             { sourceName = "Hogger", amount = 40, timestamp = 7 },
             { sourceName = "Kobold Vermin", amount = 2, timestamp = 6 } }
-  fire("PLAYER_DEAD")
+  die()
   assert(has('"killer":"Hogger"'), last())
 
   recap = { { environmentalType = "Falling", amount = 999 } }
-  fire("PLAYER_DEAD")
+  die()
   assert(has('"killer":null') and has('"environment":"FALLING"'), last())
 
   -- Recap empty at PLAYER_DEAD, filled shortly after: one 0.5 s retry.
   recap = {}
   local n = count()
   timers = {}
-  fire("PLAYER_DEAD")
+  die()
   eq(count(), n, "waits for the recap")
   eq(#timers, 1, "one retry scheduled"); eq(timers[1][1], 0.5, "retry delay")
   recap = { { sourceName = "Defias Pillager" } }
@@ -320,7 +360,7 @@ test("death: killer is the newest death recap hit", function()
 
   -- Still empty after the retry: emit anyway with killer null.
   recap = {}
-  fire("PLAYER_DEAD"); runTimers()
+  die(); runTimers()
   assert(has('"killer":null'), last())
   DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
 end)
@@ -633,16 +673,16 @@ end)
 
 test("announce: deaths and boss kills yes, quests off unless asked", function()
   announceReset()
-  fire("PLAYER_DEAD")
+  die()
   eq(lastChat()[1], "Died in Elwynn Forest.", "death")
   runTimers()
   local recap = { { sourceName = "Hogger" } }
   DeathRecap_HasEvents = function() return true end
   DeathRecap_GetEvents = function() return recap end
-  fire("PLAYER_DEAD"); runTimers()
+  die(); runTimers()
   eq(lastChat()[1], "Killed by Hogger in Elwynn Forest.", "killer named")
   recap = { { environmentalType = "Falling" } }
-  fire("PLAYER_DEAD"); runTimers()
+  die(); runTimers()
   eq(lastChat()[1], "Forgot I couldn't fly. Died in Elwynn Forest.", "environmental")
   DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
   fire("QUEST_TURNED_IN", 33, 450, 75)

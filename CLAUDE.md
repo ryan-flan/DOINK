@@ -551,8 +551,12 @@ fixture included; that's a stand-in for the real name, by decision.)
     spellOffset, skillLine, skillModifier, specializationIndex,
     specializationOffset, name again). The notifier uses the 4th value.
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
-  a reload in between produced exactly three events (2026-10-02). No guard
-  needed. Deaths post via realtime within ~1 s.
+  a reload in between produced exactly three events (2026-10-02). Deaths
+  post via realtime within ~1 s.
+- [x] **`PLAYER_DEAD` fires for a hunter's feign death** (inferred from a
+  user's saved file, 2026-10-03: two death events one second apart, same
+  killer, hunter). The notifier ignores it while `UnitIsFeignDeath` is
+  true and drops a second `PLAYER_DEAD` within 10 s of the last.
 - [x] **Death recap exists** (2026-10-02): `DeathRecap_HasEvents()`,
   `DeathRecap_GetEvents()` (no id needed for the latest death) and
   `GetDeathRecapLink` are functions; `GetDeathRecap` is not. After a real

@@ -8,6 +8,13 @@ local ADDON, ns = ...
 -- (falling, drowning, lava...) carry environmentalType instead of a source.
 
 local RECAP_RETRY = 0.5 -- seconds; one retry if the recap is still empty at PLAYER_DEAD
+-- A hunter's saved file (2026-10-03) held two deaths one second apart with
+-- the same killer: PLAYER_DEAD fires for feign death too on this client,
+-- and a feign followed by the real death announced twice. Feign death is
+-- never a death, and nobody dies twice within ten seconds.
+local DEATH_COOLDOWN = 10
+local lastDeath = -math.huge
+local retryPending = false
 
 local function Location()
   local subzone = GetSubZoneText()
@@ -34,6 +41,8 @@ local function Cause()
 end
 
 local function EmitDeath(killer, environment)
+  retryPending = false
+  lastDeath = GetTime()
   local zone, subzone = Location()
   ns:Emit("death", { zone = zone, subzone = subzone, killer = killer or ns.Json.null,
                      environment = environment or ns.Json.null })
@@ -44,11 +53,20 @@ ns.Notifiers.Death = {
   events = { "PLAYER_DEAD" },
 
   OnEvent = function(event)
+    if UnitIsFeignDeath and UnitIsFeignDeath("player") then
+      ns:Debug("death: feign death, ignored")
+      return
+    end
+    if retryPending or GetTime() - lastDeath < DEATH_COOLDOWN then
+      ns:Debug("death: duplicate PLAYER_DEAD within %ds, ignored", DEATH_COOLDOWN)
+      return
+    end
     local killer, environment = Cause()
     if killer or environment or not (DeathRecap_HasEvents and C_Timer) then
       return EmitDeath(killer, environment)
     end
     -- The recap may land a moment after PLAYER_DEAD; give it one chance.
+    retryPending = true
     C_Timer.After(RECAP_RETRY, function() EmitDeath(Cause()) end)
   end,
 
