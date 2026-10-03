@@ -138,12 +138,14 @@ local function Realtime(layout)
   local pixel = ns.Transports.Pixel
   local function rt() return DOINKDB.realtime end
 
-  Checkbox { variable = "realtime_enabled", name = "Show the strip for the companion", default = false,
+  Checkbox { variable = "realtime_enabled", name = "Enable realtime posting (experimental)", default = false,
     get = function() return rt().enabled end,
     set = function(on) pixel.SetEnabled(on) end,
-    tooltip = "After an event, a thin black-and-white strip appears in a screen corner for about "
-      .. "two seconds so the companion can post it without a reload. Needs \"Realtime "
-      .. "posting\" ticked in the companion too." }
+    tooltip = "Posts events to Discord within a second instead of at the next /reload or logout. "
+      .. "How it works: after an event the addon shows a thin black-and-white strip in a screen "
+      .. "corner for about two seconds, and the DOINK companion reads it off the game window. "
+      .. "Needs the companion running with \"Realtime posting\" ticked in its settings too. "
+      .. "Same as /doink realtime on." }
   Dropdown { variable = "realtime_position", varType = VarType.String, name = "Corner", default = "topleft",
     choices = { "topleft", "topright", "bottomleft", "bottomright" },
     labels = { topleft = "Top left", topright = "Top right", bottomleft = "Bottom left", bottomright = "Bottom right" },
