@@ -553,10 +553,14 @@ fixture included; that's a stand-in for the real name, by decision.)
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
   a reload in between produced exactly three events (2026-10-02). Deaths
   post via realtime within ~1 s.
-- [x] **`PLAYER_DEAD` fires for a hunter's feign death** (inferred from a
-  user's saved file, 2026-10-03: two death events one second apart, same
-  killer, hunter). The notifier ignores it while `UnitIsFeignDeath` is
-  true and drops a second `PLAYER_DEAD` within 10 s of the last.
+- [x] **`PLAYER_DEAD` can fire twice for one death** (a user's saved file,
+  2026-10-03: two death events one second apart, same killer, on a
+  hunter who says he did not feign death; the author's warrior has never
+  seen it). Cause unknown; the pet dying with its owner is a guess.
+  The notifier drops a second `PLAYER_DEAD` within 10 s of the last and
+  ignores it while `UnitIsFeignDeath` is true, whatever the cause.
+  - [ ] If it recurs on v0.11.6+, get `/doink debug` output from a death:
+    it prints every `PLAYER_DEAD` the addon sees, with the time.
 - [x] **Death recap exists** (2026-10-02): `DeathRecap_HasEvents()`,
   `DeathRecap_GetEvents()` (no id needed for the latest death) and
   `GetDeathRecapLink` are functions; `GetDeathRecap` is not. After a real
