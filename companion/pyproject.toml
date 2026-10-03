@@ -1,6 +1,6 @@
 [project]
 name = "doink-companion"
-version = "0.11.6"
+version = "0.11.7"
 description = "Posts DOINK addon events from WoW SavedVariables to a Discord webhook"
 requires-python = ">=3.12"
 license = "MIT"
