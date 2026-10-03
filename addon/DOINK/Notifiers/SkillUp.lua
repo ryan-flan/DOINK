@@ -4,15 +4,42 @@ local ADDON, ns = ...
 -- global, this notifier goes quiet instead of erroring at load.
 local PATTERN = SKILL_RANK_UP and ns.FormatToPattern(SKILL_RANK_UP)
 
--- Max rank from the skills panel. Skills under collapsed headers aren't
--- listed, so this can return nil.
-local function MaxRank(skillName)
+-- Max rank, best effort. Classic clients have the skills panel API
+-- (GetNumSkillLines/GetSkillLineInfo); the modern engine, which Forever
+-- runs on, removed it (first two bug reports, 2026-10-03: "attempt to call
+-- a nil value" at a milestone) and lists professions through
+-- GetProfessions/GetProfessionInfo instead. Weapon skills aren't in that
+-- list, and skills under collapsed headers aren't in the old one, so nil is
+-- a normal answer. Never lets an API difference take the notifier down.
+local function SkillPanelMax(skillName)
   for i = 1, GetNumSkillLines() do
     -- name, isHeader, isExpanded, rank, numTempPoints, modifier, maxRank, ...
     local name, isHeader, _, _, _, _, maxRank = GetSkillLineInfo(i)
     if not isHeader and name == skillName then
       return maxRank
     end
+  end
+end
+
+local function ProfessionMax(skillName)
+  for _, index in ipairs({ GetProfessions() }) do
+    -- name, icon, skillLevel, maxSkillLevel, ...
+    local name, _, _, maxRank = GetProfessionInfo(index)
+    if name == skillName then
+      return maxRank
+    end
+  end
+end
+
+local function MaxRank(skillName)
+  local ok, maxRank
+  if GetNumSkillLines and GetSkillLineInfo then
+    ok, maxRank = pcall(SkillPanelMax, skillName)
+  elseif GetProfessions and GetProfessionInfo then
+    ok, maxRank = pcall(ProfessionMax, skillName)
+  end
+  if ok and type(maxRank) == "number" and maxRank > 0 then
+    return maxRank
   end
 end
 

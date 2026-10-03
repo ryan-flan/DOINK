@@ -349,6 +349,29 @@ test("skill_up: milestones only by default", function()
   assert(has('"skill":"Blacksmithing"') and has('"rank":150') and has('"max_rank":225'), last())
 end)
 
+test("skill_up: Forever has no skills panel API (bug reports 2026-10-03)", function()
+  local numLines, lineInfo = GetNumSkillLines, GetSkillLineInfo
+  GetNumSkillLines, GetSkillLineInfo = nil, nil
+  local n = count()
+  fire("CHAT_MSG_SKILL", "Your skill in Bows has increased to 225.")
+  eq(count(), n + 1, "emitted without the old API")
+  assert(has('"skill":"Bows"') and has('"max_rank":null'), last())
+
+  -- The modern engine lists professions instead.
+  GetProfessions = function() return 3, 7 end
+  GetProfessionInfo = function(i)
+    if i == 3 then return "Blacksmithing", 1, 150, 300 end
+    return "Mining", 2, 75, 150
+  end
+  fire("CHAT_MSG_SKILL", "Your skill in Mining has increased to 75.")
+  assert(has('"skill":"Mining"') and has('"max_rank":150'), last())
+  GetProfessionInfo = function() error("boom") end
+  fire("CHAT_MSG_SKILL", "Your skill in Mining has increased to 150.")
+  assert(has('"rank":150') and has('"max_rank":null'), "an API error never loses the event")
+  GetProfessions, GetProfessionInfo = nil, nil
+  GetNumSkillLines, GetSkillLineInfo = numLines, lineInfo
+end)
+
 test("level_up: envelope level isn't stale when UnitLevel lags", function()
   -- Beta: during PLAYER_LEVEL_UP, UnitLevel still returns the old level.
   level = 9

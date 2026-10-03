@@ -538,6 +538,15 @@ fixture included; that's a stand-in for the real name, by decision.)
   **old** level. Core tracks `ns.knownLevel` from the event for the envelope.
 - [x] `SKILL_RANK_UP` = `Your skill in %s has increased to %d.` (keeps its
   period, unlike the loot strings).
+- [x] **`GetNumSkillLines` does not exist in Forever** (first two user bug
+  reports, 2026-10-03: `SkillUp.lua:10: attempt to call a nil value` on a
+  milestone skill-up). The modern engine dropped the skills panel API.
+  The notifier now tries `GetProfessions`/`GetProfessionInfo` instead and
+  settles for `max_rank = null` otherwise; weapon skills ("Bows") have no
+  max-rank source at all.
+  - [ ] Verify `GetProfessions`/`GetProfessionInfo` exist and return
+    `name, icon, skillLevel, maxSkillLevel` in Forever:
+    `/run print(type(GetNumSkillLines), type(GetProfessions), type(GetProfessionInfo)) local p = GetProfessions and {GetProfessions()} if p and p[1] then print(GetProfessionInfo(p[1])) end`
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
   a reload in between produced exactly three events (2026-10-02). No guard
   needed. Deaths post via realtime within ~1 s.
