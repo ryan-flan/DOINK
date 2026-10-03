@@ -49,6 +49,10 @@ ns.Notifiers.SkillUp = {
 
   OnEvent = function(event, msg)
     if not PATTERN then return end
+    if type(msg) ~= "string" or ns.IsSecret(msg) then
+      ns:Debug("skill_up: message is secret during the encounter, skipped")
+      return
+    end
     local skill, rank = msg:match(PATTERN)
     rank = tonumber(rank)
     if not rank then return end

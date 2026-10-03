@@ -280,6 +280,25 @@ test("loot: uncached item waits for GET_ITEM_INFO_RECEIVED", function()
   eq(count(), n + 1, "no double emit")
 end)
 
+test("secret values (encounter restrictions) never take dispatch down", function()
+  -- The real client hands addons unreadable "secret" arguments during an
+  -- encounter; tostring/concat on them throws. Stand-in: a marked table.
+  local secret = setmetatable({}, { __tostring = function() error("secret") end })
+  issecretvalue = function(v) return v == secret end
+  local n = count()
+  DOINKDB.debug = true
+  local before = #chat
+  fire("CHAT_MSG_LOOT", secret, secret, "", "", secret)
+  fire("CHAT_MSG_SKILL", secret)
+  DOINKDB.debug = false
+  fire("CHAT_MSG_LOOT", secret)
+  eq(count(), n, "nothing emitted from a secret message")
+  issecretvalue = nil
+  -- And a plain loot line still works right after.
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2140, "Carving Knife", 3))
+  eq(count(), n + 1, "normal loot after the encounter")
+end)
+
 test("no notifier registers events protected in Forever", function()
   -- Registering these pops "DOINK has been blocked from an action only
   -- available to the Blizzard UI" at load. See CLAUDE.md beta facts.

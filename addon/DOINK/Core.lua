@@ -30,10 +30,25 @@ function ns:Debug(msg, ...)
   end
 end
 
+-- Forever has Midnight's "secret values": during a boss encounter the
+-- client hands addons some event arguments (chat text, unit names) it
+-- won't let them read. tostring() of one yields another secret, and
+-- table.concat throws "invalid value (secret)" (user report, 2026-10-03,
+-- entering an encounter). issecretvalue() tells them apart.
+function ns.IsSecret(value)
+  return issecretvalue ~= nil and issecretvalue(value) or false
+end
+
 local function ArgsToString(...)
   local parts = {}
   for i = 1, select("#", ...) do
-    parts[i] = tostring((select(i, ...)))
+    local value = (select(i, ...))
+    if ns.IsSecret(value) then
+      parts[i] = "<secret>"
+    else
+      local ok, text = pcall(tostring, value)
+      parts[i] = ok and text or "?"
+    end
   end
   return table.concat(parts, ", ")
 end
@@ -211,8 +226,12 @@ local function Dispatch(event, ...)
   local list = handlers[event]
   if not list then return end
 
-  if not QUIET_EVENTS[event] then
-    ns:Debug("%s: %s", event, ArgsToString(...))
+  -- Only format the arguments when someone will see them: this used to run
+  -- for every event with debug off, and a secret argument took the whole
+  -- dispatch down before any notifier ran.
+  if DOINKDB.debug and not QUIET_EVENTS[event] then
+    local ok, text = pcall(ArgsToString, ...)
+    ns:Debug("%s: %s", event, ok and text or "(unprintable arguments)")
   end
   local n, args = select("#", ...), { ... }
   for _, notifier in ipairs(list) do

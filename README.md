@@ -138,6 +138,9 @@ the settings page or by command; the two are the same settings.
   (the same data as the "Death Recap" button). Addons cannot read the
   combat log in Forever, so if the recap is empty the line omits the killer.
 - Announcements can't be sent to Blizzard Communities yet.
+- Loot and skill-ups that happen during a boss encounter aren't detected:
+  Forever hides chat text from addons while an encounter is in progress.
+  Boss kills themselves and anything after the fight work normally.
 - Boss kills are detected through `ENCOUNTER_END`, verified in Forever
   dungeons during the beta. Raids haven't been tested yet.
 

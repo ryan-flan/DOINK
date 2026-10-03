@@ -553,6 +553,19 @@ fixture included; that's a stand-in for the real name, by decision.)
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
   a reload in between produced exactly three events (2026-10-02). Deaths
   post via realtime within ~1 s.
+- [x] **Secret values exist in Forever** (user report, 2026-10-03, on
+  entering a dungeon encounter): `Core.lua:38: invalid value (secret) at
+  index 1 in table for 'concat'`, an 18-argument chat event whose text,
+  sender and target were `<secret string>`. This is Midnight's encounter
+  restriction: during a boss fight the client hands addons arguments they
+  cannot read; `tostring()` of one is itself secret and `table.concat`
+  throws. `issecretvalue(v)` identifies them (`ns.IsSecret`). The debug
+  formatter ran for every event even with debug off and took dispatch
+  down before any notifier ran; now it only runs with debug on and is
+  pcall-guarded, and the chat-reading notifiers (loot, skill-up) skip
+  secret messages. Consequence: **loot and skill-ups during a boss
+  encounter aren't detected**; `ENCOUNTER_END` itself is fine (boss kills
+  from that dungeon run arrived).
 - [x] **`PLAYER_DEAD` can fire twice for one death** (a user's saved file,
   2026-10-03: two death events one second apart, same killer, on a
   hunter who says he did not feign death; the author's warrior has never

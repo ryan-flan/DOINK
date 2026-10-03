@@ -68,7 +68,13 @@ ns.Notifiers.Loot = {
       return
     end
 
-    local link, qty = ParseMessage((...))
+    local msg = ...
+    if type(msg) ~= "string" or ns.IsSecret(msg) then
+      -- During a boss encounter the client hides chat text from addons.
+      ns:Debug("loot: message is secret during the encounter, skipped")
+      return
+    end
+    local link, qty = ParseMessage(msg)
     if not link then return end -- someone else's loot, or not loot at all
     local itemID = tonumber(link:match("|Hitem:(%d+)"))
     if itemID then
