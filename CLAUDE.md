@@ -544,9 +544,12 @@ fixture included; that's a stand-in for the real name, by decision.)
   The notifier now tries `GetProfessions`/`GetProfessionInfo` instead and
   settles for `max_rank = null` otherwise; weapon skills ("Bows") have no
   max-rank source at all.
-  - [ ] Verify `GetProfessions`/`GetProfessionInfo` exist and return
-    `name, icon, skillLevel, maxSkillLevel` in Forever:
-    `/run print(type(GetNumSkillLines), type(GetProfessions), type(GetProfessionInfo)) local p = GetProfessions and {GetProfessions()} if p and p[1] then print(GetProfessionInfo(p[1])) end`
+  - [x] Verified 2026-10-03: `GetNumSkillLines` is `nil`; `GetProfessions`
+    and `GetProfessionInfo` are functions, and `GetProfessionInfo(index)`
+    returns `"Mining", 136248, 12, 75, 2, 21, 186, 0, -1, 0, "Mining"`
+    (name, icon fileID, skillLevel, maxSkillLevel, numAbilities,
+    spellOffset, skillLine, skillModifier, specializationIndex,
+    specializationOffset, name again). The notifier uses the 4th value.
 - [x] `PLAYER_DEAD` does **not** re-fire on `/reload`: three real deaths with
   a reload in between produced exactly three events (2026-10-02). No guard
   needed. Deaths post via realtime within ~1 s.
