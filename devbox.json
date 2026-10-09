@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.18.4/.schema/devbox.schema.json",
+  "packages": [
+    "python312@latest",
+    "luajit@latest",
+    "gh@latest"
+  ],
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "shell": {
+    "init_hook": [],
+    "scripts": {
+      "test": [
+        "devbox run test:addon",
+        "devbox run test:companion"
+      ],
+      "test:addon": [
+        "cd addon && luajit tests/test_addon.lua"
+      ],
+      "test:companion": [
+        "cd companion && python3 -m unittest discover -s tests"
+      ],
+      "fixture": [
+        "cd addon && DOINK_WRITE_FIXTURE=1 luajit tests/test_addon.lua"
+      ],
+      "companion": [
+        "cd companion && python3 main.py \"$@\""
+      ],
+      "dry-run": [
+        "cd companion && python3 main.py --dry-run \"$@\""
+      ]
+    }
+  }
+}
