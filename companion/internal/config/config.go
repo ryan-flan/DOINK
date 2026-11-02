@@ -43,6 +43,7 @@ type Config struct {
 	Wowhead             bool // look up looted items on Wowhead for icon + stats
 	UpdateCheck         bool // daily GET to GitHub for the latest release version
 	UpdateNotify        bool // also pop a notification (the tray tooltip always shows it)
+	Realtime            bool // read the screenshots the addon takes for instant posts
 }
 
 // ErrNoWoW: no SavedVariables file to watch.
@@ -92,9 +93,6 @@ func Load(path string, dryRun bool) (*Config, error) {
 	}
 	if len(raw) == 0 {
 		logger().Info(fmt.Sprintf("no settings in %s; using defaults", filepath.Base(path)))
-	}
-	if _, ok := raw["realtime"]; ok {
-		logger().Info("realtime is not supported by this version; ignored")
 	}
 	if _, ok := raw["notifiers"]; ok {
 		logger().Warn(fmt.Sprintf("[notifiers] is ignored now. Toggle notifiers in game: /doink enable|disable <type> (in %s)", filepath.Base(path)))
@@ -161,6 +159,7 @@ func Load(path string, dryRun bool) (*Config, error) {
 	cfg.Wowhead = boolean("wowhead", true)
 	cfg.UpdateCheck = boolean("update_check", true)
 	cfg.UpdateNotify = boolean("update_notify", false)
+	cfg.Realtime = boolean("realtime", true)
 	if err != nil {
 		return nil, err
 	}

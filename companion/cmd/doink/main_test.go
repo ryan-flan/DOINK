@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"image/png"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ryan-flan/DOINK/companion/internal/shot"
 )
 
 func TestLineHandler(t *testing.T) {
@@ -50,5 +53,39 @@ func TestOptionalString(t *testing.T) {
 	o.Set("https://x")
 	if o.value != "https://x" {
 		t.Errorf("%+v", o)
+	}
+}
+
+func TestDecodeScreenshots(t *testing.T) {
+	dir := t.TempDir()
+	payload := `{"char":"Flano","class":"MAGE","data":{"level":5},"realm":"R","seq":5,"surname":"Wren","ts":1790870764,"type":"level_up"}`
+	rows, err := shot.Rows([]byte(payload), false, 959)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, shot.Render(rows, 4)); err != nil {
+		t.Fatal(err)
+	}
+	withCode := filepath.Join(dir, "WoWScrnShot_110226_230648.png")
+	os.WriteFile(withCode, buf.Bytes(), 0o644)
+	buf.Reset()
+	png.Encode(&buf, shot.Render(nil, 4))
+	plain := filepath.Join(dir, "plain.png")
+	os.WriteFile(plain, buf.Bytes(), 0o644)
+
+	var out bytes.Buffer
+	if code := decodeScreenshots([]string{withCode, plain}, &out); code != 0 {
+		t.Errorf("exit %d", code)
+	}
+	text := out.String()
+	if !strings.Contains(text, "event #5 level_up Flano Wren-R") || !strings.Contains(text, "plain.png: no DOINK code found") {
+		t.Errorf("output:\n%s", text)
+	}
+	if _, err := os.Stat(withCode); err != nil {
+		t.Error("decode deleted the file")
+	}
+	if code := decodeScreenshots([]string{filepath.Join(dir, "missing.png")}, &out); code != 1 {
+		t.Errorf("missing file: exit %d", code)
 	}
 }

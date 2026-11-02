@@ -69,7 +69,7 @@ func TestDefaults(t *testing.T) {
 	want := &Config{
 		SavedVariablesPaths: []string{sv},
 		StatePath:           filepath.Join(filepath.Dir(path), "state.json"),
-		PollInterval:        2.0, MaxBacklog: 10, Wowhead: true, UpdateCheck: true,
+		PollInterval:        2.0, MaxBacklog: 10, Wowhead: true, UpdateCheck: true, Realtime: true,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("got %+v", cfg)
@@ -175,15 +175,31 @@ func TestParseAndTypeErrors(t *testing.T) {
 
 func TestIgnoredKeysAreLogged(t *testing.T) {
 	sv := filepath.Join(t.TempDir(), "DOINK.lua")
-	path := setup(t, "savedvariables_path = '"+sv+"'\nrealtime = true\n[notifiers]\nloot = false\n")
+	path := setup(t, "savedvariables_path = '"+sv+"'\n[notifiers]\nloot = false\n")
 	logs := captureLogs(t)
 	if _, err := Load(path, false); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(logs.recs, "\n")
-	if !strings.Contains(joined, "INFO realtime is not supported by this version; ignored") ||
-		!strings.Contains(joined, "WARN [notifiers] is ignored now") {
+	if !strings.Contains(joined, "WARN [notifiers] is ignored now") {
 		t.Errorf("logs %q", logs.recs)
+	}
+}
+
+func TestRealtime(t *testing.T) {
+	sv := filepath.Join(t.TempDir(), "DOINK.lua")
+	base := "savedvariables_path = '" + sv + "'\n"
+	for body, want := range map[string]bool{base: true, base + "realtime = false\n": false, base + "realtime = true\n": true} {
+		cfg, err := Load(setup(t, body), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Realtime != want {
+			t.Errorf("%q: realtime %v", body, cfg.Realtime)
+		}
+	}
+	if _, err := Load(setup(t, base+"realtime = 'yes'\n"), false); err == nil {
+		t.Error("a string was accepted")
 	}
 }
 

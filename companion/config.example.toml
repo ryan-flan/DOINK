@@ -26,7 +26,11 @@
 # queued events (the queue holds up to 500). 0 = post nothing old.
 # max_backlog = 10
 
-# realtime: ignored by this version (the realtime reader is paused).
+# Realtime: read the screenshots the addon takes for instant posts (in game:
+# /doink realtime on). Only screenshots containing a DOINK code are read
+# and deleted; your own are never touched. false = only post what the
+# SavedVariables file shows after /reload or logout.
+# realtime = true
 
 # Loot embeds fetch the item's icon and tooltip from Wowhead (one small
 # request per item per session; only the item id is sent). false = plain

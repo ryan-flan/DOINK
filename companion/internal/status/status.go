@@ -85,6 +85,11 @@ func (s *Status) Failed(msg string) {
 	}
 }
 
+// Realtime reports a /doink realtime test that arrived by screenshot.
+func (s *Status) Realtime(who string) {
+	s.OnNotice("Realtime works for " + who)
+}
+
 // OK clears any standing problem: everything pending was handled.
 func (s *Status) OK() {
 	s.mu.Lock()

@@ -190,13 +190,18 @@ func Process(d Deps, path string) bool {
 	return ok
 }
 
-// RunOnce processes every file once; an error if any failed.
+// RunOnce processes every file once, then any realtime screenshots; an
+// error if any file failed.
 func RunOnce(d Deps) error {
 	failed := 0
 	for _, path := range d.Config.SavedVariablesPaths {
 		if !Process(d, path) {
 			failed++
 		}
+	}
+	if d.Config.Realtime {
+		dirs, byDir := ScreenshotDirs(d.Config.SavedVariablesPaths)
+		NewShots().Scan(d, dirs, byDir)
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d of %d files had events that couldn't be posted", failed, len(d.Config.SavedVariablesPaths))
@@ -240,6 +245,13 @@ func (d Deps) watch() []*watcher.Watcher {
 // is polled too and a settled change reloads the settings in place.
 func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.Config, error)) error {
 	watchers := d.watch()
+	shots := NewShots()
+	shotDirs, svByDir := ScreenshotDirs(d.Config.SavedVariablesPaths)
+	if d.Config.Realtime {
+		for _, dir := range shotDirs {
+			d.Log.Info("realtime: watching " + dir)
+		}
+	}
 	if d.Started != nil {
 		d.Started()
 	}
@@ -272,6 +284,9 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 				d.Status.OK()
 			}
 		}
+		if d.Config.Realtime {
+			shots.Scan(d, shotDirs, svByDir)
+		}
 
 		if reload != nil {
 			sig := statSig(configPath)
@@ -293,6 +308,7 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 				if !slices.Equal(oldPaths, cfg.SavedVariablesPaths) {
 					watchers = d.watch()
 					dirty = map[string]bool{}
+					shotDirs, svByDir = ScreenshotDirs(cfg.SavedVariablesPaths)
 				}
 			}
 		}

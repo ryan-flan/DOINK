@@ -4,7 +4,8 @@
 // On Windows it runs as a tray app by default; elsewhere, and with --once,
 // --console, --dry-run, --test-webhook or `doink test <type>`, it is a
 // console program. `doink test <type>... [url]` posts the same fake events
-// as the in-game /doink test, without the game. During
+// as the in-game /doink test, without the game. `doink decode <image>...`
+// reads the realtime code in screenshots and changes nothing. During
 // development pass --config: `go run` builds into a temporary folder, so
 // the default (config.toml next to the executable) isn't the repo.
 package main
@@ -59,6 +60,7 @@ type options struct {
 	testWebhook optionalString
 	testEvents  bool     // doink test <type>... [url]
 	testArgs    []string // its arguments
+	decode      []string // doink decode <image>...
 	verbose     bool
 }
 
@@ -101,27 +103,41 @@ func run() int {
 		positional = append(positional, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
-	if o.testWebhook.set && o.testWebhook.value == "" && len(positional) > 0 && positional[0] != "test" {
+	command := func() string {
+		if len(positional) == 0 {
+			return ""
+		}
+		return positional[0]
+	}
+	if o.testWebhook.set && o.testWebhook.value == "" && command() != "" && command() != "test" && command() != "decode" {
 		o.testWebhook.value, positional = positional[0], positional[1:]
 	}
-	if len(positional) > 0 {
-		if positional[0] != "test" {
-			fmt.Fprintf(os.Stderr, "unknown command %q (did you mean: doink test <type>?)\n", positional[0])
+	switch command() {
+	case "":
+	case "test":
+		o.testEvents, o.testArgs = true, positional[1:]
+	case "decode":
+		if len(positional) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: doink decode <screenshot>...")
 			return 2
 		}
-		o.testEvents, o.testArgs = true, positional[1:]
+		o.decode = positional[1:]
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q (did you mean: doink test <type>?)\n", positional[0])
+		return 2
 	}
 	if *showVersion {
 		fmt.Println("DOINK companion v" + version)
 		return 0
 	}
 
-	consoleOnly := o.once || o.console || o.dryRun || o.testWebhook.set || o.testEvents
+	oneShot := o.testWebhook.set || o.testEvents || o.decode != nil
+	consoleOnly := o.once || o.console || o.dryRun || oneShot
 	if o.tray && runtime.GOOS != "windows" {
 		fmt.Fprintln(os.Stderr, "tray mode needs Windows")
 		return 1
 	}
-	if runtime.GOOS == "windows" && (o.tray && !o.once && !o.testWebhook.set && !o.testEvents || !o.tray && !consoleOnly) {
+	if runtime.GOOS == "windows" && (o.tray && !o.once && !oneShot || !o.tray && !consoleOnly) {
 		return runTray(o)
 	}
 	return runConsole(o)
@@ -129,6 +145,9 @@ func run() int {
 
 func runConsole(o options) int {
 	attachConsole()
+	if o.decode != nil {
+		return decodeScreenshots(o.decode, os.Stdout)
+	}
 	level := slog.LevelInfo
 	if o.verbose {
 		level = slog.LevelDebug
