@@ -460,15 +460,18 @@ so the two implementations couldn't drift apart. Regenerate with
 
 ## Dev setup (reference)
 
-- Repo lives at `C:\dev\DOINK` (WSL: `/mnt/c/dev/DOINK`).
-- Addon folder is junctioned:
-  `mklink /J "<WoW>\<flavor>\Interface\AddOns\DOINK" "C:\dev\DOINK\addon\DOINK"`
+- Personal machine details (OS, paths, who tests what) live in
+  `CLAUDE.local.md`, which is gitignored. Keep this file generic.
+- Toolchain via devbox (`devbox.json`: Go, LuaJIT, gh): `devbox shell`, or
+  `devbox run test` / `test:addon` / `test:companion` / `dry-run`. Don't
+  assume Go is on the host PATH.
+- Addon in game: put `addon/DOINK` at
+  `<WoW>/<flavor>/Interface/AddOns/DOINK`, as a copy or a link (Windows:
+  `mklink /J`; Linux/Wine: `ln -s`, untested under Wine).
 - In-game helpers: BugSack + BugGrabber (errors), DevTool (`/dev`), built-in
   `/etrace`, `/dump`, `/fstack`, `/console scriptErrors 1`.
 - SavedVariables path:
   `<WoW>\<flavor>\WTF\Account\<ACCOUNT>\SavedVariables\DOINK.lua`
-- Run all tooling (`git`, `gh`, `python3`) in WSL; none of it is on the
-  Windows PATH. From PowerShell: `wsl -e sh -c "cd /mnt/c/dev/DOINK && ..."`.
 - Remote: https://github.com/ryan-flan/DOINK (public), default branch `main`.
 - CurseForge project ID: 1721438 (repo variable `CURSEFORGE_PROJECT_ID`).
   Wago Addons project id: repo variable `WAGO_PROJECT_ID` (8-character id
@@ -509,7 +512,7 @@ so the two implementations couldn't drift apart. Regenerate with
      AI-use sections at the end (`docs/store-description.md` was folded into
      it). Logo: `docs/logo-400.png`.
      Secrets go in through the GitHub web UI, never via chat; `gh secret
-     set` through WSL once stored an empty value.
+     set` once stored an empty value.
 
 Semver: breaking data-contract changes bump the minor version while < 1.0.
 
@@ -540,10 +543,49 @@ Semver: breaking data-contract changes bump the minor version while < 1.0.
 (The test character is called "Flano Wren" throughout this repo, tests and
 fixture included; that's a stand-in for the real name, by decision.)
 
-- [x] Flavor folder name: `_classic_beta_` (`.flavor.info`: `wow_classic_beta`).
-  Install: `C:\Program Files (x86)\World of Warcraft\`. Expect a different
-  folder at launch.
-- [x] TOC `## Interface:` version: `16001` (client `1.60.1 70124`, Sep 29 2026).
+- [x] Flavor folder name: `_forever_` for the live client (`.flavor.info`:
+  `wowf`; seen in a live install 2026-11-02). The beta was
+  `_classic_beta_` (`wow_classic_beta`). Windows default install:
+  `C:\Program Files (x86)\World of Warcraft\`.
+- [x] TOC `## Interface:` version: `16001` (client `1.60.1 70124`, Sep 29
+  2026); still current 2026-11-01.
+- [x] **Blizzard's Discord guild-chat link** (Forever beta; from
+  Blizzard/Discord posts, the kami-labs guide and Blizzard forums, not
+  tried by us). Server-side relay of guild chat ↔ one Discord channel.
+  Player: Esc → Options → Social → "Enable Discord Functionality" (links
+  Battle.net ↔ Discord). Guild leader/officer who is also a Discord admin:
+  J → Guild Settings → Guild Control → Discord Settings → server, channel,
+  Link (needs Manage Channels, View Channel, Send Messages). Display name
+  options: Default / Last Online Character Name / Discord Global Name.
+  Officers route Discord into `/guild` or a separate `/discord` chat.
+  Unlinked members' lines don't reach Discord ("… has not yet linked
+  their Discord account"). Sept-2026 bug: Horde/PvP guilds' Link button
+  did nothing. Because `Announce.lua` uses `SendChatMessage(…, "GUILD")`,
+  DOINK's lines should show in the linked channel for linked players; the
+  README says so ("Already linking your guild to Discord?"). Unverified:
+  item-link rendering, any filtering, whether a Discord chat type is
+  exposed to addons.
+- [ ] **Launch-day checklist** (2026-11-04; nothing here is verified yet):
+  - [ ] DOINK guild lines appear in the linked Discord channel; how
+    `[Item]` links render there.
+  - [ ] `/dump ChatTypeInfo` and `/etrace` while someone types from
+    Discord: is there a `DISCORD`-ish chat type? If `SendChatMessage`
+    accepts it, add `discord` to `ns.Choices.announce.channel`.
+  - [ ] `NEW_MOUNT_ADDED` fires on Forever; `C_MountJournal` present?
+  - [ ] `GetItemInfo`'s 14th value (bindType) is present;
+    `GetItemInfoInstant` returns class/subclass ids (weapon 2, armor 4;
+    mounts 15/5).
+  - [ ] `LOOT_ITEM_PUSHED_SELF` exists ("You receive item:"), so a
+    vendor-bought mount item is seen.
+  - [ ] Real `DUEL_WINNER_*` text, and the Mak'gora global names: does
+    the `_G` scan in `Duel.lua` pick up a Mak'gora challenge or result
+    string (and nothing else)?
+  - [ ] `GetBattlefieldWinner` exists; `PVP_MATCH_COMPLETE` fires.
+  - [ ] Party units' `UnitName("party1")` returns the surname as the
+    second value, as `UnitName("player")` does (boss-kill group list).
+  - [ ] Python v0.11.7 self-update to the Go v0.12.0 lands `doink.exe`
+    and removes `_internal`.
+  - [ ] Retest the chat/combat log flush timing (see below).
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [x] **`COMBAT_LOG_EVENT_UNFILTERED` is protected for addons** (as in the
