@@ -605,6 +605,28 @@ fixture included; that's a stand-in for the real name, by decision.)
   - [ ] Python v0.11.7 self-update to the Go v0.12.0 lands `doink.exe`
     and removes `_internal`.
   - [ ] Retest the chat/combat log flush timing (see below).
+  - [ ] `C_Timer.After(2, function() Screenshot() end)` from `/run` in
+    Forever: `SCREENSHOT_SUCCEEDED`, no blocked popup (passes in
+    retail, see below).
+- [x] **Addons can take screenshots** (retail 11.x client, 2026-11-02;
+  **not yet Forever**, which shares the engine). `Screenshot()` called
+  from a `C_Timer.After` callback, i.e. with no hardware event, fires
+  `SCREENSHOT_SUCCEEDED` and writes
+  `_retail_/Screenshots/WoWScrnShot_MMDDYY_HHMMSS.jpg` (750–815 KB at
+  the default JPEG settings), out of combat and while attacking a
+  training dummy. `C_CVar.SetCVar("screenshotQuality", "3")` before the
+  call also works; the settings read `jpeg 3` beforehand (the default,
+  or left over from an earlier test that day), and all three files
+  were the same size, so the swap may be unnecessary. No blocked-action
+  popup, and no "Screen captured" line in chat. The game shows its
+  standard "Screen captured" message in the centre of the screen (fine,
+  decided); no visible stutter. The screenshot includes addon frames
+  exactly: a 64×64 `UIParent` child (strata `TOOLTIP`,
+  `SetIgnoreParentScale(true)`, `SetScale(768/physicalHeight)`,
+  `TOPLEFT`) came out as magenta pixels (0,0)–(63,63) with a sharp edge
+  in a 2554×1404 JPEG. Unchecked: during a dungeon boss encounter. This is the basis for the planned `Screenshot()`
+  channel (spec "Later"). Tip: run `/run` lines one at a time; pasting
+  several at once ran none of them, silently.
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [x] **`COMBAT_LOG_EVENT_UNFILTERED` is protected for addons** (as in the
