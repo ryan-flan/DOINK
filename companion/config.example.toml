@@ -1,20 +1,22 @@
-# Optional. The settings window (left-click the tray icon) writes config.toml
-# for you; this file documents every option. To edit config.toml by hand,
-# quit DOINK first. With no config.toml at all, DOINK finds your WoW install
-# by itself and uses the webhook set in game (/doink webhook <url>).
+# Optional. With no config.toml at all, DOINK finds your WoW install by
+# itself and uses the webhook set in game (/doink webhook <url>). Copy the
+# lines you need into config.toml next to doink.exe (Windows tray menu:
+# Edit settings) or next to doink (Linux). Changes apply while DOINK runs.
 
-# The WoW install folder, if it isn't in a standard location. Set by
-# "Choose WoW folder…". Single quotes = TOML literal string, no escaping.
+# The WoW install folder (the one holding _forever_), if DOINK doesn't find
+# it. Single quotes = TOML literal string, no escaping.
+# Windows:
 # wow_dir = 'D:\Games\World of Warcraft'
+# Linux (Lutris; Lutris, Steam/Proton and Wine prefixes are searched anyway):
+# wow_dir = '/home/you/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft'
 
 # Or one exact file; overrides wow_dir.
-# savedvariables_path = 'D:\Games\World of Warcraft\_classic_beta_\WTF\Account\12345678#1\SavedVariables\DOINK.lua'
+# savedvariables_path = 'D:\Games\World of Warcraft\_forever_\WTF\Account\12345678#1\SavedVariables\DOINK.lua'
 
-# Webhook for characters without one set in game. Set by the settings
-# window. Keep it secret.
+# Webhook for characters without one set in game. Keep it secret.
 # webhook_url = "https://discord.com/api/webhooks/..."
 
-# Print embeds to the console instead of posting (same as --dry-run).
+# Print embeds to the console or log instead of posting (same as --dry-run).
 # dry_run = false
 
 # Seconds between checks of the SavedVariables file.
@@ -24,10 +26,7 @@
 # queued events (the queue holds up to 500). 0 = post nothing old.
 # max_backlog = 10
 
-# Experimental: read the addon's strip off the WoW window and post while you
-# play. Set by the settings window's "Realtime posting" checkbox; also needs
-# /doink realtime on in game. See README, "How realtime works".
-# realtime = false
+# realtime: ignored by this version (the realtime reader is paused).
 
 # Loot embeds fetch the item's icon and tooltip from Wowhead (one small
 # request per item per session; only the item id is sent). false = plain
@@ -35,14 +34,13 @@
 # wowhead = true
 
 # Once a day, ask GitHub for the latest release version. If it is newer the
-# tray icon gets an orange dot and the menu offers "Update to vX.Y.Z", which
-# downloads the release from GitHub, verifies its checksum and restarts DOINK.
-# Nothing is downloaded until you choose that. false = never check (the
-# "Check for updates" button still works).
+# tray icon gets an orange dot and the menu offers to open the download
+# page. Nothing is ever downloaded by DOINK itself. false = never check
+# (the tray menu's "Check for updates" still works).
 # update_check = true
 
 # Also show a Windows notification when a newer version is found.
 # update_notify = false
 
-# Notifier on/off switches and filters live in the game now:
+# Notifier on/off switches and filters live in the game:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>

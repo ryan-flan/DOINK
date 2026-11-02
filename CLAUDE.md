@@ -19,7 +19,7 @@ Therefore DOINK is two parts:
 
 1. **Addon (Lua)** — detects events, announces them in chat (`Announce.lua`,
    needs nothing else) and appends them to a queue in SavedVariables.
-2. **Companion (Python, runs on the Windows gaming PC, optional)** — reads
+2. **Companion (Go, runs on the gaming PC: Windows, or Linux for Lutris/Proton; optional)** — reads
    the queue and POSTs to Discord.
 
 The addon is transport-agnostic. The companion decides how it learns about
@@ -34,7 +34,7 @@ DOINK/
 ├── CLAUDE.md
 ├── README.md                 # user-facing install + commands
 ├── .gitattributes            # * text=auto eol=lf
-├── .github/workflows/        # ci.yml: both test suites; release.yml: doink.exe on v* tags
+├── .github/workflows/        # ci.yml: both test suites; release.yml: doink.exe + Linux doink on v* tags
 ├── addon/tests/test_addon.lua  # offline harness: cd addon && luajit tests/test_addon.lua
 ├── addon/DOINK/              # junctioned into <WoW>/<flavor>/Interface/AddOns/DOINK
 │   ├── DOINK.toc
@@ -51,33 +51,33 @@ DOINK/
 │       ├── Quest.lua
 │       ├── BossKill.lua
 │       └── SkillUp.lua
-└── companion/
-    ├── pyproject.toml
-    ├── main.py
+└── companion/                # Go module github.com/ryan-flan/DOINK/companion
+    ├── go.mod                # go 1.23; deps: BurntSushi/toml, golang.org/x/sys
     ├── config.example.toml
-    ├── tests/                # python -m unittest discover -s tests
-    └── doink/
-        ├── runner.py         # the watch-and-post loop (process, run)
-        ├── app.py            # controller for the UI: settings, watcher restart
-        ├── ui.py             # settings window (tkinter, dark theme)
-        ├── tray.py           # Windows tray icon + single-instance lock (ctypes Win32)
-        ├── autostart.py      # "Start with Windows": HKCU\...\Run\DOINK
-        ├── status.py         # thread-safe state for the tooltip/notifications
-        ├── config.py         # loads config.toml (optional, every key optional)
-        ├── discover.py       # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
-        ├── pixel.py          # realtime: GDI capture of two bands, strip decoder, meter
-        ├── watcher.py        # polls SavedVariables file mtime
-        ├── parser.py         # extracts event JSON strings from the Lua file
-        ├── discord.py        # embed builders + webhook POST
-        └── state.py          # last-seen seq per character (state.json, gitignored)
+    ├── assets/               # doink.ico, doink-update.ico (embedded), make_icon.py
+    ├── winres/winres.json    # exe icon + version info (go-winres, CI only)
+    ├── cmd/doink/            # main: flags, console mode, tray mode (tray_windows.go)
+    └── internal/
+        ├── savedvars/        # parses DOINK.lua: events + webhooks (bytes, Lua strings)
+        ├── state/            # posted seqs per character (state.json, gitignored)
+        ├── discord/          # embed builders + webhook Pool (rate limits, 429s)
+        ├── wowhead/          # item icon + tooltip lines for loot embeds, cached
+        ├── config/           # loads config.toml (optional, every key optional)
+        ├── discover/         # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
+        ├── watcher/          # (mtime, size) polling with a settle poll
+        ├── status/           # thread-safe state for the tooltip/notifications
+        ├── runner/           # the watch-and-post loop (Process, Run, RunOnce)
+        ├── updates/          # GitHub release check (check only, no install)
+        ├── tray/             # Windows tray icon + menu + single instance (x/sys)
+        └── autostart/        # "Start with Windows": HKCU\...\Run\DOINK
 ```
 
 ## Data contract (both halves depend on this — do not change casually)
 
 The addon stores **each event as a JSON string** inside a Lua table. Parsing
-Lua table syntax from Python is painful; a Lua table of strings is trivial
-(regex the quoted strings, `json.loads` each). One small Lua encoder saves a
-whole Lua parser in Python.
+Lua table syntax from the companion is painful; a Lua table of strings is
+trivial (scan the quoted strings, JSON-decode each). One small Lua encoder
+saves a whole Lua parser in the companion.
 
 SavedVariables global: `DOINKDB`
 
@@ -215,10 +215,17 @@ argument, which once turned a tooltip into a setter.
 
 ## Pixel transport contract (realtime, experimental)
 
+**Paused on the companion side since the Go port (v0.12):** nothing reads
+the strip. The Python decoder described below (`companion/doink/pixel.py`,
+its tests and the realtime worker) is in git history up to v0.11.7
+(`git show v0.11.7:companion/doink/pixel.py`). The addon side is unchanged
+and still opt-in. The planned replacement is a `Screenshot()`-based
+channel (see the spec's "Later").
+
 `addon/DOINK/Transports/Pixel.lua` encodes; `companion/doink/pixel.py`
-decodes. `addon/tests/fixtures/pixel_levelup.txt` is the Lua encoder's output
-for a fixed event; the Lua test asserts it, the Python tests decode it, so the
-two implementations can't drift apart. Regenerate with
+decoded. `addon/tests/fixtures/pixel_levelup.txt` is the Lua encoder's output
+for a fixed event; the Lua test asserts it, and the Python tests decoded it,
+so the two implementations couldn't drift apart. Regenerate with
 `DOINK_WRITE_FIXTURE=1 luajit tests/test_addon.lua` when the layout changes.
 
 - **Strip**: `ROWS=3` rows × `N` blocks of `B`×`B` px (`B` default 3; `N =
@@ -306,119 +313,122 @@ two implementations can't drift apart. Regenerate with
 
 ## Companion conventions
 
-- Python 3.12+, run from **WSL** (`python3`; there is no Windows Python on the
-  dev machine). Run: `cd /mnt/c/dev/DOINK/companion && python3 main.py`.
-  Tests: `python3 -m unittest discover -s tests`. The PyInstaller .exe build
-  (M4) will need Windows Python.
-- Config paths may be written Windows-style (`C:\...`); `config.native_path`
-  maps them to `/mnt/c/...` under WSL, so one config works in both places.
-- Poll the SavedVariables file's mtime every ~2s. No OS file-watch hooks
-  (inotify across WSL `/mnt/c` is unreliable; stat polling is verified to see
-  Windows-side writes immediately).
-- On change: parse → events with `seq > state[char].last_seen` → POST in order →
-  persist state. Never re-post on restart.
-- Parsing: find the `events = { ... }` blocks, extract Lua string literals
-  (handle `\"` and `\\` escapes), `json.loads` each. Skip unparseable entries
-  with a warning rather than crashing.
-- Discord: one embed per event, colour by class (use the standard WoW class
-  colours; loot uses item-quality colour instead), Wowhead links for items and
-  quests (`https://www.wowhead.com/forever/item=<id>`, `/quest=<id>`;
-  verified), footer `Char-Realm`. Respect the
-  webhook rate limit (~30/min); batch if many events arrive from one reload.
-- Loot embeds are enriched from Wowhead (`wowhead.py`, since v0.10.0):
+- **Go** (module `github.com/ryan-flan/DOINK/companion`, `go 1.23`), via
+  devbox: `devbox shell`, or `devbox run test` / `test:companion`. Go is
+  not on the host PATH. Run: `cd companion && go run ./cmd/doink --dry-run
+  --once --config <path>/config.toml` (pass `--config` in dev: `go run`
+  builds into a temp dir, and the default is `config.toml` next to the
+  executable). Tests: `go test ./...`; offline (network = `httptest`,
+  files = `t.TempDir()`).
+- **Dependencies:** `github.com/BurntSushi/toml` and `golang.org/x/sys`,
+  nothing else at runtime. `x/sys` is pinned to the newest release that
+  still supports `go 1.23` (v0.35.0; later ones need Go 1.24+/1.26).
+  Build-time only: `go-winres` via `go run` in `release.yml`, not in
+  `go.mod`.
+- Packages: `internal/{savedvars,state,discord,wowhead,config,discover,
+  watcher,status,runner,updates,tray,autostart}` and `cmd/doink`. `tray`
+  and `autostart`'s registry code are `//go:build windows`; their tests run
+  only on the Windows CI job, which also runs the whole suite.
+- Packages that log without a `Deps` (`savedvars`, `config`, `watcher`,
+  `updates`, `tray`) have a package `Log *slog.Logger`; nil means
+  `slog.Default()`, which `cmd/doink` sets. Log messages are formatted
+  strings, not attrs (one readable line, multi-line dry-run JSON intact).
+- Config paths may be written Windows-style (`C:\...`): off Windows,
+  `config.NativePath` maps them to `/mnt/c/...` if that exists (WSL), else
+  into a Wine prefix's `drive_c` that has the path, else the `/mnt` form.
+- Poll the SavedVariables file's `(mtime, size)` every `poll_interval` (2 s).
+  No OS file-watch hooks. The watcher reports a change only once the
+  signature has held still for one poll, so it never reads a half-written
+  file. `config.toml` is polled the same way and reloaded live
+  (`runner.Run`'s `reload`); a bad edit logs a warning and keeps the old
+  settings; a changed path list rebuilds the watchers.
+- On change: parse → per character, events still pending (`seq >
+  last_seen` or in `missing`) → POST in order → persist state after each
+  message. Never re-post on restart.
+- Parsing works on **bytes**: find every `["events"] = {` block, read Lua
+  short strings (all Lua escapes incl. `\ddd`), `ToValidUTF8`, JSON-decode
+  each with `UseNumber` (seq must be an integer; data numbers become
+  float64). A bad entry is skipped with a warning; an unexpected token
+  aborts the rest of that block.
+- Discord: one embed per event, colour by class (loot uses item-quality
+  colour), Wowhead links for items and quests
+  (`https://www.wowhead.com/forever/item=<id>`, `/quest=<id>`; verified),
+  footer `Name Surname-Realm`, `[TEST] ` titles for test events. Up to 10
+  embeds per message (Discord's limit); one `Pool` entry per webhook URL,
+  each with at least 2 s between messages (longer if
+  `X-RateLimit-Remaining` is 0); 429 `retry_after` is respected (1 s if the
+  body isn't JSON), 5 attempts. Unknown types fall back to a JSON
+  description so nothing is lost.
+- Loot embeds are enriched from Wowhead (`internal/wowhead`, since v0.10.0):
   `https://nether.wowhead.com/forever/tooltip/item/<id>?locale=0` returns
   `{name, quality, icon, tooltip (HTML), spells}` (404 for unknown ids);
   the icon is `https://wow.zamimg.com/images/wow/icons/large/<icon>.jpg`.
   The tooltip HTML becomes description lines (name, sell price and stack
-  size dropped), the icon the thumbnail. One GET per item per session,
-  misses cached too, 5 s timeout, never raises; `wowhead = false` in
-  config.toml disables it. The README's network statement names Wowhead;
-  keep it accurate.
-- `--dry-run` prints embeds to stdout instead of POSTing.
-- Zero config is the goal: `config.toml` is optional and so is every key in
-  it (`savedvariables_path`, `webhook_url`, `dry_run`, `poll_interval`,
-  `max_backlog`). Without a path, `discover.py` scans standard WoW folders on
-  every drive, keeping only flavors where `Interface/AddOns/DOINK` exists, and
-  watches every account's file. Notifier toggles are **not** companion config.
-- `config.toml` and `state.json` live next to `main.py`, or next to the .exe
-  when frozen (`main.app_dir()`).
-- Webhooks are per URL (`WebhookPool`) so each keeps its own rate limiting.
-  A character with no resolvable webhook logs an error and its events stay
-  queued (state not advanced) until one is set.
-- Standard library only (`urllib`, `tomllib`); no dependencies.
-- The watcher only reports a change once `(mtime, size)` has held still for one
-  poll, so it never reads a half-written file.
-- Up to 10 embeds per webhook message (Discord's limit), at least 2s between
-  messages, and 429 `retry_after` is respected. State is saved after each
-  message.
+  size dropped, max 12), the icon the thumbnail. One GET per item per
+  session, misses cached too, 5 s timeout, never panics; `wowhead = false`
+  disables it. The README's network statement names Wowhead; keep it
+  accurate.
+- Zero config is the goal: `config.toml` is optional and so is every key
+  (`wow_dir`, `savedvariables_path`, `webhook_url`, `dry_run`,
+  `poll_interval`, `max_backlog`, `wowhead`, `update_check`,
+  `update_notify`; `realtime` and `[notifiers]` are logged and ignored).
+  Without a path, `discover` scans the standard WoW folders on every drive
+  (Windows), every `/mnt/<letter>` and every Wine/Proton prefix's
+  `drive_c` (`~/Games/*`, `~/.wine`, Lutris prefixes incl. Flatpak, Steam
+  `compatdata/*/pfx`), keeping flavors where `Interface/AddOns/DOINK`
+  exists, and watches every account's file. Notifier toggles are **not**
+  companion config.
+- `config.toml`, `state.json` and `doink.log` live next to the executable.
+- Webhook precedence: in-game per-char > in-game `*` > `webhook_url` in
+  config.toml. A character with no resolvable webhook logs an error and its
+  events stay queued (state not advanced) until one is set.
 - First time a character is seen, post at most `max_backlog` (default 10) of
   its queued events. If the newest seq in the file is below `file_seen`
   (the highest seq a previous file pass showed; SavedVariables wiped), treat
-  the character as new. Never compare with `last_seen` for this: realtime
-  posts run ahead of the file until the next `/reload`, and a companion
-  restart in that window once re-posted ten events (2026-10-02).
-- **Two modes.** `python3 main.py` (WSL/dev) is a console app. The packaged
-  Windows build (`doink.exe`, `--noconsole`) and `--tray` run as a tray app
-  with three threads: Tk owns the main thread (settings window), the tray
-  runs its own Win32 message loop, and the watcher runs with a stop `Event`.
-  Tray → Tk goes through a `queue.Queue` polled with `root.after` (Tk isn't
-  thread-safe); watcher → both goes through `Status`. `App` owns config and
-  the watcher: webhook changes apply live (`config.webhook_url` is read per
-  post), folder changes restart the watcher.
-- Settings window writes `config.toml` via `config.save_settings` (comments
-  aren't preserved). Webhook precedence: in-game per-char > in-game `*` >
-  settings window. It opens itself on first run (`App.needs_setup()`), and
-  "WoW not found" is a state the window resolves, not a fatal error. Tray
-  mode logs to `doink.log` next to the exe (rotating, ~2 MB max), never
-  `print`s (there's no stdout), and shows startup errors in a message box.
-- Tray code is ctypes against Win32 with explicit `argtypes`/`restype` on
-  every call (64-bit handles). Keep the companion dependency-free; no
-  pystray/Pillow. Win32 behaviour is only testable on the Windows CI job
-  (`tests/test_windows.py`).
-- Realtime reading has a budget: capture only the two bands, allocate the
-  buffer once, no per-pixel Python objects, decode ≈ 1 ms per capture at
-  3421 px (≈ 5 ms on pure noise). Measured live (2026-10-02, 3438×1408
-  window): 7.6 captures/s, 16.7 ms wall per capture (BitBlt waiting on the
-  GPU) but ~1 ms CPU, 1.25% CPU, 46 MB, 54 GDI handles, flat. `ResourceMeter`
-  samples CPU time per capture (not wall time: the GPU wait isn't cost),
-  working set and GDI handle count; `RealtimeWorker` stops itself (and says
-  why in the settings window) if captures average > 25 ms CPU, GDI handles
-  grow > 50, or the working set is > 100 MB over baseline **and still
-  climbing** (5 rising samples): the whole process is measured and the
-  settings window adds ~80 MB of Tk in one step, which tripped the first
-  version of the valve. Baseline is the 3rd sample, after start-up. Diagnostics: `-v`
-  logs every rejected strip candidate with the reason; `DOINK_DUMP_BANDS=<dir>`
-  writes the raw bands it failed on, replayable with `pixel.decode`. The Windows CI job runs a
-  1000-capture leak test. Status updates from the reader never notify the
-  tray except on an on/off change.
-- Updates (`updates.py`, since v0.11.0): one GET to the GitHub releases
-  API 30 s after start and then daily (`update_check = false` disables;
-  "Check for updates" in the tray menu and settings window still works by
-  hand). Result lives in `Status.update()`: the tray swaps to
-  `doink-update.ico` (orange dot, drawn by `make_icon.py`, bundled by
-  `release.yml`) and its menu offers "Update to vX…"; the settings window
-  shows the same button next to the version. Notifications only with
-  `update_notify = true` (`Status.notify_updates`, NIIF_INFO, once per
-  version per session). **Installing** (`Updater`): downloads the
-  release's `DOINK-vX.zip` + `.sha256` (github.com download URLs only,
-  from the API's `assets`), verifies the hash, unpacks only
-  `DOINK-vX/Companion/` into `update/` next to the exe (path-escape
-  checked), writes a cmd script to `%TEMP%` that waits for our PID to
-  exit, deletes `_internal`, `xcopy`s the staged folder over, removes
-  `update/` and starts the new exe, logging each step to `update.log` in
-  the app folder; then the app quits. config.toml, state.json and
-  doink.log are never touched. Windows frozen build only. The script is
-  launched with `CREATE_NO_WINDOW` and DEVNULL stdio, **never**
-  `DETACHED_PROCESS`: a windowless exe has no console to pass on and a
-  detached cmd.exe simply never ran (first live try, 2026-10-03); it
-  sleeps with `ping`, since `timeout` refuses to run without console
-  input. Console mode doesn't check.
+  the character as new. Never compare with `last_seen` for this: posts from
+  another path (realtime) run ahead of the file until the next `/reload`,
+  and a companion restart in that window once re-posted ten events
+  (2026-10-02). `state.json` keeps the Python companion's format exactly.
+- **Two modes.** Console: everywhere, and on Windows with `--once`,
+  `--console`, `--dry-run` or `--test-webhook`; logs `15:04:05 LEVEL msg` to
+  stderr (on Windows it attaches to the parent console: the exe is
+  `-H windowsgui`). Tray (Windows default): logs to `doink.log` (1 MB, then
+  `doink.log.1`), named mutex `Local\DOINK-companion` against a second copy,
+  startup errors in a message box, "WoW not found" and "no webhook yet" are
+  states shown in the tooltip/balloon, not fatal. The tray runs on the main
+  goroutine (locked OS thread); the runner and update checker are
+  goroutines; runner → tray goes through `Status` (`onChange` posts
+  `WM_STATUS` to the tray window). No settings window: "Edit settings"
+  opens `config.toml` (created from a 3-line template if missing).
+- Tray code uses `golang.org/x/sys/windows` lazy DLL procs with structs
+  laid out as Win32 expects (64-bit sizes are asserted in the Windows
+  tests). One `syscall.NewCallback` window procedure for the process,
+  dispatching by `hwnd`. Icons are embedded (`companion/assets`) and written
+  to `%TEMP%\doink-*.ico` for `LoadImageW`.
+- Realtime is **paused** (see "Pixel transport contract"): no screen
+  reading in the Go companion. The Python reader's budget and leak-test
+  notes are in git history (v0.11.7's CLAUDE.md).
+- Updates (`internal/updates`): one GET to the GitHub releases API 30 s
+  after start and then daily (1 h retry after a failure; `update_check =
+  false` disables; the tray's "Check for updates" always works). A newer
+  version swaps the tray icon to `doink-update.ico` (orange dot) and the
+  menu offers to open the download page. **Check only**: no download, no
+  self-install (that's a later milestone). Notifications only with
+  `update_notify = true`, once per version per session. Console mode
+  doesn't check. Lesson kept from the Python self-updater, for when Go
+  gets one: launch the hand-off script with `CREATE_NO_WINDOW`, never
+  `DETACHED_PROCESS` (a detached cmd.exe from a windowless exe never ran,
+  2026-10-03), and sleep with `ping`, not `timeout`.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the
   README's "What doink.exe does" section accurate when behaviour changes.
-- PyInstaller `--onedir` (not `--onefile`: fewer antivirus false positives,
-  faster start). The release workflow smoke-tests the built exe.
+- Builds: one static exe (`CGO_ENABLED=0`, `-trimpath -s -w`, `-H
+  windowsgui` on Windows), Linux amd64 too. The release workflow
+  smoke-tests both with `--once` on a dry-run config. The Windows zip keeps
+  the Python era's names and layout (`DOINK-<tag>.zip`,
+  `<name>/Companion/doink.exe`, `.sha256` as `"<hex>  <name>.zip"` with no
+  newline): v0.11.x self-updaters on existing installs depend on them.
 
 ## Dev setup (reference)
 
@@ -438,14 +448,21 @@ two implementations can't drift apart. Regenerate with
 
 ## Releases
 
-1. Bump the version in all three places: `addon/DOINK/DOINK.toc`
-   (`## Version`), `companion/doink/__init__.py`, `companion/pyproject.toml`.
-   Commit as `build: release vX.Y.Z`.
+1. Bump `## Version` in `addon/DOINK/DOINK.toc`. The companion's version
+   comes from the tag (`-ldflags -X main.version=X.Y.Z` in
+   `release.yml`; `dev` in local builds). Commit as
+   `build: release vX.Y.Z`.
 2. `git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`.
-3. `release.yml` runs two jobs:
-   - `build` (Windows): tests, builds `doink.exe`, publishes
-     `DOINK-vX.Y.Z.zip` (AddOns/, Companion/, README, LICENSE) + `.sha256`
-     as a GitHub release. Notes are generated from commits.
+3. `release.yml` runs four jobs:
+   - `build` (Windows): tests, `go-winres` (icon + version info), builds
+     `doink.exe`, smoke-tests it, packages `DOINK-vX.Y.Z.zip` (AddOns/,
+     Companion/, README, LICENSE) + `.sha256`.
+   - `linux` (Ubuntu): builds `doink` (linux/amd64), smoke-tests it,
+     packages `DOINK-vX.Y.Z-linux-amd64.tar.gz` (doink,
+     config.example.toml, README, LICENSE) + `.sha256`.
+   - `release` (tags only, after both): publishes those four files as a
+     GitHub release. Notes are generated from commits. Manual runs stop
+     after the artifacts (`DOINK-dev.zip`, `DOINK-dev-linux-amd64.tar.gz`).
    - `addon` (BigWigs packager v2, needs ≥ 2.6.0 for Forever): builds the
      **addon-only** zip `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta`
      (`move-folders` lifts `addon/DOINK` to the zip root; ignore rules run

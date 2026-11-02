@@ -17,13 +17,12 @@ moment they happen, with real item links:
 [DOINK companion](https://github.com/ryan-flan/DOINK/releases) mirrors the
 same events to a Discord channel of your choice as class-coloured embeds
 with Wowhead links, so your guild's Discord sees every ding, epic and boss
-kill even when nobody is online, and an experimental realtime mode posts
-them within a second of them happening. See
+kill even when nobody is online. See
 [Discord mirroring](#discord-mirroring-with-the-doink-companion).
 
 > **Two parts, one optional.** The addon alone does all the guild chat
 > announcements. **Discord posting requires the companion**, a separate
-> Windows program you download from the GitHub releases page and run
+> program (Windows, or Linux) you download from the GitHub releases page and run
 > alongside the game: WoW addons cannot reach the internet, so without the
 > companion nothing goes to Discord. Install the addon from here; get the
 > companion from GitHub if you want Discord.
@@ -118,7 +117,7 @@ realtime state, and which event types are enabled.
 | `/doink debug` | Toggle printing of every event the addon sees, for troubleshooting |
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
-| `/doink realtime on` / `off` / `test` / `position <corner>` | Only for the Discord companion's experimental realtime mode |
+| `/doink realtime on` / `off` / `test` / `position <corner>` | Only for the companion's experimental realtime mode (paused: companion v0.12 doesn't read it) |
 
 Settings are per character and take effect immediately, whether changed on
 the settings page or by command; the two are the same settings.
@@ -147,8 +146,9 @@ the settings page or by command; the two are the same settings.
 ## Discord mirroring with the DOINK companion
 
 **Required for Discord.** Nothing in this section works with the addon
-alone. Discord posting needs the DOINK companion running on your Windows
-PC, because WoW addons cannot access the network. The addon's guild chat
+alone. Discord posting needs the DOINK companion running on your PC
+(Windows, or Linux if you play through Lutris, Steam/Proton or Wine),
+because WoW addons cannot access the network. The addon's guild chat
 announcements need nothing extra.
 
 Everything the addon announces can also land in Discord:
@@ -168,11 +168,13 @@ separate, optional program, the **DOINK companion**. Download
 `DOINK-<version>.zip` from the
 [GitHub releases page](https://github.com/ryan-flan/DOINK/releases): it
 contains the companion (`Companion\doink.exe`) and a copy of the addon.
-The companion is not on the addon sites and is not required for anything
-above.
+Linux players download `DOINK-<version>-linux-amd64.tar.gz` instead (see
+[On Linux](#on-linux)). The companion is not on the addon sites and is not
+required for anything above.
 
-What it is: a Windows program (`doink.exe`, Python packaged with
-PyInstaller, source in this repository, MIT) that sits in the system tray.
+What it is: one small program (`doink.exe` on Windows, `doink` on Linux;
+written in Go, source in this repository, MIT) that sits in the system tray
+on Windows.
 Every two seconds it checks whether the game has written `DOINK.lua`; when
 it has, it reads the event buffer and posts each new event to a Discord
 webhook you provide, as an embed (class-coloured, with a Wowhead link for
@@ -184,9 +186,8 @@ requests to the Discord webhook URL you paste into it.
 > **Discord posts arrive when WoW saves addon data:** on `/reload`, logout,
 > or exit. That's a WoW limitation, not a setting. Play normally and your
 > session posts when you log out, or type `/doink flush` to post right away.
-> There is also an opt-in, experimental **realtime** mode that posts while
-> you play; see [How realtime works](#how-realtime-works-experimental).
-> Guild chat announcements are always instant.
+> The experimental **realtime** mode is paused: this companion version
+> doesn't read it. Guild chat announcements are always instant.
 
 ### Setting it up
 
@@ -194,41 +195,50 @@ requests to the Discord webhook URL you paste into it.
    [Releases](https://github.com/ryan-flan/DOINK/releases), move its
    `Companion` folder somewhere permanent that you can write to, e.g.
    `Documents\DOINK`, and run `doink.exe`. A gold **D** appears in the
-   system tray (click `^` if it's hidden) and the settings window opens.
+   system tray (click `^` if it's hidden). Until you've set a webhook it
+   shows a "no webhook yet" notification; that's expected.
 2. In Discord: *Server Settings → Integrations → Webhooks → New Webhook*,
-   choose a channel, *Copy Webhook URL*. Paste it into DOINK's settings,
-   click **Save**, then **Send test message** to check it.
-3. Optional: tick **Start DOINK with Windows**.
+   choose a channel, *Copy Webhook URL*. Then, in game:
+   `/doink webhook <url>` and `/doink flush`. (Or put
+   `webhook_url = "<url>"` in `config.toml`: tray menu → **Edit settings**.)
+3. Optional: right-click the tray icon and tick **Start with Windows**.
 
-DOINK finds your WoW install by itself; if it can't, the settings window
-says so and lets you choose the folder.
+DOINK finds your WoW install by itself; if it can't, the tray icon says so.
+Set `wow_dir` in `config.toml` (tray menu → **Edit settings**) to your
+World of Warcraft folder.
 
 To check the whole loop in game: `/doink test levelup`, then `/doink flush`.
 A `[TEST]` post should appear a few seconds after the reload.
 
-**Left-click** the tray icon for settings: webhook, WoW folder, Start with
-Windows, and your recent posts. Hover for the last post or the current
-problem; if something goes wrong (no webhook, Discord unreachable) you get a
-Windows notification once. **Right-click** for Settings, Check for updates,
-Open log, Open DOINK folder, Start with Windows and Quit. Closing the
-settings window keeps DOINK running in the tray.
+Hover over the tray icon for the last post or the current problem; if
+something goes wrong (no webhook, Discord unreachable) you get a Windows
+notification once. **Left-click** opens the log. **Right-click** for Edit
+settings, Open log, Open DOINK folder, Start with Windows, Check for
+updates and Quit. There is no settings window: settings live in
+`config.toml`, and changes apply without restarting DOINK.
 
 **Updates.** DOINK checks GitHub once a day for a newer release. When
-there is one, the tray icon gets an orange dot and the menu offers
-**Update to vX.Y.Z**; the settings window shows the same next to the
-version. Choosing it downloads the release zip from GitHub, checks it
-against the checksum published with the release, swaps `doink.exe` and
-`_internal` and restarts DOINK. Nothing is downloaded until you choose
-that, and your settings and posting history are kept. Add
-`update_notify = true` to `config.toml` if you'd also like a Windows
-notification. The addon updates through CurseForge or Wago like any other
-addon.
+there is one, the tray icon gets an orange dot and the menu offers to open
+the download page; download the new zip and replace `doink.exe`. DOINK
+never downloads anything by itself. Add `update_notify = true` to
+`config.toml` if you'd also like a Windows notification. The addon updates
+through CurseForge or Wago like any other addon.
 
 **One channel per character?** Set a webhook in game with
 `/doink webhook here <url>` on that character. In-game webhooks take priority
-over the one in DOINK's settings: per character first, then
-`/doink webhook <url>` (all characters), then the settings window. Webhook
-changes reach the companion on the next reload.
+over the one in `config.toml`: per character first, then
+`/doink webhook <url>` (all characters), then `webhook_url` in
+`config.toml`. Webhook changes reach the companion on the next reload.
+
+### On Linux
+
+Download `DOINK-<version>-linux-amd64.tar.gz`, unpack it somewhere
+permanent and run `./doink` (a console program; keep it running while you
+play). It finds World of Warcraft inside Lutris, Steam (Proton) and Wine
+prefixes by itself; if yours lives elsewhere, set `wow_dir` in a
+`config.toml` next to `doink`. Set the webhook in game as above, or with
+`webhook_url` in `config.toml`. `./doink --test-webhook <url>` posts a test
+message.
 
 ### Notifiers (what gets recorded for Discord)
 
@@ -249,10 +259,11 @@ Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
 
 ### Companion settings
 
-The settings window covers everyday setup and saves to `config.toml` next to
-`doink.exe`. For the rest (`dry_run`, `max_backlog`, `poll_interval`, an
-exact `savedvariables_path`), see `config.example.toml`; quit DOINK before
-editing the file by hand, then start it again.
+Settings live in `config.toml` next to `doink.exe` (tray menu → **Edit
+settings** creates and opens it). Every key is optional: `webhook_url`,
+`wow_dir`, `dry_run`, `max_backlog`, `poll_interval`, an exact
+`savedvariables_path`, `wowhead`, `update_check`, `update_notify`; see
+`config.example.toml`. DOINK picks up changes while it runs.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the
@@ -267,17 +278,14 @@ newest 10 queued events.
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
   day one HTTPS request to GitHub for the latest release's version number
-  (`update_check = false` turns that off). A newer version is only
-  downloaded, from GitHub and checksum-verified, when you choose "Update"
-  in the tray menu or settings window. No telemetry. It doesn't listen on
-  any port.
+  (`update_check = false` turns that off). It never downloads or installs
+  anything itself: a newer version only opens the release page in your
+  browser when you choose it. No telemetry. It doesn't listen on any port.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
-- **Realtime (off unless you turn it on):** reads the top and bottom 24 pixel
-  rows of the WoW window while it's the active window, looking for the
-  addon's strip. Nothing else on screen, never saved, and it watches its own
-  CPU and memory use (details below).
+- **Screen:** this version doesn't look at the screen at all (realtime is
+  paused).
 - **Uninstall:** untick Start with Windows, quit, delete the folder.
 
 Every release is built from this repository's source by
@@ -294,6 +302,10 @@ Get-FileHash DOINK-v0.9.5.zip -Algorithm SHA256
 > later.
 
 ### How realtime works (experimental)
+
+> **Paused:** companion v0.12 (the Go rewrite) doesn't read the strip yet,
+> so turning it on in game does nothing for Discord. It's coming back in a
+> later version. The text below describes how it worked in v0.6–v0.11.
 
 WoW only writes addon data on `/reload` or logout, and in the Forever beta
 every other way out of the client is shut: addons can't read the combat log,
@@ -415,22 +427,20 @@ Bugs and requests: https://github.com/ryan-flan/DOINK/issues.
 ```
 addon/DOINK/       the addon (Lua 5.1)
 addon/tests/       offline harness with WoW API stubs
-companion/         the companion (Python 3.12+, standard library only)
+companion/         the companion (Go; BurntSushi/toml and x/sys only)
 ```
 
 ```bash
+devbox run test                      # both suites (devbox provides Go and LuaJIT)
 cd addon && luajit tests/test_addon.lua
-cd companion && python3 -m unittest discover -s tests
-cd companion && python3 main.py --dry-run     # console mode
-cd companion && python main.py --tray          # tray mode (Windows Python)
+cd companion && go test ./...
+cd companion && go run ./cmd/doink --dry-run --once --config <path>/config.toml
 ```
 
-The tray, autostart, single-instance and screen-reading code (`tray.py`,
-`autostart.py`, `pixel.py`) talks to Win32 directly through `ctypes`; its
-tests run on the Windows CI job, including a capture leak test. The strip
-encoder is `addon/DOINK/Transports/Pixel.lua`; `addon/tests/fixtures/` holds
-its output for a fixed event, which the Python decoder tests must read back.
-The icon is drawn by `companion/assets/make_icon.py`.
+The tray, autostart and single-instance code (`companion/internal/tray`,
+`internal/autostart`) talks to Win32 directly through `golang.org/x/sys`;
+its tests run on the Windows CI job. The icon is drawn by
+`companion/assets/make_icon.py` (a one-off; needs Python with Pillow).
 
 Push a `v*` tag to build `doink.exe`, publish a GitHub release and upload the
 addon to CurseForge and Wago Addons. Design notes and the event data
