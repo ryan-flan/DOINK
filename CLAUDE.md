@@ -180,8 +180,9 @@ Rules:
 | `duel`      | `CHAT_MSG_SYSTEM`          | wins only (`wins_only`)                          |
 | `battleground` | `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE`, `PLAYER_ENTERING_WORLD` | wins only (`wins_only`) |
 
-Loot: `rares_boe_only` (default true) keeps rares (quality 3) only when they
-are Bind on Equip; legendaries (quality 5) always post when they are gear
+Loot: `rares_boe_only` (default true) drops rares (quality 3) only when they
+are known not to be Bind on Equip (an unknown bind type, `boe = null`,
+still posts); legendaries (quality 5) always post when they are gear
 and never when they aren't. Boss kills: `first_kill_only` (default false).
 
 Deferred to v1.1 pending beta findings: achievements (vanilla had none; Forever

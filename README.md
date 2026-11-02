@@ -320,7 +320,7 @@ rules above are applied on top.
 | Type | Posts when | Options (defaults) |
 |---|---|---|
 | `level_up` | You level up | `milestones_only` off (on = every 10 levels) |
-| `loot` | You loot something good | `min_quality` 3 (rare), `min_vendor_value` 1g (whole stack). Either one is enough. `rares_boe_only` on: a rare counts only if it is Bind on Equip. Legendaries always post when they are a weapon or armour, never when they aren't |
+| `loot` | You loot something good | `min_quality` 3 (rare), `min_vendor_value` 1g (whole stack). Either one is enough. `rares_boe_only` on: a rare counts only if it is Bind on Equip (or the game doesn't say). Legendaries always post when they are a weapon or armour, never when they aren't |
 | `death` | You die | |
 | `quest` | You turn in a quest | |
 | `boss_kill` | Your group kills a dungeon or raid boss (the embed lists your party and says `First kill!` the first time) | `first_kill_only` off |
