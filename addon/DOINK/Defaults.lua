@@ -7,12 +7,19 @@ ns.Defaults = {
   level_up  = { enabled = true, milestones_only = false },
   -- Post if quality >= min_quality (3 = rare/blue) OR the stack's total
   -- vendor value >= min_vendor_value (copper; 10000 = 1g).
-  loot      = { enabled = true, min_quality = 3, min_vendor_value = 10000 },
+  -- rares_boe_only: a rare (quality 3) posts only if it is Bind on Equip.
+  -- Legendaries post whenever they are gear, never when they aren't.
+  loot      = { enabled = true, min_quality = 3, min_vendor_value = 10000, rares_boe_only = true },
   death     = { enabled = true },
   quest     = { enabled = true },
-  boss_kill = { enabled = true },
+  -- first_kill_only: post each boss only the first time this character kills it.
+  boss_kill = { enabled = true, first_kill_only = false },
   -- milestones_only: post only at multiples of 75 (75/150/225/300).
   skill_up  = { enabled = true, milestones_only = true },
+  mount     = { enabled = true },
+  -- wins_only: losses aren't recorded.
+  duel      = { enabled = true, wins_only = true },
+  battleground = { enabled = true, wins_only = true },
 
   -- In-game chat announcements (Announce.lua). Stricter than the queue's
   -- rules above, because guild chat is shared.
@@ -24,6 +31,9 @@ ns.Defaults = {
     quest     = false,
     boss_kill = true,
     skill_up  = "off",        -- max | milestones | all | off
+    mount     = true,
+    duel      = true,
+    battleground = true,
   },
 }
 

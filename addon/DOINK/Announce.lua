@@ -94,6 +94,7 @@ local function Describe(envelope)
     if Value(d.instance) then details[#details + 1] = d.instance end
     if d.group_size then details[#details + 1] = d.group_size .. " players" end
     if #details > 0 then line = line .. " (" .. table.concat(details, ", ") .. ")" end
+    if d.first_kill == true then line = line .. " First kill!" end
     return line
   elseif t == "skill_up" then
     local max = Value(d.max_rank)
@@ -101,6 +102,18 @@ local function Describe(envelope)
       return ("%s maxed at %d!"):format(d.skill, d.rank)
     end
     return ("%s %d/%s."):format(d.skill, d.rank, max or "?")
+  elseif t == "mount" then
+    return (d.bought and "Bought a new mount: " or "Got a new mount: ")
+      .. (Value(d.link) or Value(d.name) or "?") .. "!"
+  elseif t == "duel" then
+    local kind = d.makgora and "Mak'gora" or "duel"
+    if d.won then
+      return ("Won a %s against %s%s."):format(kind, d.opponent, d.fled and " (they ran)" or "")
+    end
+    return ("Lost a %s to %s."):format(kind, d.opponent)
+  elseif t == "battleground" then
+    if d.won then return ("Won %s!"):format(d.name) end
+    return ("Lost %s."):format(d.name)
   end
 end
 
@@ -194,7 +207,8 @@ function Announce.Status()
   local chatType, why = Target(channel)
   local where = chatType and channel or (channel .. " (" .. why .. ")")
   local rules = {}
-  for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up" }) do
+  for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
+      "mount", "duel", "battleground" }) do
     local rule = Option(t)
     if type(rule) == "boolean" then rule = rule and "on" or "off" end
     rules[#rules + 1] = t .. " " .. tostring(rule)

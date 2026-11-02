@@ -1,6 +1,10 @@
 local ADDON, ns = ...
 
 local GetItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+local GetItemInfoInstant = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+
+local BIND_ON_EQUIP = 2
+local WEAPON, ARMOR = 2, 4 -- item class ids
 
 -- Only things *you* looted. "You receive item:" (quest rewards, vendor
 -- buys) and "You create:" (crafting) are different strings and ignored.
@@ -23,10 +27,19 @@ local function ParseMessage(msg)
   end
 end
 
+-- Item class id (2 weapon, 4 armor, ...) without waiting for the cache;
+-- nil if the API is missing or fails.
+local function ClassID(itemID)
+  if not GetItemInfoInstant then return nil end
+  local ok, classID = pcall(function() return select(6, GetItemInfoInstant(itemID)) end)
+  if ok and type(classID) == "number" then return classID end
+end
+
 local function Handle(itemID, link, qty)
   -- GetItemInfo returns: name, link, quality, itemLevel, reqLevel, class,
-  -- subclass, maxStack, equipLoc, texture, sellPrice, ...
-  local name, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemID)
+  -- subclass, maxStack, equipLoc, texture, sellPrice, classID, subclassID,
+  -- bindType, ...
+  local name, _, quality, _, _, _, _, _, _, _, sellPrice, _, _, bindType = GetItemInfo(itemID)
   if not name then
     -- Not cached yet; finish when the client has it.
     pending[itemID] = pending[itemID] or {}
@@ -36,10 +49,24 @@ local function Handle(itemID, link, qty)
   end
 
   local vendorValue = (sellPrice or 0) * qty
-  if quality < ns:GetOption("loot", "min_quality")
-      and vendorValue < ns:GetOption("loot", "min_vendor_value") then
-    return
+  local boe, gear = nil, nil -- nil = unknown
+  if bindType ~= nil then boe = bindType == BIND_ON_EQUIP end
+  local classID = ClassID(itemID)
+  if classID ~= nil then gear = classID == WEAPON or classID == ARMOR end
+
+  if quality >= 5 then
+    -- Legendary gear always posts (unknown counts as gear); legendary
+    -- materials never do.
+    if gear == false then return end
+  else
+    -- rares_boe_only: a soulbound rare is only interesting to you.
+    local passesQuality = quality >= ns:GetOption("loot", "min_quality")
+      and not (quality == 3 and ns:GetOption("loot", "rares_boe_only") and boe ~= true)
+    local passesValue = vendorValue >= ns:GetOption("loot", "min_vendor_value")
+    if not (passesQuality or passesValue) then return end
   end
+
+  local null = ns.Json.null
 
   ns:Emit("loot", {
     item_id = itemID,
@@ -48,6 +75,8 @@ local function Handle(itemID, link, qty)
     quality = quality,
     qty = qty,
     vendor_value = vendorValue, -- whole stack, in copper
+    boe = boe == nil and null or boe,
+    gear = gear == nil and null or gear,
   })
 end
 
@@ -90,6 +119,8 @@ ns.Notifiers.Loot = {
       quality = 5,
       qty = 1,
       vendor_value = 255355,
+      boe = true,
+      gear = true,
     }
   end,
 }

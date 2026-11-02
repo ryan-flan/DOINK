@@ -66,6 +66,41 @@ function ns.FormatToPattern(fmt)
   return "^" .. p .. "$"
 end
 
+-- "%1$s has defeated %2$s in a duel" -> anchored pattern + the argument
+-- number each capture holds (so swapped-order locales still work). Plain
+-- %s/%d count in order.
+function ns.FormatToPatternOrdered(fmt)
+  local parts, order, nextArg, i = {}, {}, 1, 1
+  while i <= #fmt do
+    local n, kind = fmt:match("^%%(%d+)%$([sd])", i)
+    local plain = not n and fmt:match("^%%([sd])", i)
+    if n then
+      parts[#parts + 1] = kind == "d" and "(%d+)" or "(.-)"
+      order[#order + 1] = tonumber(n)
+      i = i + #n + 3
+    elseif plain then
+      parts[#parts + 1] = plain == "d" and "(%d+)" or "(.+)"
+      order[#order + 1] = nextArg
+      nextArg = nextArg + 1
+      i = i + 2
+    else
+      parts[#parts + 1] = (fmt:sub(i, i):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0"))
+      i = i + 1
+    end
+  end
+  return "^" .. table.concat(parts) .. "$", order
+end
+
+-- Captures from an ordered pattern, rearranged into argument order:
+-- args[1] is what %1$s held, whatever its position in the text.
+function ns.MatchOrdered(text, pattern, order)
+  local captures = { text:match(pattern) }
+  if #captures == 0 then return nil end
+  local args = {}
+  for i, argIndex in ipairs(order) do args[argIndex] = captures[i] end
+  return args
+end
+
 ------------------------------------------------------------------ options
 
 function ns:GetOption(eventType, key)
@@ -135,6 +170,7 @@ local function InitChar()
   char.seq = char.seq or 0
   char.config = char.config or {}
   char.events = char.events or {}
+  char.kills = char.kills or {} -- encounter id (string) -> ts of the first kill
   ns.db.chars[key] = char
 
   ns.char = char
@@ -308,7 +344,7 @@ local HELP = {
   "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
   "/doink reset <type> - back to defaults",
   "/doink announce [guild|officer|party|raid|off] - where to announce in chat",
-  "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on",
+  "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on (types: level_up, loot, death, quest, boss_kill, skill_up, mount, duel, battleground)",
   "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
   "/doink realtime on|off|test|position <corner> - post without reloading (experimental)",
@@ -552,7 +588,7 @@ local function AnnounceUsage()
   ns:Print("usage: /doink announce guild|officer|party|raid|off, "
     .. "/doink announce <type> <rule>, /doink announce test")
   ns:Print("rules: level_up milestones|all|off, loot any|uncommon|rare|epic|legendary|off, "
-    .. "skill_up max|milestones|all|off, death|quest|boss_kill on|off")
+    .. "skill_up max|milestones|all|off, death|quest|boss_kill|mount|duel|battleground on|off")
 end
 
 commands.announce = function(args)

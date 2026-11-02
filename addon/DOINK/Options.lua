@@ -21,6 +21,7 @@ local QUALITY_NAMES = {
 local TYPE_NAMES = {
   level_up = "Level-ups", loot = "Loot", death = "Deaths", quest = "Quest turn-ins",
   boss_kill = "Boss kills", skill_up = "Skill-ups",
+  mount = "New mounts", duel = "Duels", battleground = "Battlegrounds",
 }
 
 local ANNOUNCE_LABELS = {
@@ -110,11 +111,15 @@ local function Announcements(layout)
   OptionCheckbox { variable = "announce_quest", name = "Quest turn-ins", type = "announce", key = "quest" }
   OptionDropdown { variable = "announce_skill_up", varType = VarType.String, name = "Skill-ups",
     type = "announce", key = "skill_up", choices = c.skill_up, labels = ANNOUNCE_LABELS.skill_up }
+  OptionCheckbox { variable = "announce_mount", name = "New mounts", type = "announce", key = "mount" }
+  OptionCheckbox { variable = "announce_duel", name = "Duels", type = "announce", key = "duel" }
+  OptionCheckbox { variable = "announce_battleground", name = "Battlegrounds", type = "announce", key = "battleground" }
 end
 
 local function Discord(layout)
   Header(layout, "Discord, via the companion app (this character)")
-  for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up" }) do
+  for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
+      "mount", "duel", "battleground" }) do
     OptionCheckbox { variable = "enabled_" .. t, name = TYPE_NAMES[t], type = t, key = "enabled",
       tooltip = "Record " .. TYPE_NAMES[t]:lower() .. " for the companion to post to Discord." }
   end
@@ -131,6 +136,13 @@ local function Discord(layout)
     tooltip = "A stack worth this much to a vendor is recorded even below the minimum quality." }
   OptionCheckbox { variable = "skill_up_milestones", name = "Skill-ups: milestones only",
     type = "skill_up", key = "milestones_only", tooltip = "Only 75, 150, 225 and 300." }
+  OptionCheckbox { variable = "loot_rares_boe_only", name = "Loot: rares only if Bind on Equip",
+    type = "loot", key = "rares_boe_only" }
+  OptionCheckbox { variable = "boss_kill_first_kill_only", name = "Boss kills: first kill only",
+    type = "boss_kill", key = "first_kill_only" }
+  OptionCheckbox { variable = "duel_wins_only", name = "Duels: wins only", type = "duel", key = "wins_only" }
+  OptionCheckbox { variable = "battleground_wins_only", name = "Battlegrounds: wins only",
+    type = "battleground", key = "wins_only" }
 end
 
 local function Realtime(layout)
@@ -138,7 +150,7 @@ local function Realtime(layout)
   local pixel = ns.Transports.Pixel
   local function rt() return DOINKDB.realtime end
 
-  Checkbox { variable = "realtime_enabled", name = "Enable realtime posting (experimental)", default = false,
+  Checkbox { variable = "realtime_enabled", name = "Enable realtime strip (not read by companion v0.12 yet)", default = false,
     get = function() return rt().enabled end,
     set = function(on) pixel.SetEnabled(on) end,
     tooltip = "Posts events to Discord within a second instead of at the next /reload or logout. "

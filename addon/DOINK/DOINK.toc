@@ -19,6 +19,9 @@ Notifiers\Death.lua
 Notifiers\Quest.lua
 Notifiers\BossKill.lua
 Notifiers\SkillUp.lua
+Notifiers\Mount.lua
+Notifiers\Duel.lua
+Notifiers\Battleground.lua
 Announce.lua
 Transports\Pixel.lua
 Options.lua

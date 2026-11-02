@@ -70,6 +70,11 @@ end
 LOOT_ITEM_SELF = "You receive loot: %s"
 LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d"
 SKILL_RANK_UP = "Your skill in %s has increased to %d."
+LOOT_ITEM_PUSHED_SELF = "You receive item: %s"
+LOOT_ITEM_PUSHED_SELF_MULTIPLE = "You receive item: %sx%d"
+DUEL_WINNER_KNOCKOUT = "%1$s has defeated %2$s in a duel"
+DUEL_WINNER_RETREAT = "%2$s has fled from %1$s in a duel"
+MAKGORA_WINNER_TEST = "%1$s has slain %2$s in a Mak'gora" -- stand-in; real names unknown until launch
 
 local now, level = 1000, 9
 time = function() return 1790870000 end
@@ -81,11 +86,38 @@ local function die()
   now = now + 60
   fire("PLAYER_DEAD")
 end
-function UnitName() return "Flano", "Wren" end -- Forever: surname second
+-- Party members for boss kills; the player stubs stay as they were.
+local party = {
+  party1 = { "Grakkor", "Highmountain", "Shaman", "SHAMAN", 24 },
+  party2 = { "Mira", nil, "Mage", "MAGE", 22 },
+}
+local partyOn = false
+function UnitExists(unit)
+  if unit == "player" then return true end
+  return partyOn and party[unit] ~= nil
+end
+function UnitName(unit)
+  local p = unit and party[unit]
+  if p then return p[1], p[2] end
+  return "Flano", "Wren" -- Forever: surname second
+end
 function UnitGUID() return "Player-1-ABC" end
 function GetRealmName() return "Classic Beta PvE 2" end
-function UnitClass() return "Warrior", "WARRIOR" end
-function UnitLevel() return level end
+function UnitClass(unit)
+  local p = unit and party[unit]
+  if p then return p[3], p[4] end
+  return "Warrior", "WARRIOR"
+end
+function UnitLevel(unit)
+  local p = unit and party[unit]
+  if p then return p[5] end
+  return level
+end
+local faction, instanceKind, bgWinner = "Alliance", "none", nil
+function UnitFactionGroup() return faction end
+function IsInInstance() return instanceKind ~= "none", instanceKind end
+function GetBattlefieldWinner() return bgWinner end
+C_MountJournal = nil
 function GetZoneText() return "Elwynn Forest" end
 function GetSubZoneText() return "" end
 function GetInstanceInfo() return "Deadmines", "party" end
@@ -95,17 +127,32 @@ function ReloadUI() end
 function geterrorhandler() return function(e) error(e, 0) end end
 SlashCmdList = {}
 
--- name, link, quality, ilvl, reqLevel, class, subclass, maxStack, equipLoc, texture, sellPrice
+-- name, link, quality, ilvl, reqLevel, class, subclass, maxStack, equipLoc,
+-- texture, sellPrice, classID, subclassID, bindType
 local itemCache = {
-  [769] = { "Chunk of Boar Meat", nil, 1, 0, 0, nil, nil, 20, "", 0, 4 },
-  [2140] = { "Carving Knife", nil, 3, 0, 0, nil, nil, 1, "", 0, 260 },
-  [4875] = { "Broken Boar Tusk", nil, 0, 0, 0, nil, nil, 1, "", 0, 20000 },
+  [769] = { "Chunk of Boar Meat", nil, 1, 0, 0, nil, nil, 20, "", 0, 4, nil, nil, 0 },
+  [2140] = { "Carving Knife", nil, 3, 0, 0, nil, nil, 1, "", 0, 260, nil, nil, 2 },
+  [4875] = { "Broken Boar Tusk", nil, 0, 0, 0, nil, nil, 1, "", 0, 20000, nil, nil, 0 },
+  [6314] = { "Wolfmaster Cape", nil, 3, 0, 0, nil, nil, 1, "", 0, 1215, nil, nil, 1 },
+  [13033] = { "Zealot Blade", nil, 3, 0, 0, nil, nil, 1, "", 0, 9000, nil, nil, 2 },
+  [17182] = { "Sulfuras", nil, 5, 0, 0, nil, nil, 1, "", 0, 0, nil, nil, 1 },
+  [17010] = { "Elementium Bar", nil, 5, 0, 0, nil, nil, 20, "", 0, 0, nil, nil, 0 },
 }
 local uncached = {}
 function GetItemInfo(id)
   if uncached[id] then return nil end
   local row = itemCache[id]
-  if row then return unpack(row, 1, 11) end
+  if row then return unpack(row, 1, 14) end
+end
+-- classID, subclassID as GetItemInfoInstant's 6th and 7th values.
+local itemClass = {
+  [13033] = { 2, 7 }, [6314] = { 4, 1 }, [17182] = { 2, 5 }, [17010] = { 7, 0 }, [5656] = { 15, 5 },
+}
+function GetItemInfoInstant(linkOrID)
+  local id = tonumber(linkOrID) or tonumber(tostring(linkOrID):match("|Hitem:(%d+)"))
+  local c = itemClass[id]
+  if not c then return id end
+  return id, nil, nil, nil, nil, c[1], c[2]
 end
 
 PROTECTED_EVENTS = { COMBAT_LOG_EVENT_UNFILTERED = true }
@@ -162,6 +209,7 @@ local ns = {}
 for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
+    "Notifiers/Mount.lua", "Notifiers/Duel.lua", "Notifiers/Battleground.lua",
     "Announce.lua", "Transports/Pixel.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
@@ -446,6 +494,180 @@ local function slash(msg)
   return table.concat(printed, "\n")
 end
 
+test("FormatToPatternOrdered: captures come back in argument order", function()
+  local p, order = ns.FormatToPatternOrdered(DUEL_WINNER_KNOCKOUT)
+  eq(p, "^(.-) has defeated (.-) in a duel$", "pattern")
+  local a = ns.MatchOrdered("Bob has defeated Al in a duel", p, order)
+  eq(a[1], "Bob", "winner"); eq(a[2], "Al", "loser")
+  p, order = ns.FormatToPatternOrdered(DUEL_WINNER_RETREAT)
+  a = ns.MatchOrdered("Al has fled from Bob in a duel", p, order)
+  eq(a[1], "Bob", "winner from a swapped-order string"); eq(a[2], "Al", "loser")
+  p, order = ns.FormatToPatternOrdered("Got %s (%d).")
+  eq(p, "^Got (.+) %((%d+)%)%.$", "plain %s/%d, magic escaped")
+  a = ns.MatchOrdered("Got it (3).", p, order)
+  eq(a[1], "it", "arg 1"); eq(a[2], "3", "arg 2")
+  eq(ns.MatchOrdered("nope", p, order), nil, "no match")
+end)
+
+local function lootMsg(id, name, q) return "You receive loot: " .. link(id, name, q) end
+
+test("loot: BoE rare posts, BoP rare doesn't (rares_boe_only)", function()
+  slash("reset loot")
+  local n = count()
+  fire("CHAT_MSG_LOOT", lootMsg(6314, "Wolfmaster Cape", 3))
+  eq(count(), n, "BoP rare skipped")
+  fire("CHAT_MSG_LOOT", lootMsg(13033, "Zealot Blade", 3))
+  eq(count(), n + 1, "BoE rare posted")
+  slash("set loot rares_boe_only off")
+  fire("CHAT_MSG_LOOT", lootMsg(6314, "Wolfmaster Cape", 3))
+  eq(count(), n + 2, "BoP rare posted with rares_boe_only off")
+  slash("reset loot")
+end)
+
+test("loot: legendary gear always posts, legendary material never", function()
+  slash("set loot min_quality 6")
+  slash("set loot min_vendor_value 0")
+  local n = count()
+  fire("CHAT_MSG_LOOT", lootMsg(17182, "Sulfuras", 5))
+  eq(count(), n + 1, "legendary weapon")
+  fire("CHAT_MSG_LOOT", lootMsg(17010, "Elementium Bar", 5))
+  eq(count(), n + 1, "legendary material, even with vendor 0")
+  slash("reset loot")
+end)
+
+test("loot: boe and gear fields in the data", function()
+  fire("CHAT_MSG_LOOT", lootMsg(13033, "Zealot Blade", 3))
+  assert(has('"boe":true') and has('"gear":true'), last())
+  fire("CHAT_MSG_LOOT", lootMsg(17182, "Sulfuras", 5))
+  assert(has('"boe":false') and has('"gear":true'), last())
+  -- Carving Knife: no GetItemInfoInstant class, so gear is unknown.
+  fire("CHAT_MSG_LOOT", lootMsg(2140, "Carving Knife", 3))
+  assert(has('"boe":true') and has('"gear":null'), last())
+end)
+
+test("mount: bought from a vendor via \"You receive item\"", function()
+  local n = count()
+  fire("MERCHANT_SHOW")
+  fire("CHAT_MSG_LOOT", "You receive item: " .. link(5656, "Gray Wolf", 3))
+  fire("MERCHANT_CLOSED")
+  eq(count(), n + 1, "emitted")
+  assert(has('"type":"mount"') and has('"name":"Gray Wolf"') and has('"item_id":5656'), last())
+  assert(has('"bought":true') and has('"spell_id":null') and has('"link":"|cnIQ3:|Hitem:5656'), last())
+end)
+
+test("mount: looted mount dedupes within 120 s", function()
+  now = now + 121
+  local n = count()
+  fire("CHAT_MSG_LOOT", lootMsg(5656, "Gray Wolf", 3))
+  eq(count(), n + 1, "looted mount")
+  assert(has('"bought":false'), last())
+  now = now + 119
+  fire("CHAT_MSG_LOOT", lootMsg(5656, "Gray Wolf", 3))
+  eq(count(), n + 1, "second within 120 s dropped")
+  C_MountJournal = { GetMountInfoByID = function() return "Gray Wolf", 6777 end }
+  fire("NEW_MOUNT_ADDED", 12)
+  eq(count(), n + 1, "journal event for the same mount dropped too")
+  now = now + 121
+  fire("NEW_MOUNT_ADDED", 12)
+  eq(count(), n + 2, "journal route")
+  assert(has('"spell_id":6777') and has('"item_id":null') and has('"link":null'), last())
+  C_MountJournal = { GetMountInfoByID = function() error("boom") end }
+  now = now + 121
+  fire("NEW_MOUNT_ADDED", 13)
+  eq(count(), n + 2, "journal error ignored")
+  C_MountJournal = nil
+end)
+
+test("mount: non-mount pushed item ignored", function()
+  now = now + 121
+  local n = count()
+  fire("CHAT_MSG_LOOT", "You receive item: " .. link(13033, "Zealot Blade", 3))
+  eq(count(), n, "a weapon is not a mount")
+  fire("CHAT_MSG_LOOT", "You receive item: " .. link(769, "Chunk of Boar Meat", 1) .. "x2")
+  eq(count(), n, "no class info, not a mount")
+end)
+
+test("duel: win, loss ignored by default, retreat marks fled, Mak'gora flagged", function()
+  local n = count()
+  fire("CHAT_MSG_SYSTEM", "Flano has defeated Grakkor Highmountain in a duel")
+  eq(count(), n + 1, "win")
+  assert(has('"type":"duel"') and has('"opponent":"Grakkor Highmountain"') and has('"won":true'), last())
+  assert(has('"fled":false') and has('"makgora":false'), last())
+  fire("CHAT_MSG_SYSTEM", "Grakkor has defeated Flano Wren-Classic Beta PvE 2 in a duel")
+  eq(count(), n + 1, "loss ignored by default")
+  fire("CHAT_MSG_SYSTEM", "Grakkor has fled from Flano Wren in a duel")
+  eq(count(), n + 2, "retreat is a win")
+  assert(has('"opponent":"Grakkor"') and has('"won":true') and has('"fled":true'), last())
+  fire("CHAT_MSG_SYSTEM", "Flano Wren has slain Grakkor in a Mak'gora")
+  eq(count(), n + 3, "Mak'gora")
+  assert(has('"makgora":true') and has('"won":true'), last())
+  fire("CHAT_MSG_SYSTEM", "Bob has defeated Al in a duel")
+  eq(count(), n + 3, "someone else's duel")
+end)
+
+test("duel: wins_only off records a loss", function()
+  slash("set duel wins_only off")
+  fire("CHAT_MSG_SYSTEM", "Grakkor has defeated Flano in a duel")
+  assert(has('"opponent":"Grakkor"') and has('"won":false'), last())
+  slash("reset duel")
+end)
+
+test("battleground: win recorded once per visit, loss ignored by default", function()
+  local n = count()
+  instanceKind, bgWinner = "pvp", nil
+  fire("PLAYER_ENTERING_WORLD")
+  eq(count(), n, "no winner yet")
+  bgWinner = 1 -- Alliance
+  fire("UPDATE_BATTLEFIELD_STATUS", 1)
+  eq(count(), n + 1, "win")
+  assert(has('"type":"battleground"') and has('"won":true') and has('"name":"Deadmines"'), last())
+  fire("PVP_MATCH_COMPLETE")
+  eq(count(), n + 1, "once per visit")
+  instanceKind = "none"
+  fire("PLAYER_ENTERING_WORLD")
+  instanceKind, bgWinner = "pvp", 0 -- Horde wins the next one
+  fire("PVP_MATCH_COMPLETE")
+  eq(count(), n + 1, "loss ignored")
+  instanceKind = "none"
+  fire("PLAYER_ENTERING_WORLD")
+  slash("set battleground wins_only off")
+  instanceKind = "pvp"
+  fire("PVP_MATCH_COMPLETE")
+  assert(has('"won":false'), last())
+  slash("reset battleground")
+  instanceKind, bgWinner = "none", nil
+  fire("PLAYER_ENTERING_WORLD")
+end)
+
+test("boss_kill: first kill flagged once, group lists party members, first_kill_only skips repeats", function()
+  local n = count()
+  partyOn = true
+  fire("ENCOUNTER_END", 1145, "Mr. Smite", 1, 5, 1)
+  eq(count(), n + 1, "first kill")
+  assert(has('"first_kill":true'), last())
+  assert(has('"group":["Grakkor Highmountain (Shaman 24)","Mira (Mage 22)"]'), last())
+  eq(ns.char.kills["1145"], time(), "remembered")
+  fire("ENCOUNTER_END", 1145, "Mr. Smite", 1, 5, 1)
+  assert(has('"first_kill":false'), last())
+  slash("set bosskill first_kill_only on")
+  fire("ENCOUNTER_END", 1145, "Mr. Smite", 1, 5, 1)
+  eq(count(), n + 2, "repeat skipped")
+  fire("ENCOUNTER_END", 1146, "Cookie", 1, 5, 1)
+  eq(count(), n + 3, "new boss still posts")
+  slash("reset bosskill")
+  inRaid = true
+  fire("ENCOUNTER_END", 1146, "Cookie", 1, 5, 1)
+  assert(has('"group":null'), "raid: " .. last())
+  inRaid = false
+  issecretvalue = function(v) return v == "Mira" end
+  fire("ENCOUNTER_END", 1146, "Cookie", 1, 5, 1)
+  assert(has('"group":null'), "secret: " .. last())
+  issecretvalue = nil
+  partyOn = false
+  fire("ENCOUNTER_END", 1146, "Cookie", 1, 5, 1)
+  assert(has('"group":null'), "solo: " .. last())
+end)
+
 test("set: numbers, money and booleans, typed by the default", function()
   slash("set loot min_quality 4")
   eq(ns:GetOption("loot", "min_quality"), 4, "number")
@@ -498,7 +720,8 @@ test("webhook: account-wide, per character, clear; never printed in full", funct
 end)
 
 test("every notifier has a working /doink test fixture", function()
-  for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup" }) do
+  for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup",
+      "mount", "duel", "battleground" }) do
     local n = count()
     SlashCmdList.DOINK("test " .. t)
     eq(count(), n + 1, t)
@@ -744,6 +967,7 @@ test("announce: test events are whispered to you, never the guild", function()
   eq(lastChat()[2], "WHISPER", "whisper"); eq(lastChat()[3], "Flano Wren", "full name")
   assert(lastChat()[1]:find("^%[test%] Ding! Level"), lastChat()[1])
   runTimers()
+  now = now + 61 -- fresh per-minute budget: nine sample lines follow
   slash("announce test")
   runTimers()
   local lines = {}
@@ -782,7 +1006,53 @@ test("announce: off silences everything, including tests; bad input shows usage"
   assert(slash("announce loot shiny"):find("usage", 1, true))
   assert(slash("announce bogus"):find("usage", 1, true))
   slash("announce guild")
-  assert(slash(""):find("announce: guild; level_up milestones, loot epic, death on, quest off, boss_kill on, skill_up off", 1, true))
+  assert(slash(""):find("announce: guild; level_up milestones, loot epic, death on, quest off, boss_kill on, skill_up off, mount on, duel on, battleground on", 1, true))
+end)
+
+test("announce: mounts, duels, battlegrounds and First kill!", function()
+  announceReset()
+  now = now + 121
+  fire("MERCHANT_SHOW")
+  fire("CHAT_MSG_LOOT", "You receive item: " .. link(5656, "Gray Wolf", 3))
+  fire("MERCHANT_CLOSED")
+  eq(lastChat()[1], "Bought a new mount: " .. link(5656, "Gray Wolf", 3) .. "!", "bought mount")
+  runTimers()
+  now = now + 121
+  C_MountJournal = { GetMountInfoByID = function() return "Swift Razzashi Raptor", 24242 end }
+  fire("NEW_MOUNT_ADDED", 1)
+  C_MountJournal = nil
+  eq(lastChat()[1], "Got a new mount: Swift Razzashi Raptor!", "journal mount, no link")
+  runTimers()
+  fire("CHAT_MSG_SYSTEM", "Grakkor has fled from Flano in a duel")
+  eq(lastChat()[1], "Won a duel against Grakkor (they ran).", "duel win, fled")
+  runTimers()
+  fire("CHAT_MSG_SYSTEM", "Flano has slain Grakkor in a Mak'gora")
+  eq(lastChat()[1], "Won a Mak'gora against Grakkor.", "Mak'gora")
+  runTimers()
+  slash("set duel wins_only off")
+  fire("CHAT_MSG_SYSTEM", "Grakkor has defeated Flano in a duel")
+  eq(lastChat()[1], "Lost a duel to Grakkor.", "duel loss")
+  slash("reset duel")
+  runTimers()
+  now = now + 61
+  instanceKind, bgWinner = "pvp", 1
+  fire("PVP_MATCH_COMPLETE")
+  eq(lastChat()[1], "Won Deadmines!", "battleground win")
+  runTimers()
+  slash("set battleground wins_only off")
+  instanceKind = "none"; fire("PLAYER_ENTERING_WORLD")
+  instanceKind, bgWinner = "pvp", 0
+  fire("PVP_MATCH_COMPLETE")
+  eq(lastChat()[1], "Lost Deadmines.", "battleground loss")
+  slash("reset battleground")
+  instanceKind, bgWinner = "none", nil; fire("PLAYER_ENTERING_WORLD")
+  runTimers()
+  fire("ENCOUNTER_END", 1147, "Captain Greenskin", 1, 5, 1)
+  eq(lastChat()[1], "Captain Greenskin down! (Deadmines, 5 players) First kill!", "first kill")
+  runTimers()
+  fire("ENCOUNTER_END", 1147, "Captain Greenskin", 1, 5, 1)
+  eq(lastChat()[1], "Captain Greenskin down! (Deadmines, 5 players)", "repeat kill")
+  runTimers()
 end)
 
 ------------------------------------------------------------------ options page
@@ -796,10 +1066,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 10 + 3, "announce 7, discord 10, realtime 3")
+  eq(#settings.controls, 7 + 3 + 10 + 7 + 3, "announce 7+3, discord 10+7, realtime 3")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 12, "checkboxes"); eq(kinds.dropdown, 7, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 22, "checkboxes"); eq(kinds.dropdown, 7, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")
