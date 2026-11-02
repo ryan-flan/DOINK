@@ -137,6 +137,8 @@ local itemCache = {
   [13033] = { "Zealot Blade", nil, 3, 0, 0, nil, nil, 1, "", 0, 9000, nil, nil, 2 },
   [17182] = { "Sulfuras", nil, 5, 0, 0, nil, nil, 1, "", 0, 0, nil, nil, 1 },
   [17010] = { "Elementium Bar", nil, 5, 0, 0, nil, nil, 20, "", 0, 0, nil, nil, 0 },
+  -- No 14th value: a client that doesn't report bindType.
+  [9999] = { "Mystery Rare", nil, 3, 0, 0, nil, nil, 1, "", 0, 500, nil, nil, nil },
 }
 local uncached = {}
 function GetItemInfo(id)
@@ -522,6 +524,14 @@ test("loot: BoE rare posts, BoP rare doesn't (rares_boe_only)", function()
   fire("CHAT_MSG_LOOT", lootMsg(6314, "Wolfmaster Cape", 3))
   eq(count(), n + 2, "BoP rare posted with rares_boe_only off")
   slash("reset loot")
+end)
+
+test("loot: rare with unknown bind type still posts (rares_boe_only)", function()
+  slash("reset loot")
+  local n = count()
+  fire("CHAT_MSG_LOOT", lootMsg(9999, "Mystery Rare", 3))
+  eq(count(), n + 1, "unknown bind type counts as BoE")
+  assert(has('"boe":null'), last())
 end)
 
 test("loot: legendary gear always posts, legendary material never", function()

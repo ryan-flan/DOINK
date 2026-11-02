@@ -59,9 +59,11 @@ local function Handle(itemID, link, qty)
     -- materials never do.
     if gear == false then return end
   else
-    -- rares_boe_only: a soulbound rare is only interesting to you.
+    -- rares_boe_only: a soulbound rare is only interesting to you. An
+    -- unknown bind type (boe == nil) counts as BoE: a few extra posts beat
+    -- silently dropping every rare on a client that doesn't report it.
     local passesQuality = quality >= ns:GetOption("loot", "min_quality")
-      and not (quality == 3 and ns:GetOption("loot", "rares_boe_only") and boe ~= true)
+      and not (quality == 3 and ns:GetOption("loot", "rares_boe_only") and boe == false)
     local passesValue = vendorValue >= ns:GetOption("loot", "min_vendor_value")
     if not (passesQuality or passesValue) then return end
   end

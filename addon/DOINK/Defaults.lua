@@ -7,7 +7,8 @@ ns.Defaults = {
   level_up  = { enabled = true, milestones_only = false },
   -- Post if quality >= min_quality (3 = rare/blue) OR the stack's total
   -- vendor value >= min_vendor_value (copper; 10000 = 1g).
-  -- rares_boe_only: a rare (quality 3) posts only if it is Bind on Equip.
+  -- rares_boe_only: a rare (quality 3) posts only if it is Bind on Equip
+  -- (or the client doesn't say: an unknown bind type counts as BoE).
   -- Legendaries post whenever they are gear, never when they aren't.
   loot      = { enabled = true, min_quality = 3, min_vendor_value = 10000, rares_boe_only = true },
   death     = { enabled = true },
