@@ -93,6 +93,9 @@ DOINKDB = {
     ["Flano-Whatever"] = {
       seq = 42,                 -- last seq issued for this char
       config = { ... },         -- per-char config overrides
+      kills = {                 -- first-kill memory: encounter id -> ts
+        ["672"] = 1759300000,
+      },
       events = {                -- ring buffer, newest last, max 500 entries
         '{"seq":41,"ts":1759300000,...}',
         '{"seq":42,"ts":1759300100,...}',
@@ -146,11 +149,22 @@ Rules:
 - Ring buffer: when `#events > 500`, drop from the front.
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
-  - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234}`
+  - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234, "boe": true|false|null, "gear": true|false|null}`
   - `death`:     `{"zone": "Westfall", "subzone": "...", "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
-  - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "...", "difficulty": 1, "success": true, "group_size": 5}`
+  - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "...", "difficulty": 1, "success": true, "group_size": 5, "first_kill": true|false, "group": ["Flano Wren (Warrior 23)", ...]|null}`
   - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150}`
+  - `mount`:     `{"name": "Gray Wolf", "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
+  - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
+  - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
+- `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is
+  unknown). `loot.gear` is item class 2 (weapon) or 4 (armor); `null` when
+  the class is unknown.
+- `boss_kill.first_kill` is true the first time this character kills that
+  encounter (remembered in `chars[key].kills`, keyed by the encounter id as
+  a string). `boss_kill.group` lists the party members other than the
+  player (at most 4) as `"Name Surname (Class Level)"`; `null` in a raid,
+  when solo, or when any name is secret.
 
 ## Notifiers (v1)
 
@@ -162,6 +176,13 @@ Rules:
 | `quest`     | `QUEST_TURNED_IN`          | always                                           |
 | `boss_kill` | `ENCOUNTER_END`            | success only                                     |
 | `skill_up`  | `CHAT_MSG_SKILL`           | milestones only (75/150/225/300)                 |
+| `mount`     | `NEW_MOUNT_ADDED`, `CHAT_MSG_LOOT` | always (one per 120 s)                   |
+| `duel`      | `CHAT_MSG_SYSTEM`          | wins only (`wins_only`)                          |
+| `battleground` | `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE`, `PLAYER_ENTERING_WORLD` | wins only (`wins_only`) |
+
+Loot: `rares_boe_only` (default true) keeps rares (quality 3) only when they
+are Bind on Equip; legendaries (quality 5) always post when they are gear
+and never when they aren't. Boss kills: `first_kill_only` (default false).
 
 Deferred to v1.1 pending beta findings: achievements (vanilla had none; Forever
 may add them), rare mob kills (combat log `UNIT_DIED` + classification).
@@ -174,7 +195,8 @@ transport does with it. Rules live in `ns.Defaults.announce` (per-character
 overrides via `ns:GetOption("announce", key)`; allowed string values in
 `ns.Choices.announce`): `channel` guild|officer|party|raid|off, `level_up`
 milestones|all|off, `loot` minimum quality any|uncommon|rare|epic|legendary|off,
-`skill_up` max|milestones|all|off, `death`/`quest`/`boss_kill` booleans.
+`skill_up` max|milestones|all|off, `death`/`quest`/`boss_kill`/`mount`/`duel`/`battleground`
+booleans (the last three default on).
 Defaults are deliberately stricter than the Discord queue's (milestones,
 epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
 
