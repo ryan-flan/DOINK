@@ -1,34 +1,25 @@
 name: CI
-
-on:
-  push:
-  pull_request:
-
+on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12" # oldest supported
-      - name: Install LuaJIT
-        run: sudo apt-get update && sudo apt-get install -y luajit
+      - run: sudo apt-get update && sudo apt-get install -y luajit
       - name: Addon tests
         working-directory: addon
         run: luajit tests/test_addon.lua
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
       - name: Companion tests
         working-directory: companion
-        run: python -m unittest discover -s tests -v
-
+        run: go vet ./... && go test ./...
   # The tray, autostart and single-instance code only runs on Windows.
   test-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Companion tests
-        working-directory: companion
-        run: python -m unittest discover -s tests -v
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
+      - working-directory: companion
+        run: go vet ./... ; go test ./...

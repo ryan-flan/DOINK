@@ -1,0 +1,28 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": "../assets/doink.ico"
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "0.0.0.0",
+          "product_version": "0.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "Comments": "Source and builds: github.com/ryan-flan/DOINK",
+            "CompanyName": "DOINK",
+            "FileDescription": "DOINK companion: posts WoW events to Discord",
+            "InternalName": "doink",
+            "LegalCopyright": "Copyright (c) 2026 Ryan Flanagan. MIT License.",
+            "OriginalFilename": "doink.exe",
+            "ProductName": "DOINK"
+          }
+        }
+      }
+    }
+  }
+}

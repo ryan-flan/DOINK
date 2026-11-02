@@ -48,31 +48,29 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
 
       - name: Companion tests (on Windows)
         working-directory: companion
-        run: python -m unittest discover -s tests -v
+        run: go test ./...
 
-      # Folder build, not --onefile: one-file builds unpack to a temp dir on
-      # every launch, which antivirus heuristics flag far more often.
+      # One self-contained exe: icon and version info come from winres.json
+      # (go-winres writes a .syso that go build links in).
       - name: Build doink.exe
         working-directory: companion
+        shell: pwsh
         run: |
-          pip install pyinstaller
-          python packaging/version_info.py version_info.txt
-          pyinstaller --onedir --noconsole --name doink --icon assets/doink.ico `
-            --add-data "assets/doink.ico;assets" --add-data "assets/doink-update.ico;assets" `
-            --add-data "assets/doink-48.png;assets" `
-            --version-file version_info.txt main.py
+          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0" }
+          go run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --out cmd/doink/rsrc --product-version $tag --file-version $tag
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$tag" -o dist/Companion/doink.exe ./cmd/doink
 
       - name: Smoke test the built exe
         shell: pwsh
         run: |
           $dir = "smoke"
-          Copy-Item -Recurse companion/dist/doink $dir
+          Copy-Item -Recurse companion/dist/Companion $dir
           $sv = (Resolve-Path $dir).Path + "\DOINK.lua"
           Set-Content $sv @'
           DOINKDB = {
@@ -89,6 +87,9 @@ jobs:
           $p = Start-Process "$dir/doink.exe" -ArgumentList "--once" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "doink.exe --once exited with $($p.ExitCode)" }
 
+      # Same names and layout as the Python builds: the v0.11 self-updater
+      # on existing installs looks for DOINK-<tag>.zip, its .sha256 and the
+      # Companion/ folder inside.
       - name: Package
         shell: pwsh
         run: |
@@ -96,7 +97,7 @@ jobs:
           $out = "package/$name"
           New-Item -ItemType Directory -Force "$out/AddOns", "$out/Companion" | Out-Null
           Copy-Item -Recurse addon/DOINK "$out/AddOns/DOINK"
-          Copy-Item -Recurse companion/dist/doink/* "$out/Companion/"
+          Copy-Item -Recurse companion/dist/Companion/* "$out/Companion/"
           Copy-Item companion/config.example.toml "$out/Companion/"
           Copy-Item README.md, LICENSE "$out/"
           Compress-Archive -Path $out -DestinationPath "package/$name.zip"
@@ -111,8 +112,66 @@ jobs:
             ${{ env.ZIP }}
             ${{ env.ZIP }}.sha256
 
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
+
+      - name: Build doink
+        working-directory: companion
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then tag="${GITHUB_REF_NAME#v}"; else tag=0.0.0; fi
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$tag" -o dist/doink ./cmd/doink
+
+      - name: Smoke test the built binary
+        working-directory: companion
+        run: |
+          mkdir smoke
+          cat > smoke/DOINK.lua <<'LUA'
+          DOINKDB = {
+          ["chars"] = {
+          ["Flano Wren-R"] = {
+          ["events"] = {
+          "{\"char\":\"Flano\",\"surname\":\"Wren\",\"realm\":\"R\",\"seq\":1,\"type\":\"level_up\",\"data\":{\"level\":2}}",
+          },
+          },
+          },
+          }
+          LUA
+          printf "savedvariables_path = '%s'\ndry_run = true\n" "$PWD/smoke/DOINK.lua" > smoke/config.toml
+          ./dist/doink --once --config smoke/config.toml
+
+      - name: Package
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then name="DOINK-$GITHUB_REF_NAME-linux-amd64"; else name="DOINK-dev-linux-amd64"; fi
+          mkdir package
+          cp companion/dist/doink companion/config.example.toml README.md LICENSE package/
+          tar -czf "$name.tar.gz" -C package doink config.example.toml README.md LICENSE
+          printf '%s  %s' "$(sha256sum "$name.tar.gz" | cut -d' ' -f1)" "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "TARBALL=$name.tar.gz" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doink-linux
+          path: |
+            ${{ env.TARBALL }}
+            ${{ env.TARBALL }}.sha256
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [build, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: doink-* # not the store-only addon zip
+          path: dist
+          merge-multiple: true
       - name: Publish release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "${{ env.ZIP }}" "${{ env.ZIP }}.sha256" --title "DOINK ${{ github.ref_name }}" --generate-notes
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" \
+            --title "DOINK ${{ github.ref_name }}" --generate-notes
