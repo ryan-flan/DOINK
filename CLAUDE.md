@@ -611,9 +611,18 @@ fixture included; that's a stand-in for the real name, by decision.)
   their Discord account"). Sept-2026 bug: Horde/PvP guilds' Link button
   did nothing. Because `Announce.lua` uses `SendChatMessage(…, "GUILD")`,
   DOINK's lines should show in the linked channel for linked players; the
-  README says so ("Already linking your guild to Discord?"). Unverified:
-  item-link rendering, any filtering, whether a Discord chat type is
-  exposed to addons.
+  README says so ("Already linking your guild to Discord?").
+  - [x] Tried on retail 12.1.5 (2026-11-02, a linked guild): a guild line
+    sent by addon code (from `/run`, i.e. with a key press) reached the
+    Discord channel. Item links arrive as plain text (`Looted
+    [Hearthstone]!`: no colour, no link); Discord shows the player's
+    Discord name and avatar with a game-controller badge. A message typed
+    in Discord arrives in game as a normal `CHAT_MSG_GUILD` whose sender
+    is the Discord name (`flano`: lowercase, no realm); the chat frame
+    adds a Discord icon. So addons can read Discord messages, but on
+    retail can't answer them automatically (GUILD needs a key press).
+  - [ ] Which `CHAT_MSG_GUILD` argument marks a Discord-origin message
+    (needed before acting on Discord messages).
 - [ ] **Launch-day checklist** (2026-11-04; nothing here is verified yet):
   - [ ] **First: can an addon post to GUILD without a key press?**
     `/run C_Timer.After(1,function() SendChatMessage("test","GUILD") end)`.
