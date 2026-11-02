@@ -36,6 +36,9 @@ type Deps struct {
 	Items   *wowhead.Cache // nil when wowhead is off
 	Log     *slog.Logger
 	Version string
+	// Started, if set, is called once Run is watching its files (after
+	// Status.Watching), so startup warnings set there aren't cleared by it.
+	Started func()
 }
 
 // WebhookFor picks a character's webhook: its own in-game one, else the
@@ -236,6 +239,9 @@ func (d Deps) watch() []*watcher.Watcher {
 // is polled too and a settled change reloads the settings in place.
 func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.Config, error)) error {
 	watchers := d.watch()
+	if d.Started != nil {
+		d.Started()
+	}
 	dirty := map[string]bool{}
 	failures := 0
 	var retryAt time.Time

@@ -95,12 +95,6 @@ func runTray(o options) int {
 	st.OnNotice = t.Inform
 	log.Info("DOINK companion v" + version + " started")
 
-	if noWoW {
-		st.Failed("World of Warcraft not found. Set wow_dir in config.toml (tray menu: Edit settings)")
-	} else if cfg.WebhookURL == "" && !anyGameWebhooks(cfg) && !cfg.DryRun {
-		st.Failed("no webhook yet. In game: /doink webhook <url>, or edit config.toml")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	if cfg.UpdateCheck {
 		checker.Start(ctx)
@@ -109,7 +103,16 @@ func runTray(o options) int {
 	go func() {
 		defer close(done)
 		reload := func() (*config.Config, error) { return config.Load(o.config, o.dryRun) }
-		if err := runner.Run(ctx, deps(cfg, stateFile, st, log), o.config, reload); err != nil {
+		d := deps(cfg, stateFile, st, log)
+		// After Run's Status.Watching, which would clear these.
+		d.Started = func() {
+			if noWoW {
+				st.Failed("World of Warcraft not found. Set wow_dir in config.toml (tray menu: Edit settings)")
+			} else if cfg.WebhookURL == "" && !anyGameWebhooks(cfg) && !cfg.DryRun {
+				st.Failed("no webhook yet. In game: /doink webhook <url>, or edit config.toml")
+			}
+		}
+		if err := runner.Run(ctx, d, o.config, reload); err != nil {
 			log.Error(err.Error())
 		}
 	}()

@@ -507,6 +507,20 @@ func TestRunReloadsConfigAndStops(t *testing.T) {
 	}
 }
 
+func TestStartedWarningSurvivesWatching(t *testing.T) {
+	f := newFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := f.deps(f.state())
+	d.Started = func() { f.status.Failed("no webhook yet") }
+	if err := Run(ctx, d, filepath.Join(f.dir, "config.toml"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.status.Summary(); got != "DOINK: no webhook yet" {
+		t.Errorf("summary %q", got)
+	}
+}
+
 func TestRunWithACancelledContext(t *testing.T) {
 	f := newFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
