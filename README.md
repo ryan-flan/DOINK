@@ -245,13 +245,14 @@ requests.
    shows a "no webhook yet" notification; that's expected.
 2. In Discord: *Server Settings → Integrations → Webhooks → New Webhook*,
    choose a channel, *Copy Webhook URL*. Then, in game:
-   `/doink webhook <url>` and `/doink flush`. (Or put
-   `webhook_url = "<url>"` in `config.toml`: tray menu → **Edit settings**.)
-3. Optional: right-click the tray icon and tick **Start with Windows**.
+   `/doink webhook <url>` and `/doink flush`. (Or paste it into the
+   companion's settings window: right-click the tray icon → **Settings**,
+   then **Send test** to check it.)
+3. Optional: tick **Start with Windows** in the settings window (or the
+   tray menu).
 
 DOINK finds your WoW install by itself; if it can't, the tray icon says so.
-Set `wow_dir` in `config.toml` (tray menu → **Edit settings**) to your
-World of Warcraft folder.
+Choose your World of Warcraft folder in the settings window (**Browse…**).
 
 To check the whole loop in game: `/doink test levelup`, then `/doink flush`.
 A `[TEST]` post should appear a few seconds after the reload. To see what
@@ -261,10 +262,17 @@ command prompt (or `test loot`, `test death`, ...): it posts the same
 
 Hover over the tray icon for the last post or the current problem; if
 something goes wrong (no webhook, Discord unreachable) you get a Windows
-notification once. **Left-click** opens the log. **Right-click** for Edit
-settings, Open log, Open DOINK folder, Start with Windows, Check for
-updates and Quit. There is no settings window: settings live in
-`config.toml`, and changes apply without restarting DOINK.
+notification once. **Left-click** opens the log. **Right-click** for
+Settings, Open log, Open DOINK folder, Start with Windows, Check for
+updates and Quit.
+
+The **settings window** has the webhook (with a **Send test** button), the
+WoW folder, Start with Windows, and the last few posts. It follows your
+Windows light or dark theme. It saves to `config.toml`, keeping anything
+else you wrote there, and changes apply without restarting DOINK. Every
+other setting is in `config.toml` (link at the bottom of the window). The
+window is drawn by Microsoft Edge WebView2, which comes with Windows 11 and
+current Windows 10; without it, Settings opens `config.toml` instead.
 
 **Updates.** DOINK checks GitHub once a day for a newer release. When
 there is one, the tray icon gets an orange dot and the menu offers to open
@@ -352,7 +360,9 @@ newest 10 queued events.
 - **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
 - **Writes** only inside its own folder: `config.toml` (your settings),
   `state.json` (what it has already posted), `doink.log` (capped at ~2 MB;
-  the Linux build logs to the terminal instead).
+  the Linux build logs to the terminal instead). The one exception: the
+  settings window's WebView2 keeps its browser data in
+  `%LOCALAPPDATA%\DOINK\WebView2`, created the first time you open it.
 - **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
@@ -360,12 +370,15 @@ newest 10 queued events.
   (`update_check = false` turns that off). It never downloads or installs
   anything itself: a newer version only opens the release page in your
   browser when you choose it. No telemetry. It doesn't listen on any port.
+  The settings window is a local page built into `doink.exe`; it loads
+  nothing from the internet.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
 - **Screen:** this version doesn't look at the screen at all (realtime is
   paused).
-- **Uninstall:** untick Start with Windows, quit, delete the folder.
+- **Uninstall:** untick Start with Windows, quit, delete the folder (and
+  `%LOCALAPPDATA%\DOINK` if you opened the settings window).
 
 Every release is built from this repository's source by
 [GitHub Actions](.github/workflows/release.yml); the build log is public on
@@ -454,7 +467,7 @@ Bugs and requests: https://github.com/ryan-flan/DOINK/issues.
 ```
 addon/DOINK/       the addon (Lua 5.1)
 addon/tests/       offline harness with WoW API stubs
-companion/         the companion (Go; BurntSushi/toml and x/sys only)
+companion/         the companion (Go; BurntSushi/toml, x/sys, go-webview2)
 ```
 
 ```bash

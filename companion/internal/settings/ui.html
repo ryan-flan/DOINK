@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>DOINK</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f2; --card: #ffffff; --line: #e6e3dc; --text: #1d1c1a; --muted: #6f6b63;
+  --field: #fbfaf8; --gold: #c8901a; --gold-ink: #ffffff; --gold-soft: #fbf1dc;
+  --ok: #2e9d5b; --warn: #c7741a; --warn-soft: #fdf0e2; --err: #c2413b; --err-soft: #fbe9e8;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181b; --card: #202226; --line: #2e3036; --text: #ecebe8; --muted: #9a978f;
+    --field: #191a1d; --gold: #e3a92b; --gold-ink: #1b1608; --gold-soft: #2e2615;
+    --ok: #4cc27e; --warn: #e79a45; --warn-soft: #33261a; --err: #ef6b64; --err-soft: #35201f;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  padding: 22px 22px 18px; user-select: none; -webkit-user-select: none;
+}
+input { user-select: text; }
+
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.mark {
+  width: 40px; height: 40px; border-radius: 11px; flex: none;
+  background: linear-gradient(145deg, #f0c04a, #c8901a); color: #2a1d02;
+  display: grid; place-items: center; font: 800 22px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.12);
+}
+.title { flex: 1; min-width: 0; }
+.title h1 { margin: 0; font: 650 18px/1.2 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: .2px; }
+.title .ver { color: var(--muted); font-size: 12px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+  padding: 5px 11px 5px 9px; border-radius: 999px; background: var(--card);
+  border: 1px solid var(--line); font-size: 12.5px; color: var(--muted);
+}
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.pill.problem .dot { background: var(--warn); }
+.pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#status-line { margin: -4px 0 14px; }
+
+.banner {
+  display: none; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px;
+  border-radius: 10px; font-size: 13px;
+}
+.banner.show { display: flex; }
+.banner.update { background: var(--gold-soft); }
+.banner.problem { background: var(--warn-soft); }
+.banner.error { background: var(--err-soft); }
+.banner .grow { flex: 1; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px 15px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.card h2 { margin: 0 0 2px; font-size: 13.5px; font-weight: 650; }
+.card .hint { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.field {
+  flex: 1; min-width: 0; height: 34px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--field); color: var(--text);
+  font: inherit; font-size: 13px; outline: none; transition: border-color .12s, box-shadow .12s;
+}
+.field:focus { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent); }
+.field::placeholder { color: var(--muted); opacity: .8; }
+.note { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.note b { color: var(--text); font-weight: 600; }
+.note.ok { color: var(--ok); }
+.note.bad { color: var(--err); }
+
+button {
+  font: inherit; font-size: 13px; height: 34px; padding: 0 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--text); white-space: nowrap;
+  transition: background .12s, opacity .12s;
+}
+button:hover { background: var(--field); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); font-weight: 600; }
+button.primary:hover { filter: brightness(1.05); }
+button.icon { width: 34px; padding: 0; display: grid; place-items: center; }
+button.link {
+  height: auto; padding: 0; border: 0; background: none; color: var(--muted);
+  font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px;
+}
+button.link:hover { color: var(--text); background: none; }
+
+.posts { list-style: none; margin: 0; padding: 0; max-height: 168px; overflow-y: auto; }
+.posts li { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.posts li:first-child { border-top: 0; padding-top: 2px; }
+.posts .when { color: var(--muted); font-size: 12px; width: 82px; flex: none; padding-top: 1px; }
+.posts .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { color: var(--muted); font-size: 13px; }
+
+details { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+summary { cursor: pointer; }
+details ul { margin: 6px 0 0; padding-left: 18px; word-break: break-all; }
+
+footer { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+footer .links { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; }
+.switch { display: flex; align-items: center; gap: 9px; cursor: pointer; font-size: 13px; }
+.switch input { display: none; }
+.switch .track {
+  width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s;
+}
+.switch .track::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+.switch input:checked + .track { background: var(--gold); }
+.switch input:checked + .track::after { transform: translateX(14px); }
+.toolbar { display: flex; align-items: center; gap: 12px; margin: 14px 0 12px; }
+.toolbar .grow { flex: 1; }
+#saved { color: var(--ok); font-size: 12.5px; opacity: 0; transition: opacity .2s; }
+#saved.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark">D</div>
+  <div class="title"><h1>DOINK</h1><div class="ver" id="version"></div></div>
+</header>
+<div id="status-line"><span class="pill" id="pill"><i class="dot"></i><span id="summary">Starting…</span></span></div>
+
+<div class="banner update" id="update"><span class="grow" id="update-text"></span><button class="primary" data-open="update">Download</button></div>
+<div class="banner problem" id="problem"><span class="grow" id="problem-text"></span></div>
+<div class="banner error" id="config-error"><span class="grow" id="config-error-text"></span><button data-open="config">Edit config.toml</button></div>
+
+<section class="card">
+  <h2>Discord webhook</h2>
+  <p class="hint">In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</p>
+  <div class="row">
+    <input class="field" id="webhook" type="password" spellcheck="false" autocomplete="off" placeholder="https://discord.com/api/webhooks/…">
+    <button class="icon" id="reveal" title="Show or hide the URL"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button id="test">Send test</button>
+  </div>
+  <div class="note" id="webhook-note"></div>
+</section>
+
+<section class="card">
+  <h2>World of Warcraft folder</h2>
+  <p class="hint">Leave empty and DOINK finds it by itself.</p>
+  <div class="row">
+    <input class="field" id="wowdir" spellcheck="false" autocomplete="off" placeholder="Found automatically">
+    <button id="browse">Browse…</button>
+  </div>
+  <div class="note" id="wow-note"></div>
+  <details id="found-box"><summary id="found-summary"></summary><ul id="found"></ul></details>
+</section>
+
+<div class="toolbar">
+  <label class="switch" id="autostart-box"><input type="checkbox" id="autostart"><span class="track"></span>Start with Windows</label>
+  <span class="grow"></span>
+  <span id="saved">Saved</span>
+  <button class="primary" id="save" disabled>Save</button>
+</div>
+
+<section class="card">
+  <h2>Recent posts</h2>
+  <ul class="posts" id="posts"></ul>
+  <div class="empty" id="no-posts">Nothing posted yet this session. Posts arrive after a <b>/reload</b>, logout or exit.</div>
+</section>
+
+<footer>
+  <div class="links">
+    <button class="link" data-open="log">Open log</button>
+    <button class="link" data-open="folder">Open DOINK folder</button>
+    <button class="link" data-open="config">Edit config.toml</button>
+  </div>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let view = null, saved = { webhook: "", wowDir: "" };
+
+function setText(id, text) { $(id).textContent = text || ""; }
+function show(id, on) { $(id).classList.toggle("show", !!on); }
+
+function renderLive(l) {
+  const problem = l.problem || "";
+  $("pill").classList.toggle("problem", !!problem);
+  setText("summary", problem ? "Needs attention" : (l.summary || "Running"));
+  setText("problem-text", problem.charAt(0).toUpperCase() + problem.slice(1));
+  show("problem", problem);
+  setText("update-text", l.update ? "DOINK v" + l.update + " is available." : "");
+  show("update", l.update);
+  const posts = $("posts");
+  posts.replaceChildren();
+  for (const p of l.recent || []) {
+    const li = document.createElement("li");
+    const when = document.createElement("span"); when.className = "when"; when.textContent = p.at;
+    const what = document.createElement("span"); what.className = "what"; what.textContent = p.who + " " + p.what;
+    what.title = what.textContent;
+    li.append(when, what);
+    posts.append(li);
+  }
+  $("no-posts").style.display = (l.recent || []).length ? "none" : "";
+}
+
+function render(v) {
+  view = v;
+  setText("version", "Companion v" + v.version + (v.dryRun ? " · dry run (nothing is posted)" : ""));
+  setText("config-error-text", v.configError ? "config.toml has a problem: " + v.configError : "");
+  show("config-error", v.configError);
+  saved = { webhook: v.webhook || "", wowDir: v.wowDir || "" };
+  $("webhook").value = saved.webhook;
+  $("wowdir").value = saved.wowDir;
+
+  const hookNote = $("webhook-note");
+  hookNote.className = "note";
+  if (v.gameWebhook) {
+    hookNote.innerHTML = "";
+    hookNote.append("A webhook set in game (", Object.assign(document.createElement("b"), { textContent: "/doink webhook" }),
+      ") is used for " + v.gameWebhook + "; it wins over this one.");
+  } else {
+    hookNote.textContent = v.webhook ? "" : "Or set it in game: /doink webhook <url>";
+  }
+
+  const found = v.found || [];
+  const wowNote = $("wow-note");
+  wowNote.className = "note";
+  if (v.svPathSet) wowNote.textContent = "savedvariables_path in config.toml overrides this folder.";
+  else if (!found.length) { wowNote.className = "note bad"; wowNote.textContent = "No WoW install with the DOINK addon found yet."; }
+  else wowNote.textContent = "";
+  $("found-box").style.display = found.length ? "" : "none";
+  setText("found-summary", "Watching " + found.length + (found.length === 1 ? " file" : " files"));
+  $("found").replaceChildren(...found.map(f => Object.assign(document.createElement("li"), { textContent: f })));
+
+  const auto = v.autostart;
+  $("autostart-box").style.display = auto === null || auto === undefined ? "none" : "";
+  $("autostart").checked = !!auto;
+
+  renderLive(v);
+  updateDirty();
+}
+
+function updateDirty() {
+  const dirty = $("webhook").value.trim() !== saved.webhook || $("wowdir").value.trim() !== saved.wowDir;
+  $("save").disabled = !dirty;
+}
+
+function flash(id) {
+  $(id).classList.add("show");
+  setTimeout(() => $(id).classList.remove("show"), 1800);
+}
+
+// Called by the companion.
+window.doinkLive = l => renderLive(l);
+window.doinkTested = msg => {
+  $("test").disabled = false;
+  $("test").textContent = "Send test";
+  const note = $("webhook-note");
+  note.className = "note " + (msg ? "bad" : "ok");
+  note.textContent = msg || "Sent. Check your Discord channel.";
+};
+
+$("webhook").addEventListener("input", updateDirty);
+$("wowdir").addEventListener("input", updateDirty);
+$("reveal").addEventListener("click", () => {
+  const f = $("webhook");
+  f.type = f.type === "password" ? "text" : "password";
+});
+$("test").addEventListener("click", () => {
+  $("test").disabled = true;
+  $("test").textContent = "Sending…";
+  doinkTest($("webhook").value);
+});
+$("browse").addEventListener("click", async () => {
+  const dir = await doinkBrowse();
+  if (dir) { $("wowdir").value = dir; updateDirty(); }
+});
+$("save").addEventListener("click", async () => {
+  $("save").disabled = true;
+  const r = await doinkSave($("webhook").value, $("wowdir").value);
+  if (r.error) {
+    const note = /webhook/i.test(r.error) ? $("webhook-note") : $("wow-note");
+    note.className = "note bad";
+    note.textContent = r.error;
+    updateDirty();
+    return;
+  }
+  render(r.view);
+  flash("saved");
+});
+$("autostart").addEventListener("change", async e => {
+  const msg = await doinkAutostart(e.target.checked);
+  if (msg) { e.target.checked = !e.target.checked; alert(msg); }
+});
+document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => doinkOpen(b.dataset.open)));
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") doinkClose();
+  if (e.key === "Enter" && !$("save").disabled && e.target.classList.contains("field")) $("save").click();
+});
+
+doinkLoad().then(render);
+</script>
+</body>
+</html>

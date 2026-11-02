@@ -309,21 +309,29 @@ func (t *Tray) Run() error {
 	return nil
 }
 
+// Icon is DOINK's icon at a pixel size, for other windows (0 on failure).
+func Icon(size int) uintptr { return loadIconSize("doink.ico", assets.Icon, uintptr(size)) }
+
 // loadIcon writes the embedded icon to %TEMP%\doink-<name> (if absent or
 // different) and loads it at the small-icon size; the stock application
 // icon if that fails.
 func loadIcon(name string, data []byte) uintptr {
+	size, _, _ := procGetSystemMetrics.Call(smCxSmIcon)
+	icon := loadIconSize(name, data, size)
+	if icon == 0 {
+		icon, _, _ = procLoadIconW.Call(0, idiApp)
+	}
+	return icon
+}
+
+func loadIconSize(name string, data []byte, size uintptr) uintptr {
 	path := filepath.Join(os.TempDir(), "doink-"+name)
 	if old, err := os.ReadFile(path); err != nil || !bytes.Equal(old, data) {
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			logger().Warn(fmt.Sprintf("couldn't write %s: %v", path, err))
 		}
 	}
-	size, _, _ := procGetSystemMetrics.Call(smCxSmIcon)
 	icon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(utf16Ptr(path))), imageIcon, size, size, lrLoadFile)
-	if icon == 0 {
-		icon, _, _ = procLoadIconW.Call(0, idiApp)
-	}
 	return icon
 }
 
@@ -419,7 +427,7 @@ func (t *Tray) menu() {
 	appendMenu(menu, mfGrayed, 0, title)
 	appendMenu(menu, mfGrayed, 0, strings.TrimPrefix(t.st.Summary(), "DOINK: "))
 	appendMenu(menu, mfSeparator, 0, "")
-	appendMenu(menu, mfString, idSettings, "Edit settings")
+	appendMenu(menu, mfString, idSettings, "Settings")
 	procSetMenuDefaultItem.Call(menu, idSettings, 0) // bold
 	appendMenu(menu, mfString, idLog, "Open log")
 	appendMenu(menu, mfString, idFolder, "Open DOINK folder")

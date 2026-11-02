@@ -15,9 +15,12 @@ import (
 
 	"golang.org/x/sys/windows"
 
+	"github.com/ryan-flan/DOINK/companion/internal/autostart"
 	"github.com/ryan-flan/DOINK/companion/internal/config"
+	"github.com/ryan-flan/DOINK/companion/internal/discord"
 	"github.com/ryan-flan/DOINK/companion/internal/runner"
 	"github.com/ryan-flan/DOINK/companion/internal/savedvars"
+	"github.com/ryan-flan/DOINK/companion/internal/settings"
 	"github.com/ryan-flan/DOINK/companion/internal/state"
 	"github.com/ryan-flan/DOINK/companion/internal/status"
 	"github.com/ryan-flan/DOINK/companion/internal/tray"
@@ -53,9 +56,13 @@ func runTray(o options) int {
 	}
 
 	var icon atomic.Pointer[tray.Tray]
+	var window atomic.Pointer[settings.Window]
 	st := status.New(func(newError string) {
 		if t := icon.Load(); t != nil {
 			t.Notify(newError)
+		}
+		if w := window.Load(); w != nil {
+			w.Refresh()
 		}
 	})
 
@@ -80,6 +87,42 @@ func runTray(o options) int {
 		},
 		st.UpdateChecked, updates.FirstCheck, updates.Interval, updates.Retry)
 
+	backend := &settings.Backend{
+		ConfigPath: o.config,
+		DryRun:     o.dryRun,
+		Version:    version,
+		Status:     st,
+		Send: func(url string) error {
+			pool := discord.NewPool(nil, false, version, log)
+			return pool.Send(url, []discord.Embed{discord.ConnectionTestEmbed(version)})
+		},
+		AutostartGet: func() bool {
+			on, _ := autostart.IsEnabled(autostart.Name, autostart.Command())
+			return on
+		},
+		AutostartSet: func(on bool) error {
+			return autostart.SetEnabled(on, autostart.Name, autostart.Command())
+		},
+		Open: func(what string) {
+			switch what {
+			case "log":
+				open(log, logPath)
+			case "folder":
+				open(log, dir)
+			case "config":
+				openConfig(log, o.config)
+			case "update":
+				if u := st.Update(); u != nil && u.Newer() {
+					open(log, u.URL)
+				}
+			}
+		},
+	}
+	win := settings.NewWindow(backend)
+	win.Fallback = func() { openConfig(log, o.config) }
+	win.Icon = tray.Icon
+	window.Store(win)
+
 	t := tray.New(st, version, tray.Hooks{
 		OnQuit: func() {
 			if t := icon.Load(); t != nil {
@@ -87,7 +130,7 @@ func runTray(o options) int {
 			}
 		},
 		OnCheckUpdates: checker.CheckNow,
-		OpenConfig:     func() { openConfig(log, o.config) },
+		OpenConfig:     win.Show,
 		OpenLog:        func() { open(log, logPath) },
 		OpenFolder:     func() { open(log, dir) },
 	})
@@ -107,9 +150,9 @@ func runTray(o options) int {
 		// After Run's Status.Watching, which would clear these.
 		d.Started = func() {
 			if noWoW {
-				st.Failed("World of Warcraft not found. Set wow_dir in config.toml (tray menu: Edit settings)")
+				st.Failed(settings.ProblemNoWoW)
 			} else if cfg.WebhookURL == "" && !anyGameWebhooks(cfg) && !cfg.DryRun {
-				st.Failed("no webhook yet. In game: /doink webhook <url>, or edit config.toml")
+				st.Failed(settings.ProblemNoWebhook)
 			}
 		}
 		if err := runner.Run(ctx, d, o.config, reload); err != nil {
@@ -122,6 +165,7 @@ func runTray(o options) int {
 		log.Error("tray: " + err.Error())
 		tray.MessageBox("DOINK couldn't create its tray icon: "+err.Error(), true)
 	}
+	win.Close()
 	cancel()
 	select {
 	case <-done:

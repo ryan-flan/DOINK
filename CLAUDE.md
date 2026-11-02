@@ -52,7 +52,7 @@ DOINK/
 │       ├── BossKill.lua
 │       └── SkillUp.lua
 └── companion/                # Go module github.com/ryan-flan/DOINK/companion
-    ├── go.mod                # go 1.23; deps: BurntSushi/toml, golang.org/x/sys
+    ├── go.mod                # go 1.23; deps: BurntSushi/toml, golang.org/x/sys, jchv/go-webview2
     ├── config.example.toml
     ├── assets/               # doink.ico, doink-update.ico (embedded), make_icon.py
     ├── winres/winres.json    # exe icon + version info (go-winres, CI only)
@@ -69,6 +69,7 @@ DOINK/
         ├── runner/           # the watch-and-post loop (Process, Run, RunOnce)
         ├── updates/          # GitHub release check (check only, no install)
         ├── tray/             # Windows tray icon + menu + single instance (x/sys)
+        ├── settings/         # settings window (WebView2, Windows) + config.toml editing
         └── autostart/        # "Start with Windows": HKCU\...\Run\DOINK
 ```
 
@@ -343,13 +344,14 @@ so the two implementations couldn't drift apart. Regenerate with
   builds into a temp dir, and the default is `config.toml` next to the
   executable). Tests: `go test ./...`; offline (network = `httptest`,
   files = `t.TempDir()`).
-- **Dependencies:** `github.com/BurntSushi/toml` and `golang.org/x/sys`,
-  nothing else at runtime. `x/sys` is pinned to the newest release that
+- **Dependencies:** `github.com/BurntSushi/toml`, `golang.org/x/sys` and
+  (Windows only, for the settings window) `github.com/jchv/go-webview2`
+  (MIT, pure Go, pulls in `jchv/go-winloader`), nothing else at runtime. `x/sys` is pinned to the newest release that
   still supports `go 1.23` (v0.35.0; later ones need Go 1.24+/1.26).
   Build-time only: `go-winres` via `go run` in `release.yml`, not in
   `go.mod`.
 - Packages: `internal/{savedvars,state,discord,wowhead,config,discover,
-  watcher,status,runner,updates,tray,autostart}` and `cmd/doink`. `tray`
+  watcher,status,runner,updates,tray,autostart,settings}` and `cmd/doink`. `tray`
   and `autostart`'s registry code are `//go:build windows`; their tests run
   only on the Windows CI job, which also runs the whole suite.
 - Packages that log without a `Deps` (`savedvars`, `config`, `watcher`,
@@ -427,8 +429,24 @@ so the two implementations couldn't drift apart. Regenerate with
   states shown in the tooltip/balloon, not fatal. The tray runs on the main
   goroutine (locked OS thread); the runner and update checker are
   goroutines; runner → tray goes through `Status` (`onChange` posts
-  `WM_STATUS` to the tray window). No settings window: "Edit settings"
-  opens `config.toml` (created from a 3-line template if missing).
+  `WM_STATUS` to the tray window).
+- Settings window (`internal/settings`, since v0.13; decided 2026-11-02,
+  reversing v0.12's "no settings window"): tray menu → Settings. HTML/CSS
+  page (`ui.html`, embedded, CSP blocks all network) in a WebView2 window
+  via `go-webview2`, on **its own locked OS thread** with its own COM
+  apartment and message loop: closing a go-webview2 window posts
+  `WM_QUIT` to its thread, which must not be the tray's. One window at a
+  time; Show from any goroutine; `Status` changes push `doinkLive` into it.
+  Per-thread DPI awareness (per-monitor v2), dark title bar from
+  `AppsUseLightTheme`. WebView2 data lives in
+  `%LOCALAPPDATA%\DOINK\WebView2` (the README says so). No WebView2
+  runtime → falls back to opening `config.toml` (3-line template if
+  missing). It edits only `webhook_url` and `wow_dir`, by rewriting those
+  lines in place (`settings.Set`: comments and other keys kept, result
+  re-parsed before an atomic write). The logic (`Backend`: view, save,
+  validate, test post) is platform-neutral and tested on Linux; only
+  `window_windows.go` is Windows-only. The library's own `init` locks the
+  main goroutine to the main thread and CoInitializes it; harmless.
 - Tray code uses `golang.org/x/sys/windows` lazy DLL procs with structs
   laid out as Win32 expects (64-bit sizes are asserted in the Windows
   tests). One `syscall.NewCallback` window procedure for the process,
