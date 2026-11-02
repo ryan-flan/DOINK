@@ -7,3 +7,4 @@ __pycache__/
 companion/*.syso
 companion/cmd/doink/*.syso
 companion/dist/
+CLAUDE.local.md
