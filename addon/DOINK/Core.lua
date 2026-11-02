@@ -127,8 +127,10 @@ local function InitDB()
   db.version = db.version or DB_VERSION
   db.chars = db.chars or {}
   db.webhooks = db.webhooks or {} -- ["*"] = account-wide, ["Name-Realm"] = per char
-  -- Realtime (pixel transport) is experimental and opt-in; see Transports/.
-  db.realtime = db.realtime or { enabled = false, position = "topleft", block = 3 }
+  -- Realtime (screenshot transport) is opt-in; see Transports/Screenshot.lua.
+  db.realtime = db.realtime or { enabled = false }
+  -- v0.14.0: the pixel strip's corner and block size are gone.
+  db.realtime.position, db.realtime.block = nil, nil
   -- Future migrations go here:
   -- if db.version < 2 then ... db.version = 2 end
   ns.db = db
@@ -347,7 +349,7 @@ local HELP = {
   "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on (types: level_up, loot, death, quest, boss_kill, skill_up, mount, duel, battleground)",
   "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
-  "/doink realtime on|off|test|position <corner> - post without reloading (experimental)",
+  "/doink realtime on|off|test - post to Discord instantly via screenshots (needs the companion)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
   "/doink debug - toggle verbose logging",
@@ -439,7 +441,7 @@ commands[""] = function()
     #char.events, MAX_EVENTS, char.seq, DOINKDB.debug and "on" or "off")
   ns:Print("announce: %s", ns.Transports.Announce.Status())
   ns:Print("webhook: %s", WebhookStatus())
-  ns:Print("realtime (experimental): %s", ns.Transports.Pixel.Status())
+  ns:Print("realtime: %s", ns.Transports.Screenshot.Status())
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
       and "|cff60ff60on|r" or "|cffff6060off|r"
@@ -623,48 +625,30 @@ commands.announce = function(args)
 end
 
 commands.realtime = function(args)
-  local pixel = ns.Transports.Pixel
-  local settings = DOINKDB.realtime
-  local sub, rest = args:match("^(%S*)%s*(.-)$")
-  sub = sub:lower()
+  local shot = ns.Transports.Screenshot
+  local sub = (args:match("^(%S*)") or ""):lower()
 
   if sub == "on" or sub == "off" then
-    pixel.SetEnabled(sub == "on")
+    shot.SetEnabled(sub == "on")
     if sub == "on" then
-      ns:Print("realtime on (experimental): events also show as a strip in the "
-        .. "%s corner for the companion to read. Tick \"Realtime posting\" in "
-        .. "the companion's settings too.", settings.position)
+      ns:Print("realtime on: each event takes a screenshot that the DOINK companion "
+        .. "(v0.14+) reads and deletes. You'll see \"Screen captured\" each time.")
     else
       ns:Print("realtime off")
     end
   elseif sub == "test" then
-    if not settings.enabled then
+    if not DOINKDB.realtime.enabled then
       ns:Print("realtime is off. /doink realtime on first")
       return
     end
-    pixel.Hello(true)
-    ns:Print("showing a test pattern for 10s; the companion's settings window "
-      .. "should report it")
-  elseif sub == "position" then
-    rest = rest:lower():gsub("[%s_-]", "")
-    if not pixel.CORNERS[rest] then
-      ns:Print("usage: /doink realtime position topleft|topright|bottomleft|bottomright")
-      return
-    end
-    settings.position = rest
-    pixel.Reposition()
-    ns:Print("realtime strip moved to the %s corner", rest)
-  elseif sub == "block" then
-    local n = tonumber(rest)
-    if not n or n < 2 or n > 8 or n ~= math.floor(n) then
-      ns:Print("usage: /doink realtime block <2-8> (pixels per block; default 3)")
-      return
-    end
-    settings.block = n
-    ns:Print("block size set to %dpx; takes effect after /reload", n)
+    shot.Test()
+    ns:Print("taking a test screenshot; the companion should say \"Realtime works\" "
+      .. "within a few seconds")
+  elseif sub == "position" or sub == "block" then
+    ns:Print("no longer needed: realtime uses screenshots now")
   else
-    ns:Print("realtime (experimental): %s", pixel.Status())
-    ns:Print("usage: /doink realtime on|off|test|position <corner>|block <n>")
+    ns:Print("realtime: %s", shot.Status())
+    ns:Print("usage: /doink realtime on|off|test")
   end
 end
 

@@ -80,12 +80,6 @@ local function Checkbox(spec)
     Proxy(spec.variable, VarType.Boolean, spec.name, spec.default, spec.get, spec.set), spec.tooltip)
 end
 
-local function Dropdown(spec)
-  Settings.CreateDropdown(category,
-    Proxy(spec.variable, spec.varType, spec.name, spec.default, spec.get, spec.set),
-    DropdownOptions(spec.choices, spec.labels), spec.tooltip)
-end
-
 local function Slider(spec)
   local options = Settings.CreateSliderOptions(spec.min, spec.max, spec.step)
   options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, spec.format)
@@ -146,29 +140,16 @@ local function Discord(layout)
 end
 
 local function Realtime(layout)
-  Header(layout, "Realtime posting (experimental, all characters)")
-  local pixel = ns.Transports.Pixel
-  local function rt() return DOINKDB.realtime end
+  Header(layout, "Realtime posting (all characters)")
+  local shot = ns.Transports.Screenshot
 
-  Checkbox { variable = "realtime_enabled", name = "Enable realtime strip (not read by companion v0.12 yet)", default = false,
-    get = function() return rt().enabled end,
-    set = function(on) pixel.SetEnabled(on) end,
-    tooltip = "Posts events to Discord within a second instead of at the next /reload or logout. "
-      .. "How it works: after an event the addon shows a thin black-and-white strip in a screen "
-      .. "corner for about two seconds, and the DOINK companion reads it off the game window. "
-      .. "Needs the companion running with \"Realtime posting\" ticked in its settings too. "
-      .. "Same as /doink realtime on." }
-  Dropdown { variable = "realtime_position", varType = VarType.String, name = "Corner", default = "topleft",
-    choices = { "topleft", "topright", "bottomleft", "bottomright" },
-    labels = { topleft = "Top left", topright = "Top right", bottomleft = "Bottom left", bottomright = "Bottom right" },
-    get = function() return rt().position end,
-    set = function(v) rt().position = v; pixel.Reposition() end,
-    tooltip = "Move it if something else (the Discord overlay, say) sits in that corner." }
-  Dropdown { variable = "realtime_block", varType = VarType.Number, name = "Block size (pixels)", default = 3,
-    choices = { 2, 3, 4, 5, 6, 7, 8 },
-    get = function() return rt().block end,
-    set = function(v) rt().block = v end,
-    tooltip = "Takes effect after /reload. Larger is easier to read on scaled displays." }
+  Checkbox { variable = "realtime_enabled", name = "Post to Discord instantly", default = false,
+    get = function() return DOINKDB.realtime.enabled end,
+    set = function(on) shot.SetEnabled(on) end,
+    tooltip = "Each event flashes a thin code strip along the top of the screen for one frame and takes a screenshot; the DOINK "
+      .. "companion (v0.14 or later) reads it, posts the event within a few seconds and deletes "
+      .. "the screenshot. You'll see \"Screen captured\" each time. Without the companion, those "
+      .. "screenshots stay in your Screenshots folder. Same as /doink realtime on." }
 end
 
 ------------------------------------------------------------------ API

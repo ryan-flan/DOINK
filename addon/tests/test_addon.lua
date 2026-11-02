@@ -27,12 +27,15 @@ function CreateFrame(_, _, parent)
   function f:Show() self.shown = true end
   function f:Hide() self.shown = false end
   function f:IsShown() return self.shown end
+  function f:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
   function f:GetEffectiveScale() return 1 end
   function f:CreateTexture()
     local t = {}
     function t:SetSize(w, h) self.w, self.h = w, h end
     function t:SetPoint(_, _, _, x, y) self.x, self.y = x, y end
     function t:SetColorTexture(r) self.color = r end
+    function t:Show() self.hidden = false end
+    function t:Hide() self.hidden = true end
     f.textures[#f.textures + 1] = t
     return t
   end
@@ -41,7 +44,17 @@ function CreateFrame(_, _, parent)
 end
 WorldFrame = CreateFrame("Frame")
 UIParent = CreateFrame("Frame")
+UIParent:Show()
 function GetPhysicalScreenSize() return 1920, 1080 end
+
+-- Screenshots and the CVars the screenshot transport swaps.
+local screenshots = 0
+function Screenshot() screenshots = screenshots + 1 end
+local cvars = { screenshotFormat = "jpeg", screenshotQuality = "3" }
+C_CVar = {
+  GetCVar = function(name) return cvars[name] end,
+  SetCVar = function(name, value) cvars[name] = tostring(value) end,
+}
 
 -- Chat and timers, for Announce.lua.
 local chat = {}          -- every SendChatMessage call: { line, chatType, target }
@@ -212,7 +225,7 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
     "Notifiers/Mount.lua", "Notifiers/Duel.lua", "Notifiers/Battleground.lua",
-    "Announce.lua", "Transports/Pixel.lua", "Options.lua" }) do
+    "Announce.lua", "Transports/Screenshot.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
 
@@ -741,8 +754,8 @@ end)
 
 ------------------------------------------------------------------ realtime
 
-local Pixel = ns.Transports.Pixel
-local T = Pixel._test
+local Shot = ns.Transports.Screenshot
+local T = Shot._test
 
 local function bitString(row, n)
   local out = {}
@@ -756,11 +769,24 @@ local function field(row, offset, width) -- MSB-first integer from row bits
   return v
 end
 
+-- Runs the transport until its queue is empty, answering every shot.
+local function drainShots()
+  for _ = 1, 200 do
+    if #T.queue() == 0 and T.state() == "idle" then return end
+    now = now + 0.5
+    T.update()
+    if T.state() == "shooting" then fire("SCREENSHOT_SUCCEEDED") end
+  end
+  error("queue never drained")
+end
+
 test("realtime: off by default and creates nothing until enabled", function()
   eq(DOINKDB.realtime.enabled, false, "default")
   slash("test levelup")
-  eq(T.frame(), nil, "no frame while off")
-  assert(slash(""):find("realtime (experimental): off", 1, true))
+  eq(T.grid(), nil, "no grid while off")
+  eq(T.driver(), nil, "no driver while off")
+  eq(screenshots, 0, "no screenshots")
+  assert(slash(""):find("realtime: off", 1, true))
 end)
 
 test("realtime: CRCs match the standard check values", function()
@@ -768,111 +794,189 @@ test("realtime: CRCs match the standard check values", function()
   eq(T.crc8("123456789"), 0xF4, "CRC-8")
 end)
 
-test("realtime: chunk layout, header fields and padding", function()
+test("realtime: grid layout, header fields and padding", function()
   local msg = string.rep("x", 150)
-  local chunks = Pixel.Encode(400, 0x1234, msg)
-  eq(#chunks, 2, "150 bytes at 100/chunk")
-  local row0 = chunks[2][1]
+  local rows = Shot.Encode(msg, false, 256)
+  eq(#rows, 1 + 5, "header row + ceil(1200/256) data rows")
+  local row0 = rows[1]
   eq(bitString(row0, 16), "1010101010110011", "sync")
-  eq(field(row0, 16, 4), 1, "version")
+  eq(field(row0, 16, 4), 2, "version")
   eq(field(row0, 20, 4), 0, "flags")
-  eq(field(row0, 24, 16), 400, "blocks")
-  eq(field(row0, 40, 16), 0x1234, "msg id")
-  eq(field(row0, 56, 8), 1, "chunk index")
-  eq(field(row0, 64, 8), 2, "chunk count")
-  eq(field(row0, 72, 8), 50, "payload length of the last chunk")
-  eq(field(row0, 80, 16), T.crc16(msg:sub(101)), "payload crc")
-  eq(#bitString(row0, 400), 400, "row 0 padded to width")
-  -- First data row of chunk 1: 'x' = 0x78 = 01111000, repeated.
-  eq(bitString(chunks[1][2], 16), "0111100001111000", "data bits")
-  -- Chunk 2 has 50 bytes = 400 bits: fills row 1 exactly, row 2 is padding.
-  eq(bitString(chunks[2][3], 400), string.rep("0", 400), "padding")
+  eq(field(row0, 24, 16), 256, "cols")
+  eq(field(row0, 40, 8), 5, "rows")
+  eq(field(row0, 48, 16), 150, "payload length")
+  eq(field(row0, 64, 16), T.crc16(msg), "payload crc")
+  local header = ""
+  for i = 0, 7 do header = header .. string.char(field(row0, 16 + i * 8, 8)) end
+  eq(field(row0, 80, 8), T.crc8(header), "header crc")
+  eq(bitString(row0, 256):sub(89), string.rep("0", 256 - 88), "row 0 padding")
+  eq(bitString(rows[2], 16), "0111100001111000", "data bits ('x' = 0x78)")
+  -- 1200 bits: 4 full rows, then 176 bits, then padding.
+  eq(bitString(rows[6], 256):sub(177), string.rep("0", 80), "last row padding")
+  for r = 1, 6 do eq(#rows[r], 256, "row " .. r .. " width") end
+  eq(field(Shot.Encode("hi", true, 256)[1], 20, 4), 1, "hello flag")
+  eq(#Shot.Encode(msg, false, 1200), 1 + 1, "a wide strip: one data row")
 end)
 
-test("realtime: on builds the strip, says hello, cycles, then hides", function()
+test("realtime: one screenshot holds up to 1024 bytes", function()
+  eq(#Shot.Encode(string.rep("a", 1024), false, 256), 33, "32 data rows at the narrowest")
+  eq(Shot.Encode(string.rep("a", 1025), false, 1200), nil, "too long")
+end)
+
+test("realtime: an event shows the grid for one frame: shoot, then hide", function()
   slash("realtime on")
-  local f = T.frame()
-  -- UIParent, not WorldFrame: WorldFrame children draw under the whole UI.
-  assert(f and f.parent == UIParent, "frame parented to UIParent")
-  eq(f.strata, "TOOLTIP", "strata"); eq(f.mouse, false, "mouse off")
-  eq(f.ignoreParentScale, true, "ignores parent scale")
-  assert(math.abs(f.scale - 768 / 1080) < 1e-9, "pixel-perfect scale")
-  local n, b = T.geometry()
-  eq(n, 400, "blocks (1920/3 capped at 400)"); eq(b, 3, "block px")
-  eq(#f.textures, 3 * 400, "one texture per block")
-  eq(f.w, 1200, "width px"); eq(f.h, 9, "height px")
-  eq(f.point[1], "TOPLEFT", "default corner")
+  local g = T.grid()
+  assert(g and g.parent == UIParent, "grid parented to UIParent")
+  eq(g.strata, "TOOLTIP", "strata"); eq(g.mouse, false, "mouse off")
+  eq(g.ignoreParentScale, true, "ignores parent scale")
+  assert(math.abs(g.scale - 768 / 1080) < 1e-9, "pixel-perfect scale")
+  eq(g.point[1], "TOPLEFT", "corner"); eq(g.point[4], 0, "x"); eq(g.point[5], 0, "y")
+  eq(T.block(), 2, "2 px blocks")
+  eq(T.cols(), 959, "as wide as 1920 px allows, one block kept for the backing")
+  eq(T.queue()[1], nil, "no hello at enable")
 
-  assert(f:IsShown(), "hello shows the strip immediately")
-  local outbox = T.outbox()
-  eq(#outbox, 1, "hello queued")
-  local chunks = #outbox[1].chunks
-  assert(chunks >= 1, "hello encoded")
-  local first = T.current()
-  assert(first == outbox[1].chunks[1], "chunk 1 painted first")
-  -- Painted colours follow the bits.
-  eq(f.textures[1].color, 1, "sync starts white"); eq(f.textures[2].color, 0, "then black")
-
-  T.advance(0.1)
-  assert(T.current() == first, "nothing changes before 0.25s")
-  T.advance(0.15)
-  if chunks > 1 then assert(T.current() == outbox[1].chunks[2], "chunk 2 next") end
-  for _ = 2, chunks * 4 do T.advance(0.25) end
-  assert(not f:IsShown(), "hidden after 4 showings")
-  eq(#T.outbox(), 0, "outbox drained")
-end)
-
-test("realtime: an emitted event cycles 4 times and hides (regression: envelope in 'left')", function()
-  slash("test death")
-  local msg = T.outbox()[#T.outbox()]
-  eq(msg.left, 4, "repeat count is a number, not the envelope")
-  local chunks = #msg.chunks
-  for _ = 1, chunks * 4 * 2 do T.advance(0.25) end -- generous: outbox may hold the hello too
-  assert(not T.frame():IsShown(), "hidden after the showings")
-  eq(#T.outbox(), 0, "drained")
-end)
-
-test("realtime: emitted events are queued, outbox is capped at 8", function()
-  slash("test levelup 10")
-  eq(#T.outbox(), 8, "capped")
-  assert(T.frame():IsShown(), "showing")
-  slash("realtime off")
-  eq(#T.outbox(), 0, "cleared on off")
-  assert(not T.frame():IsShown(), "hidden on off")
+  now = now + 10
+  local before = screenshots
   slash("test levelup")
-  eq(#T.outbox(), 0, "nothing queued while off")
+  eq(#T.queue(), 1, "queued")
+  T.update()
+  -- The client captures the frame drawn after the call: show and shoot
+  -- in the same frame, hide on the next.
+  assert(g:IsShown(), "grid shown")
+  eq(screenshots, before + 1, "shot in the same frame")
+  eq(T.state(), "shooting", "waiting for the client")
+  -- Painted colours follow the bits: the sync starts 1, 0.
+  local tex = T.textures()
+  eq(tex[1][1].color, 1, "sync starts white"); eq(tex[1][2].color, 0, "then black")
+  T.update()
+  assert(not g:IsShown(), "hidden on the next frame")
+  eq(#T.queue(), 1, "still waiting for the client")
+  T.update()
+  eq(screenshots, before + 1, "one shot")
+  fire("SCREENSHOT_SUCCEEDED")
+  eq(#T.queue(), 0, "done")
+  assert(slash("realtime"):find("last shot ok", 1, true), "status")
 end)
 
-test("realtime: position and block commands", function()
+test("realtime: shots are 1.1 s apart, the queue is capped at 8", function()
+  now = now + 10
+  slash("test levelup")
+  slash("test levelup")
+  local shotTime = now
+  T.update(); T.update(); T.update(); fire("SCREENSHOT_SUCCEEDED")
+  eq(#T.queue(), 1, "one left")
+  T.update()
+  eq(T.state(), "idle", "waits for the spacing")
+  now = shotTime + 1.2
+  T.update()
+  eq(T.state(), "shooting", "then shoots the next")
+  drainShots()
+
+  slash("test levelup 10")
+  eq(#T.queue(), 8, "capped")
+  drainShots()
+end)
+
+test("realtime: a failed shot is retried once, a silent one times out", function()
+  now = now + 10
+  local before = screenshots
+  slash("test death")
+  T.update(); T.update(); T.update()
+  fire("SCREENSHOT_FAILED")
+  eq(#T.queue(), 1, "kept for one retry")
+  now = now + 2
+  T.update(); T.update(); T.update()
+  fire("SCREENSHOT_FAILED")
+  eq(#T.queue(), 0, "dropped after two tries")
+  eq(screenshots, before + 2, "two shots")
+
+  now = now + 2
+  slash("test death")
+  T.update(); T.update(); T.update()
+  now = now + 3.5
+  T.update()
+  eq(#T.queue(), 0, "timed out and moved on")
+  eq(T.state(), "idle", "idle")
+  assert(not T.grid():IsShown(), "hidden")
+end)
+
+test("realtime: waits while the UI is hidden (Alt-Z)", function()
+  now = now + 10
+  UIParent:Hide()
+  slash("test levelup")
+  T.update(); T.update(); T.update()
+  eq(T.state(), "idle", "nothing painted with the UI hidden")
+  UIParent:Show()
+  T.update()
+  eq(T.state(), "shooting", "shot once it's back")
+  drainShots()
+end)
+
+test("realtime: unreadable screenshot settings are swapped for the shot and put back", function()
+  now = now + 10
+  cvars.screenshotFormat, cvars.screenshotQuality = "tga", "1"
+  slash("test levelup")
+  T.update(); T.update(); T.update()
+  eq(cvars.screenshotFormat, "jpeg", "jpeg during the shot")
+  eq(cvars.screenshotQuality, "3", "quality 3 during the shot")
+  eq(DOINKDB.realtime.restore.format, "tga", "old format remembered")
+  fire("SCREENSHOT_SUCCEEDED")
+  eq(cvars.screenshotFormat, "tga", "format restored")
+  eq(cvars.screenshotQuality, "1", "quality restored")
+  eq(DOINKDB.realtime.restore, nil, "nothing left to restore")
+
+  -- A /reload mid-shot leaves the swap in place; login puts it back.
+  cvars.screenshotFormat = "jpeg"
+  DOINKDB.realtime.restore = { format = "tga" }
+  Shot.OnLogin()
+  eq(cvars.screenshotFormat, "tga", "restored at login")
+  eq(DOINKDB.realtime.restore, nil, "cleared")
+  cvars.screenshotFormat, cvars.screenshotQuality = "jpeg", "3"
+end)
+
+test("realtime: a hello for /doink realtime test", function()
+  now = now + 10
+  assert(slash("realtime test"):find("Realtime works", 1, true))
+  local rows = T.queue()[1].rows
+  eq(field(rows[1], 20, 4), 1, "hello flag")
+  drainShots()
+end)
+
+test("realtime: blocked by the client turns it off", function()
+  slash("test levelup")
+  fire("ADDON_ACTION_BLOCKED", "SomeOtherAddon", "Foo()")
+  eq(DOINKDB.realtime.enabled, true, "another addon's block is ignored")
+  printed = {}
+  fire("ADDON_ACTION_BLOCKED", "DOINK", "Screenshot()")
+  eq(DOINKDB.realtime.enabled, false, "off")
+  eq(#T.queue(), 0, "queue cleared")
+  assert(table.concat(printed, "\n"):find("blocks addon screenshots", 1, true), "told")
+  assert(slash("realtime"):find("blocked", 1, true), "status says why")
+  local before = screenshots
+  slash("test levelup")
+  T.update(); T.update(); T.update()
+  eq(screenshots, before, "nothing shot while off")
+end)
+
+test("realtime: off clears the queue; old pixel settings are gone", function()
   slash("realtime on")
-  assert(slash("realtime position top-right"):find("topright", 1, true))
-  eq(T.frame().point[1], "TOPRIGHT", "repositioned")
-  eq(T.frame().point[4], -12, "12 px in from the right edge (Windows 11 rounds window corners)")
-  eq(T.frame().point[5], 0, "flush with the top edge")
-  slash("realtime position bottomleft")
-  eq(T.frame().point[4], 12, "12 px in from the left edge")
-  slash("realtime position topright")
-  eq(DOINKDB.realtime.position, "topright", "saved")
-  assert(slash("realtime position middle"):find("usage", 1, true))
-  assert(slash("realtime block 9"):find("usage", 1, true))
-  slash("realtime block 4")
-  eq(DOINKDB.realtime.block, 4, "block saved for next reload")
-  assert(slash("realtime"):find("on, topright", 1, true))
+  slash("test levelup 3")
   slash("realtime off")
+  eq(#T.queue(), 0, "cleared")
+  eq(DOINKDB.realtime.position, nil, "position migrated away")
+  eq(DOINKDB.realtime.block, nil, "block migrated away")
+  assert(slash("realtime position topleft"):find("no longer needed", 1, true))
 end)
 
 test("realtime: fixture matches (shared with the companion's decoder tests)", function()
   local payload = '{"char":"Flano","class":"WARRIOR","data":{"level":10},"level":10,'
     .. '"realm":"Classic Beta PvE 2","seq":3,"surname":"Wren","test":true,'
     .. '"ts":1790870000,"type":"level_up"}'
-  local chunks = Pixel.Encode(400, 4660, payload)
-  local lines = { "msg_id 4660", "blocks 400", "rows 3", "payload " .. payload }
-  for i, rows in ipairs(chunks) do
-    lines[#lines + 1] = "chunk " .. (i - 1)
-    for r = 1, 3 do lines[#lines + 1] = bitString(rows[r], 400) end
-  end
+  local rows = Shot.Encode(payload, false, 400)
+  local lines = { "payload " .. payload }
+  for r = 1, #rows do lines[#lines + 1] = bitString(rows[r], 400) end
   local text = table.concat(lines, "\n") .. "\n"
-  local path = FIXTURES .. "/pixel_levelup.txt"
+  local path = FIXTURES .. "/shot_levelup.txt"
   if os.getenv("DOINK_WRITE_FIXTURE") then
     local f = assert(io.open(path, "w")); f:write(text); f:close()
   end
@@ -1076,10 +1180,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 10 + 7 + 3, "announce 7+3, discord 10+7, realtime 3")
+  eq(#settings.controls, 7 + 3 + 10 + 7 + 1, "announce 7+3, discord 10+7, realtime 1")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 22, "checkboxes"); eq(kinds.dropdown, 7, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 22, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")
@@ -1111,18 +1215,14 @@ test("options: controls read and write the same options as the slash commands", 
   enabled.set(true)
 end)
 
-test("options: realtime controls drive the strip", function()
+test("options: the realtime checkbox turns the screenshot transport on and off", function()
   local rt = control("realtime_enabled")
   eq(rt.get(), false, "off by default")
   rt.set(true)
-  eq(DOINKDB.realtime.enabled, true, "enabled"); assert(T.frame():IsShown(), "hello shown")
-  control("realtime_position").set("bottomright")
-  eq(T.frame().point[1], "BOTTOMRIGHT", "repositioned live")
-  control("realtime_block").set(5)
-  eq(DOINKDB.realtime.block, 5, "block saved")
+  eq(DOINKDB.realtime.enabled, true, "enabled")
+  assert(T.driver(), "transport started")
   rt.set(false)
   eq(DOINKDB.realtime.enabled, false, "disabled")
-  DOINKDB.realtime.position, DOINKDB.realtime.block = "topleft", 3
 end)
 
 test("options: /doink config opens the page", function()

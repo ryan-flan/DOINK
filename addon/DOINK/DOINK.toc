@@ -23,5 +23,5 @@ Notifiers\Mount.lua
 Notifiers\Duel.lua
 Notifiers\Battleground.lua
 Announce.lua
-Transports\Pixel.lua
+Transports\Screenshot.lua
 Options.lua
