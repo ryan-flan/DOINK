@@ -722,8 +722,9 @@ fixture included; that's a stand-in for the real name, by decision.)
   (2026-10-03 00:45). Wago answered 403 to the v0.11.3 upload (rate limit
   after a burst of releases, presumably); v0.11.4 uploaded fine.
 - **Later:** community channels via `C_Club` once one exists to test with
-  (parked: Battle.net is limited in the beta); rare kills, achievements.
-  (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
+  (parked: Battle.net is limited in the beta); rare kills, achievements;
+  new PvP ranks and legacy points (user request, 2026-11-02; the events and
+  APIs behind both are unknown until launch). (CurseForge packaging via the BigWigs packager: wired up, see Releases.)
 
 ## Working style
 
