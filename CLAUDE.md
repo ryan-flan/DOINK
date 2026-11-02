@@ -654,7 +654,13 @@ fixture included; that's a stand-in for the real name, by decision.)
   exactly: a 64×64 `UIParent` child (strata `TOOLTIP`,
   `SetIgnoreParentScale(true)`, `SetScale(768/physicalHeight)`,
   `TOPLEFT`) came out as magenta pixels (0,0)–(63,63) with a sharp edge
-  in a 2554×1404 JPEG. Unchecked: during a dungeon boss encounter. This is the basis for the planned `Screenshot()`
+  in a 2554×1404 JPEG. Unchecked: during a dungeon boss encounter.
+  - [x] v0.14.0 end to end in retail (2026-11-02, a dev copy with a
+    `DOINK_Mainline.toc`, Interface 120105): `/doink realtime test`,
+    `test levelup` and `test loot` each took a screenshot with no errors;
+    `doink decode` read all three real JPEGs (hello, 135-byte level-up,
+    344-byte loot), and a `--dry-run --once` companion run logged the
+    hello, printed both embeds and would have deleted all three files. This is the basis for the planned `Screenshot()`
   channel (spec "Later"). Tip: run `/run` lines one at a time; pasting
   several at once ran none of them, silently.
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
