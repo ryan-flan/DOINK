@@ -621,8 +621,24 @@ fixture included; that's a stand-in for the real name, by decision.)
     is the Discord name (`flano`: lowercase, no realm); the chat frame
     adds a Discord icon. So addons can read Discord messages, but on
     retail can't answer them automatically (GUILD needs a key press).
-  - [ ] Which `CHAT_MSG_GUILD` argument marks a Discord-origin message
-    (needed before acting on Discord messages).
+  - [x] How to tell a Discord-origin `CHAT_MSG_GUILD` (retail 12.1.5,
+    2026-11-02, every argument printed for one message each way):
+    | arg | from Discord | from the game |
+    |---|---|---|
+    | 2 sender | `flano` (Discord name) | `Flano-Draenor` |
+    | 6 flags | `DISCORD` | `""` |
+    | 8 channelIndex | 1 | 0 |
+    | 12 guid | `nil` | `Player-1403-…` |
+    | 13 bnSenderID | 32 | 0 |
+    | 18 (new) table | `fromDiscord=true`, `globalName="flano"`, `userID=1`, `lastOnlineName="Flano"`, `lastOnlineGUID="Player-1403-…"` | `fromDiscord=false`, empty names, `userID=0` |
+
+    The 18th argument's other keys: `type` (0), `hasError`,
+    `hasAttachment`, `hasEmoji`, `hasEmbed`, `hasSticker`, `hasPoll`,
+    `hasForwardedMessage`, `forwardedMessage` (all false/empty here).
+    Use `flags == "DISCORD"` or `info.fromDiscord`; `lastOnlineName` /
+    `lastOnlineGUID` tie the Discord user to their character. Unchecked:
+    a guild that routes Discord into a separate `/discord` chat (may be
+    another event), and Forever.
 - [ ] **Launch-day checklist** (2026-11-04; nothing here is verified yet):
   - [ ] **First: can an addon post to GUILD without a key press?**
     `/run C_Timer.After(1,function() SendChatMessage("test","GUILD") end)`.
