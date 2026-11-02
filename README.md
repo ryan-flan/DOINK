@@ -140,7 +140,7 @@ realtime state, and which event types are enabled.
 | `/doink debug` | Toggle printing of every event the addon sees, for troubleshooting |
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
-| `/doink realtime on` / `off` / `test` / `position <corner>` | Only for the companion's experimental realtime mode (paused: companion v0.12 doesn't read it) |
+| `/doink realtime on` / `off` / `test` | Only for the Discord companion: post each event within seconds instead of at the next reload (see [Instant posts](#instant-posts-realtime)) |
 
 Settings are per character and take effect immediately, whether changed on
 the settings page or by command; the two are the same settings.
@@ -222,8 +222,10 @@ Every two seconds it checks whether the game has written `DOINK.lua`; when
 it has, it reads the event buffer and posts each new event to a Discord
 webhook you provide, as an embed (class-coloured, with a Wowhead link for
 items and quests). It remembers what it has posted so nothing is posted
-twice. It reads only `DOINK.lua` and writes only its own three files
-(settings, posting history, log) in its own folder; see
+twice. It reads only `DOINK.lua` (and, with
+[instant posts](#instant-posts-realtime), DOINK's own screenshots) and
+writes only its own three files (settings, posting history, log) in its
+own folder; see
 [What doink.exe does](#what-doinkexe-does-and-doesnt) for its network
 requests.
 
@@ -232,8 +234,8 @@ requests.
 > session posts when you log out, or type `/doink flush` to post right away.
 > Guild chat announcements are always instant.
 >
-> **Realtime** (posting without a reload) is temporarily not read by the
-> companion; it's coming back as a screenshot-based channel.
+> Want posts within seconds instead? Turn on
+> [instant posts](#instant-posts-realtime).
 
 ### Setting it up
 
@@ -286,6 +288,31 @@ through CurseForge or Wago like any other addon.
 over the one in `config.toml`: per character first, then
 `/doink webhook <url>` (all characters), then `webhook_url` in
 `config.toml`. Webhook changes reach the companion on the next reload.
+
+### Instant posts (realtime)
+
+Off by default. With `/doink realtime on` (or **Post to Discord
+instantly** on the settings page), each event reaches Discord a few
+seconds after it happens, without a reload. Needs companion v0.14 or later.
+
+How it works: an addon can't send anything out of the game, but it can
+take a screenshot. For each event, DOINK flashes a thin black-and-white
+strip (about 8 px tall) along the top of the screen for a single frame and
+takes a screenshot; you'll see the game's usual "Screen captured" message.
+The companion finds that screenshot in WoW's `Screenshots` folder, reads
+the code, posts the event and deletes the screenshot. Your own screenshots
+are never touched: the companion deletes only screenshots that contain a
+valid DOINK code. If the companion isn't running, DOINK's screenshots stay
+in the folder until it next starts and cleans them up (as long as they're
+under 14 days old).
+
+`/doink realtime test` takes one test screenshot; the companion answers
+with a "Realtime works" notification and posts nothing. Nothing is posted
+twice: when you later `/reload`, events that already arrived this way are
+skipped. If the game ever blocks addon screenshots (during some boss
+fights, say), DOINK turns realtime off by itself and tells you; events then
+post at the next reload as usual. `realtime = false` in `config.toml` stops
+the companion reading screenshots.
 
 ### On Linux
 
@@ -342,11 +369,12 @@ Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
 
 ### Companion settings
 
-Settings live in `config.toml` next to `doink.exe` (tray menu → **Edit
-settings** creates and opens it). Every key is optional: `webhook_url`,
-`wow_dir`, `dry_run`, `max_backlog`, `poll_interval`, an exact
-`savedvariables_path`, `wowhead`, `update_check`, `update_notify`; see
-`config.example.toml`. DOINK picks up changes while it runs.
+Settings live in `config.toml` next to `doink.exe` (the settings window
+edits the webhook and WoW folder there; the link at its bottom opens the
+file). Every key is optional: `webhook_url`, `wow_dir`, `dry_run`,
+`max_backlog`, `poll_interval`, an exact `savedvariables_path`, `wowhead`,
+`realtime`, `update_check`, `update_notify`; see `config.example.toml`.
+DOINK picks up changes while it runs.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the
@@ -357,7 +385,11 @@ newest 10 queued events.
 - **One file.** `doink.exe` is a single program with nothing to install
   and no `_internal` folder (versions up to v0.11 were Python and had one;
   if you update by hand you can delete it).
-- **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
+- **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders,
+  and the screenshots in WoW's `Screenshots` folder (those from the last
+  14 days when it starts, then new ones) to find DOINK's realtime codes.
+- **Deletes** only screenshots that contain a valid DOINK realtime code,
+  after posting them. `realtime = false` turns this off.
 - **Writes** only inside its own folder: `config.toml` (your settings),
   `state.json` (what it has already posted), `doink.log` (capped at ~2 MB;
   the Linux build logs to the terminal instead). The one exception: the
@@ -375,8 +407,8 @@ newest 10 queued events.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
-- **Screen:** this version doesn't look at the screen at all (realtime is
-  paused).
+- **Screen:** it never looks at or captures your screen; realtime works
+  through the screenshots the addon itself takes.
 - **Uninstall:** untick Start with Windows, quit, delete the folder (and
   `%LOCALAPPDATA%\DOINK` if you opened the settings window).
 
@@ -414,12 +446,14 @@ One folder, `DOINK`, 16 files, about 2,200 lines of Lua, no third-party code:
 | `Notifiers/Mount.lua` | Listens to `NEW_MOUNT_ADDED`, `CHAT_MSG_LOOT`, `MERCHANT_SHOW` and `MERCHANT_CLOSED`. |
 | `Notifiers/Duel.lua` | Listens to `CHAT_MSG_SYSTEM`. |
 | `Notifiers/Battleground.lua` | Listens to `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE` and `PLAYER_ENTERING_WORLD`. |
-| `Transports/Pixel.lua` | The optional, off-by-default "realtime" strip for the companion. Creates nothing unless enabled. |
+| `Transports/Screenshot.lua` | Optional, off by default: [instant posts](#instant-posts-realtime) for the companion. Listens to `SCREENSHOT_SUCCEEDED`, `SCREENSHOT_FAILED`, `ADDON_ACTION_BLOCKED` and `ADDON_ACTION_FORBIDDEN`; creates nothing unless enabled. |
 
 The addon registers only the events listed above (plus `ADDON_LOADED`,
 `PLAYER_LOGIN` and `PLAYER_LEVEL_UP`). It does not register the combat log event, which Forever
 protects, and it does not hook or replace any Blizzard function. It makes
-no network connections (addons can't) and reads nothing from disk.
+no network connections (addons can't) and reads nothing from disk. With
+instant posts on, it takes screenshots, which the game saves in its
+`Screenshots` folder.
 
 ## How it works: what the addon stores
 
@@ -431,8 +465,9 @@ Everything is kept in one saved variable, `DOINKDB`, written by the game to
   last 500 events as JSON text (type, time, character, realm, class, level,
   and event details such as item id and name). This buffer exists for the
   optional companion; the addon itself never reads it back.
-- Account-wide: the debug flag, the realtime settings (off by default), and
-  any Discord webhook URL you set with `/doink webhook`. If you never set
+- Account-wide: the debug flag, whether realtime is on (off by default;
+  while a screenshot is being taken, also your screenshot format if DOINK
+  had to switch it, so it can be put back), and any Discord webhook URL you set with `/doink webhook`. If you never set
   one, nothing is stored there.
 
 The addon does not store chat or anything about other characters, with two

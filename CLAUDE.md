@@ -23,8 +23,8 @@ Therefore DOINK is two parts:
    the queue and POSTs to Discord.
 
 The addon is transport-agnostic. The companion decides how it learns about
-events. v1 uses a file watcher; later versions may add a combat-log tailer or a
-pixel-encoding screen reader for realtime. **Never** write addon code that
+events: a file watcher on SavedVariables, plus (since v0.14) the
+screenshots the addon takes for realtime. **Never** write addon code that
 assumes a particular transport.
 
 ## Repo layout
@@ -43,7 +43,7 @@ DOINK/
 │   ├── Defaults.lua          # default config table + ns.Choices for string options
 │   ├── Announce.lua          # in-game chat announcements (guild/officer/party/raid)
 │   ├── Options.lua           # settings page via the client's Settings API (no library)
-│   ├── Transports/Pixel.lua  # realtime strip encoder (experimental, off by default)
+│   ├── Transports/Screenshot.lua # realtime: grid + Screenshot() (off by default)
 │   └── Notifiers/
 │       ├── LevelUp.lua
 │       ├── Loot.lua
@@ -59,6 +59,7 @@ DOINK/
     ├── cmd/doink/            # main: flags, console mode, tray mode (tray_windows.go)
     └── internal/
         ├── savedvars/        # parses DOINK.lua: events + webhooks (bytes, Lua strings)
+        ├── shot/             # reads the realtime grid out of a screenshot
         ├── state/            # posted seqs per character (state.json, gitignored)
         ├── discord/          # embed builders + webhook Pool (rate limits, 429s)
         ├── wowhead/          # item icon + tooltip lines for loot embeds, cached
@@ -191,7 +192,7 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 
 ## Announcements (in-game chat)
 
-`Announce.lua` is registered in `ns.Transports` like the pixel strip: Core
+`Announce.lua` is registered in `ns.Transports` like the screenshot transport: Core
 calls `Send(json, envelope)` for every emitted event and never knows what the
 transport does with it. Rules live in `ns.Defaults.announce` (per-character
 overrides via `ns:GetOption("announce", key)`; allowed string values in
@@ -237,68 +238,91 @@ API, so the webhook stays with `/doink webhook` and the companion window
 function returning two values is truncated to one when it isn't the last
 argument, which once turned a tooltip into a setter.
 
-## Pixel transport contract (realtime, experimental)
+## Screenshot transport contract (realtime, since v0.14)
 
-**Paused on the companion side since the Go port (v0.12):** nothing reads
-the strip. The Python decoder described below (`companion/doink/pixel.py`,
-its tests and the realtime worker) is in git history up to v0.11.7
-(`git show v0.11.7:companion/doink/pixel.py`). The addon side is unchanged
-and still opt-in. The planned replacement is a `Screenshot()`-based
-channel (see the spec's "Later").
+Realtime = Discord within seconds instead of at `/reload`. The addon draws
+a thin black-and-white strip along the top edge for one frame and calls
+`Screenshot()`;
+the companion finds the file in `<flavor>/Screenshots`, decodes the grid,
+posts the event and deletes the file. Verified in retail (2026-11-02, see
+beta facts): `Screenshot()` works from a timer and in combat, and the
+screenshot contains addon frames pixel-exact. Ideas from
+wow-character-tracker (GPL-3): no code taken.
 
-`addon/DOINK/Transports/Pixel.lua` encodes; `companion/doink/pixel.py`
-decoded. `addon/tests/fixtures/pixel_levelup.txt` is the Lua encoder's output
-for a fixed event; the Lua test asserts it, and the Python tests decoded it,
-so the two implementations couldn't drift apart. Regenerate with
-`DOINK_WRITE_FIXTURE=1 luajit tests/test_addon.lua` when the layout changes.
+History: v0.6–v0.11 used a pixel strip read off the window by the Python
+companion (BitBlt, foreground only, Windows 11 corner rounding; see beta
+facts). The Go port dropped the reader; v0.14 deleted the strip. Code:
+`git show v0.13.0:addon/DOINK/Transports/Pixel.lua`,
+`git show v0.11.7:companion/doink/pixel.py`.
 
-- **Strip**: `ROWS=3` rows × `N` blocks of `B`×`B` px (`B` default 3; `N =
-  clamp(floor((screenWidth - 24)/B), 104, 400)`). Anchored to a user-chosen
-  corner (`DOINKDB.realtime.position`, default `topleft`) **12 px in from
-  the side edge** and flush with the top/bottom edge: Windows 11 rounds
-  window corners by ~8 px and the GDI capture sees the rounded, blended
-  pixels (beta 2026-10-02: the last block of every full-width chunk read as
-  the desktop behind the corner). Parented to **`UIParent`**
-  (children of `WorldFrame` draw beneath every UIParent frame whatever their
-  strata; a Details backdrop dimmed and corrupted the strip in beta), strata
-  `TOOLTIP`, level 10000, mouse disabled, pixel-perfect via
-  `SetIgnoreParentScale(true)` + `SetScale(768/physicalHeight)` (verified:
-  exactly 3.0 px blocks at 3438×1408 windowed). Alt-Z hides it with the UI.
-- **Bits**: 1 bit per block, 1 = white, 0 = black, opaque.
-- **Row 0**: 16-block sync `1010101010110011`, then MSB-first: `version(4)=1,
-  flags(4)=0, blocks(16), msg_id(16), chunk_index(8), chunk_count(8),
-  payload_len(8), payload_crc16(16), header_crc8(8)`: 104 blocks, rest 0.
-  CRC-16/CCITT-FALSE (0x1021, init 0xFFFF) over the chunk payload; CRC-8
-  (0x07, init 0) over the 10 header bytes.
-- **Rows 1+**: payload bytes MSB-first, row-major, rest 0. Capacity
-  `floor((ROWS-1)*N/8)` bytes per chunk (100 at N=400).
-- **Message** = the event's JSON string exactly as queued (UTF-8), or a hello
-  `{"type":"hello","addon":..,"char":..,"surname":..,"realm":..,"position":..}`
-  (plus `"test":true` from `/doink realtime test`). Hellos are shown as
-  status, never posted.
-- **Timing**: each chunk shows for 250 ms; the outbox (max 8 messages) cycles
-  until each message has been shown 4 times, then the strip hides. No idle
-  heartbeat. A hello is sent at `PLAYER_LOGIN` and on `/doink realtime on`.
-- **Reader**: BitBlt of the top and bottom `BAND_ROWS=24` rows of the client
-  area into one DIB section; finds the sync at any x with per-block-size
-  regexes (±2 px), fits the grid by least squares and keeps refining it from
-  every transition along each row (the sync alone can't pin a fractional
-  block width over 400 blocks; snap tolerance 0.45 block, because a
-  near-integer width such as 3.02 px jumps a whole pixel every sixty-odd
-  blocks), reads each block as the **majority of its central half** (soft
-  edges), calibrates black/white on the sync blocks for the header row,
-  thresholds each payload row locally (48 px segments), checks both CRCs,
-  and if the fitted grid fails, **sweeps** block widths ±0.08 px in 0.01
-  steps and the sync position ±1 px until a grid passes both CRCs (dying
-  rescales the strip slightly; see beta facts). 8 Hz while WoW is the foreground window, 1 Hz otherwise;
-  foreground-only (no `PrintWindow`) by design.
-- **Dedupe**: `state.json` gained `missing`: seqs below `last_seen` not yet
-  posted. Realtime posts call `mark_posted(key, seq, first_sight_backlog)`;
-  the file pass posts `seq > last_seen or seq in missing` and prunes gaps the
-  file can't fill. Both workers share one `State` and one `WebhookPool`.
-- **Opt-in on both sides**: `DOINKDB.realtime.enabled` (addon) and
-  `realtime` in `config.toml` (companion), both default false. Nothing is
-  created in game until `/doink realtime on`.
+`addon/DOINK/Transports/Screenshot.lua` encodes, `companion/internal/shot`
+decodes. `addon/tests/fixtures/shot_levelup.txt` (first line `payload
+<json>`, then one line of 0/1 per row) is the Lua encoder's output; the Lua
+test asserts it and the Go test checks `shot.Rows` against it, so the two
+can't drift. Regenerate with `DOINK_WRITE_FIXTURE=1 luajit
+tests/test_addon.lua`.
+
+- **Grid**: a strip along the top edge, `COLS` = screen width / 2 − 1
+  blocks (256..1200; 959 at 1920 px), `B` = 2 physical px per block (the
+  smallest that survives the game's JPEG; 1 px doesn't). A box-shaped
+  256-wide grid was tried first and was far more noticeable than the old
+  9 px pixel strip; a wide strip keeps a typical event to 4 rows = 8 px.
+  Row 0: sync `1010101010110011`, then MSB-first `version(4)=2, flags(4)`
+  (bit 0 = hello), `cols(16)`, `rows(8)` = R data rows (1..32),
+  `payload_len(16)`, `payload_crc16(16)` (CRC-16/CCITT-FALSE, 0x1021,
+  init 0xFFFF), `header_crc8(8)` (0x07, init 0, over the 8 bytes before
+  it); 88 blocks, rest 0. Rows 1..R: payload bits row-major, `cols` per
+  row, padding 0. Max payload 1024 bytes; longer messages aren't sent
+  (the file path posts them). One message per screenshot. 1 = white,
+  0 = black, on a black backing one block bigger right and bottom. The
+  decoder's block-size sweep only helps near-exact sizes; the grid is
+  pixel-perfect in practice (verified).
+- **Frame**: child of `UIParent` (WorldFrame children draw under the UI),
+  strata `TOOLTIP`, level 10000, mouse off, pixel-perfect via
+  `SetIgnoreParentScale(true)` + `SetScale(768/physicalHeight)`,
+  `TOPLEFT` at (0,0): the screenshot is the game's own render, so no
+  corner inset. Texture rows are created as messages need them. A separate
+  parentless driver frame owns `OnUpdate` and the events.
+- **Message** = the event's JSON exactly as queued, or a hello
+  `{"type":"hello","addon":..,"char":..,"surname":..,"realm":..,"test":true}`
+  (flag bit 0) from `/doink realtime test` only; no hello at login (each
+  costs a screenshot and a "Screen captured").
+- **State machine**: queue max 8 (drop the oldest not being shot). idle →
+  (queue non-empty, ≥ 1.1 s since the last shot because file names have 1 s
+  resolution, `UIParent:IsVisible()`) paint + show + `Screenshot()` in
+  the same `OnUpdate`, hide on the next: the client captures the frame it
+  draws after the call (retail 2026-11-02: hidden in the same handler →
+  not in the file; hidden one frame later → in it), so the grid is on
+  screen for one frame. `SCREENSHOT_SUCCEEDED` pops; `SCREENSHOT_FAILED`
+  retries once; no answer in 3 s moves on.
+- **Format swap**: `screenshotFormat` other than jpeg/png → jpeg, and
+  `screenshotQuality` < 3 → 3, for the shot only; the old values wait in
+  `DOINKDB.realtime.restore` and are put back after the shot or at the
+  next login (a `/reload` mid-shot).
+- **Blocked**: `ADDON_ACTION_BLOCKED`/`ADDON_ACTION_FORBIDDEN` naming DOINK
+  turns realtime off with one chat line. The popup can't be caught with
+  `pcall`, so this is the only guard if Forever or a boss encounter
+  blocks `Screenshot()`.
+- **Companion** (`runner/shots.go`, on `Run`'s goroutine so it never races
+  `Process`): each poll, for each `<flavor>/Screenshots` derived from the
+  watched SavedVariables paths, files named
+  `WoWScrnShot_\d{6}_\d{6}(_\d+)?.(jpg|jpeg|png)`. Each file is decoded once
+  per run per (mtime, size); on the first scan files older than 14 days
+  aren't opened; files under 500 ms old wait; unreadable images under
+  10 s old are retried. No grid → left alone forever. Hello → log + tray
+  notice "Realtime works for <name>", file deleted. Event → if not
+  `IsPending` delete; else `PostEvents(..., MaxBacklog)` and delete on
+  success; on failure keep the file (the SavedVariables path posts it
+  later). Dry run deletes nothing. Webhooks: the in-game ones from that
+  flavor's SavedVariables files, then config.
+- **Dedupe**: `state.json`'s `missing` (seqs below `last_seen` not yet
+  posted) lets realtime posts run ahead of the file; the file pass posts
+  `seq > last_seen or seq in missing`. Unchanged from the pixel era.
+- **Opt-in in game only**: `DOINKDB.realtime.enabled` (default false); the
+  companion's `realtime` defaults to true (it only acts on DOINK's own
+  screenshots), `realtime = false` turns reading off.
+- `doink decode <image>...` prints what a screenshot's grid says; changes
+  nothing.
 
 ## Addon conventions
 
@@ -396,7 +420,7 @@ so the two implementations couldn't drift apart. Regenerate with
 - Zero config is the goal: `config.toml` is optional and so is every key
   (`wow_dir`, `savedvariables_path`, `webhook_url`, `dry_run`,
   `poll_interval`, `max_backlog`, `wowhead`, `update_check`,
-  `update_notify`; `realtime` and `[notifiers]` are logged and ignored).
+  `update_notify`, `realtime`; `[notifiers]` is logged and ignored).
   Without a path, `discover` scans the standard WoW folders on every drive
   (Windows), every `/mnt/<letter>` and every Wine/Proton prefix's
   `drive_c` (`~/Games/*`, `~/.wine`, Lutris prefixes incl. Flatpak, Steam
@@ -452,9 +476,8 @@ so the two implementations couldn't drift apart. Regenerate with
   tests). One `syscall.NewCallback` window procedure for the process,
   dispatching by `hwnd`. Icons are embedded (`companion/assets`) and written
   to `%TEMP%\doink-*.ico` for `LoadImageW`.
-- Realtime is **paused** (see "Pixel transport contract"): no screen
-  reading in the Go companion. The Python reader's budget and leak-test
-  notes are in git history (v0.11.7's CLAUDE.md).
+- Realtime: see "Screenshot transport contract". The companion never
+  captures the screen.
 - Updates (`internal/updates`): one GET to the GitHub releases API 30 s
   after start and then daily (1 h retry after a failure; `update_check =
   false` disables; the tray's "Check for updates" always works). A newer
@@ -608,6 +631,13 @@ fixture included; that's a stand-in for the real name, by decision.)
   - [ ] `C_Timer.After(2, function() Screenshot() end)` from `/run` in
     Forever: `SCREENSHOT_SUCCEEDED`, no blocked popup (passes in
     retail, see below).
+  - [ ] Realtime end to end in Forever: `/doink realtime on`, a real
+    event posts within ~3 s and its screenshot is deleted; `doink decode`
+    on a kept copy reads it. Commit the grid's bounding box cropped from a
+    real Forever screenshot as `companion/internal/shot/testdata/` for a
+    regression test (crop only the grid: nothing personal).
+  - [ ] Realtime during a dungeon boss fight: shot taken, or blocked and
+    realtime turned itself off.
 - [x] **Addons can take screenshots** (retail 11.x client, 2026-11-02;
   **not yet Forever**, which shares the engine). `Screenshot()` called
   from a `C_Timer.After` callback, i.e. with no hardware event, fires
@@ -785,7 +815,7 @@ fixture included; that's a stand-in for the real name, by decision.)
   MIT license; v0.5.0 settings window (webhook + test message, WoW folder
   picker, recent posts).
 - **v0.6.0:** realtime via the pixel bridge (experimental, opt-in both
-  sides). See "Pixel transport contract". Not done: `PrintWindow` capture
+  sides; replaced by screenshots in v0.14). Not done: `PrintWindow` capture
   for an alt-tabbed WoW; `Screenshot()`-based capture as a fallback.
 - **v0.7.0:** in-game chat announcements (`Announce.lua`); the addon is now
   useful without the companion, and the README/CurseForge page lead with
@@ -804,6 +834,9 @@ fixture included; that's a stand-in for the real name, by decision.)
   it, and v0.11.3 → v0.11.4 was the first successful live self-update
   (2026-10-03 00:45). Wago answered 403 to the v0.11.3 upload (rate limit
   after a burst of releases, presumably); v0.11.4 uploaded fine.
+- **v0.13.0:** companion settings window (WebView2). **v0.14.0:** realtime
+  via screenshots replaces the pixel strip (see "Screenshot transport
+  contract"); `doink decode`.
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements;
   new PvP ranks and legacy points (user request, 2026-11-02; the events and
