@@ -238,7 +238,9 @@ play). It finds World of Warcraft inside Lutris, Steam (Proton) and Wine
 prefixes by itself; if yours lives elsewhere, set `wow_dir` in a
 `config.toml` next to `doink`. Set the webhook in game as above, or with
 `webhook_url` in `config.toml`. `./doink --test-webhook <url>` posts a test
-message.
+message, and `./doink test all` (or `test loot`, `test death`, ...) posts
+the same `[TEST]` events as `/doink test` in game, without the game:
+`doink.exe test all` from a command prompt does the same on Windows.
 
 ### Notifiers (what gets recorded for Discord)
 

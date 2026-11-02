@@ -2,7 +2,9 @@
 // to Discord.
 //
 // On Windows it runs as a tray app by default; elsewhere, and with --once,
-// --console, --dry-run or --test-webhook, it is a console program. During
+// --console, --dry-run, --test-webhook or `doink test <type>`, it is a
+// console program. `doink test <type>... [url]` posts the same fake events
+// as the in-game /doink test, without the game. During
 // development pass --config: `go run` builds into a temporary folder, so
 // the default (config.toml next to the executable) isn't the repo.
 package main
@@ -55,6 +57,8 @@ type options struct {
 	console     bool
 	tray        bool
 	testWebhook optionalString
+	testEvents  bool     // doink test <type>... [url]
+	testArgs    []string // its arguments
 	verbose     bool
 }
 
@@ -84,26 +88,40 @@ func run() int {
 	fs.Var(&o.testWebhook, "test-webhook", "post a test message to `URL` (default: the configured webhook) and exit")
 	fs.BoolVar(&o.verbose, "v", false, "debug logging")
 	showVersion := fs.Bool("version", false, "print the version and exit")
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return 2
-	}
-	if o.testWebhook.set && o.testWebhook.value == "" && fs.NArg() > 0 {
-		o.testWebhook.value = fs.Arg(0)
-		if err := fs.Parse(fs.Args()[1:]); err != nil { // flags after the URL
+	// Flags may come before or after positional arguments
+	// ("doink test loot --dry-run").
+	var positional []string
+	for args := os.Args[1:]; ; {
+		if err := fs.Parse(args); err != nil {
 			return 2
 		}
+		if fs.NArg() == 0 {
+			break
+		}
+		positional = append(positional, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+	if o.testWebhook.set && o.testWebhook.value == "" && len(positional) > 0 && positional[0] != "test" {
+		o.testWebhook.value, positional = positional[0], positional[1:]
+	}
+	if len(positional) > 0 {
+		if positional[0] != "test" {
+			fmt.Fprintf(os.Stderr, "unknown command %q (did you mean: doink test <type>?)\n", positional[0])
+			return 2
+		}
+		o.testEvents, o.testArgs = true, positional[1:]
 	}
 	if *showVersion {
 		fmt.Println("DOINK companion v" + version)
 		return 0
 	}
 
-	consoleOnly := o.once || o.console || o.dryRun || o.testWebhook.set
+	consoleOnly := o.once || o.console || o.dryRun || o.testWebhook.set || o.testEvents
 	if o.tray && runtime.GOOS != "windows" {
 		fmt.Fprintln(os.Stderr, "tray mode needs Windows")
 		return 1
 	}
-	if runtime.GOOS == "windows" && (o.tray && !o.once && !o.testWebhook.set || !o.tray && !consoleOnly) {
+	if runtime.GOOS == "windows" && (o.tray && !o.once && !o.testWebhook.set && !o.testEvents || !o.tray && !consoleOnly) {
 		return runTray(o)
 	}
 	return runConsole(o)
@@ -119,12 +137,15 @@ func runConsole(o options) int {
 	slog.SetDefault(log)
 
 	cfg, err := config.Load(o.config, o.dryRun)
-	if err != nil && !(errors.Is(err, config.ErrNoWoW) && o.testWebhook.set) {
+	if err != nil && !(errors.Is(err, config.ErrNoWoW) && (o.testWebhook.set || o.testEvents)) {
 		log.Error(err.Error())
 		return 1
 	}
 	if o.testWebhook.set {
 		return testWebhook(o.testWebhook.value, cfg, log)
+	}
+	if o.testEvents {
+		return runTestEvents(o.testArgs, cfg, log)
 	}
 
 	st, err := state.Load(cfg.StatePath, !cfg.DryRun)

@@ -389,8 +389,14 @@ so the two implementations couldn't drift apart. Regenerate with
   another path (realtime) run ahead of the file until the next `/reload`,
   and a companion restart in that window once re-posted ten events
   (2026-10-02). `state.json` keeps the Python companion's format exactly.
+- `doink test <type>... [url]` (`all`, or the addon's type names, matched
+  the same way) posts the addon's `/doink test` fixtures (`cmd/doink/
+  testevents.go`; keep them in step with each notifier's `Test()`) as
+  `Flano Wren-DOINK` to the given URL, else `webhook_url`, else the
+  in-game `*` webhook. Wowhead-enriched, `--dry-run` aware, never touches
+  `state.json`. For checking embeds without logging in.
 - **Two modes.** Console: everywhere, and on Windows with `--once`,
-  `--console`, `--dry-run` or `--test-webhook`; logs `15:04:05 LEVEL msg` to
+  `--console`, `--dry-run`, `--test-webhook` or `test`; logs `15:04:05 LEVEL msg` to
   stderr (on Windows it attaches to the parent console: the exe is
   `-H windowsgui`). Tray (Windows default): logs to `doink.log` (1 MB, then
   `doink.log.1`), named mutex `Local\DOINK-companion` against a second copy,
