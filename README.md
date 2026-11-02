@@ -262,9 +262,9 @@ command prompt (or `test loot`, `test death`, ...): it posts the same
 
 Hover over the tray icon for the last post or the current problem; if
 something goes wrong (no webhook, Discord unreachable) you get a Windows
-notification once. **Left-click** opens the log. **Right-click** for
-Settings, Open log, Open DOINK folder, Start with Windows, Check for
-updates and Quit.
+notification once. **Click** the icon for the settings window.
+**Right-click** for Settings, Open log, Open DOINK folder, Start with
+Windows, Check for updates and Quit.
 
 The **settings window** has the webhook (with a **Send test** button), the
 WoW folder, Start with Windows, and the last few posts. It follows your

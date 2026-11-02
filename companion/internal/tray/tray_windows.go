@@ -386,7 +386,7 @@ func (t *Tray) proc(hwnd, message, lParam uintptr) (result uintptr, handled bool
 	case message == wmTray:
 		switch lParam & 0xFFFF {
 		case wmLButtonUp:
-			t.hooks.OpenLog()
+			t.hooks.OpenConfig()
 		case wmRButtonUp:
 			t.menu()
 		}
