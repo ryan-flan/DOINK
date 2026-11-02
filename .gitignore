@@ -9,3 +9,6 @@ companion/doink.log*
 *.spec
 __pycache__/
 .venv/
+companion/*.syso
+companion/cmd/doink/*.syso
+companion/dist/
