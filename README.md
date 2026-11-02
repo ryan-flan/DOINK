@@ -1,15 +1,18 @@
 # DOINK: your milestones in guild chat, and in Discord
 
 DOINK is an addon for **World of Warcraft: Forever** that tells your guild
-about your adventures. It watches for six kinds of in-game event (level-ups,
-loot, deaths, quest turn-ins, boss kills and profession skill-ups) and
-announces the ones you choose in guild, officer, party or raid chat the
-moment they happen, with real item links:
+about your adventures. It watches for nine kinds of in-game event
+(level-ups, loot, deaths, quest turn-ins, boss kills, profession skill-ups,
+new mounts, duel and Mak'gora wins, and battleground wins) and announces the
+ones you choose in guild, officer, party or raid chat the moment they
+happen, with real item links:
 
 ```
 [Guild] [Flano]: Ding! Level 20.
 [Guild] [Flano]: Looted [Thunderfury, Blessed Blade of the Windseeker]!
-[Guild] [Flano]: Ragnaros down! (Molten Core, 40 players)
+[Guild] [Flano]: Ragnaros down! (Molten Core, 40 players) First kill!
+[Guild] [Flano]: Got a new mount: [Gray Wolf]!
+[Guild] [Flano]: Won a Mak'gora against Grakkor Highmountain.
 [Guild] [Flano]: Killed by Defias Pillager in Westfall.
 ```
 
@@ -29,7 +32,11 @@ kill even when nobody is online. See
 
 No dependencies and no libraries: install it and it works. Settings are on
 a normal options page (Esc → Options → AddOns → DOINK) and can also be set
-with `/doink` commands. Status: beta, tracking the Forever beta client.
+with `/doink` commands.
+
+**Guild already linked to Discord?** Blizzard's guild chat link shows DOINK's
+lines in your Discord channel with no companion at all; see
+[below](#already-linking-your-guild-to-discord).
 
 ## Credit: Dink
 
@@ -47,7 +54,8 @@ Install **DOINK** from CurseForge or Wago Addons (or through an addon
 manager such as WowUp), or download `DOINK-<version>.zip` from
 [Releases](https://github.com/ryan-flan/DOINK/releases) and copy
 `AddOns\DOINK` into your WoW AddOns folder, e.g.
-`C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\`.
+`C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\`
+(during the beta the folder was `_classic_beta_`).
 Restart WoW completely (new addons are only picked up on start).
 
 That's it for guild chat. `/doink announce test` whispers you a sample of
@@ -62,11 +70,14 @@ Every event type, what triggers it, the exact wording, and the default rule:
 | Event | Triggered by | Chat line | Announced by default |
 |---|---|---|---|
 | Level-up | `PLAYER_LEVEL_UP` | `Ding! Level 20.` / `Ding! Level 60 - max level!` | Levels 10, 20, 30, 40, 50 and 60 only |
-| Loot | Your own `You receive loot:` message | `Looted [item link]!` (`x3` appended for stacks) | Epic quality or better |
+| Loot | Your own `You receive loot:` message | `Looted [item link]!` (`x3` appended for stacks) | Epic quality or better (see below) |
 | Death | `PLAYER_DEAD`, killer from the client's death recap | `Killed by Defias Pillager in Moonbrook, Westfall.`; falling, drowning, fatigue, fire, lava and slime get their own lines (`Forgot I couldn't fly. Died in Thousand Needles.`); `Died in Moonbrook, Westfall.` when the recap is empty | Yes |
-| Boss kill | `ENCOUNTER_END` with success | `Ragnaros down! (Molten Core, 40 players)` | Yes (kills only, never wipes) |
+| Boss kill | `ENCOUNTER_END` with success | `Ragnaros down! (Molten Core, 40 players)`, plus `First kill!` the first time this character kills that boss | Yes (kills only, never wipes) |
 | Quest turn-in | `QUEST_TURNED_IN` | `Completed quest: A Threat Within.` | No |
 | Skill-up | `Your skill in X has increased to N.` | `Blacksmithing maxed at 300!` / `Blacksmithing 150/225.` | No |
+| Mount | A new mount learned (`NEW_MOUNT_ADDED`), or a mount item arriving in your bags | `Got a new mount: [Gray Wolf]!` / `Bought a new mount: [Gray Wolf]!` (bought = a vendor window was open) | Yes (at most one every two minutes) |
+| Duel | The game's duel result message | `Won a duel against Grakkor Highmountain.` (`(they ran)` if they fled) / `Won a Mak'gora against Grakkor Highmountain.` | Yes (wins only) |
+| Battleground | The end of a battleground match | `Won Warsong Gulch!` | Yes (wins only) |
 
 The defaults are deliberately conservative because guild chat is shared.
 Each rule can be changed per character:
@@ -74,7 +85,19 @@ Each rule can be changed per character:
 - Level-up: `milestones` (default), `all`, `off`
 - Loot: minimum quality `any`, `uncommon`, `rare`, `epic` (default), `legendary`, or `off`
 - Skill-up: `max` (only when a skill reaches its cap), `milestones` (75/150/225/300), `all`, `off` (default)
-- Death, boss kill, quest: `on` or `off`
+- Death, boss kill, quest, mount, duel, battleground: `on` or `off`
+
+The announcement rules work on what the addon records (see
+[Notifiers](#notifiers-what-gets-recorded-for-discord)), so a few event
+settings apply to chat too. Loot: a rare is only recorded when it is Bind
+on Equip or sells for 1g or more (a soulbound blue only matters to you),
+legendaries always
+when they are a weapon or armour and never when they are a material; with
+the default `epic` rule, chat shows epics and legendaries. Duel and
+battleground losses are not recorded unless you turn off `wins_only`
+(`/doink set duel wins_only off`); then chat says `Lost a duel to ...` /
+`Lost Warsong Gulch.`. Boss kills can be limited to first kills with
+`/doink set boss_kill first_kill_only on`.
 
 Channels: `guild` (default), `officer`, `party`, `raid`, or `off`. If you are
 not in a guild (or group) nothing is sent and `/doink` says so. Say, yell and
@@ -108,7 +131,7 @@ realtime state, and which event types are enabled.
 | `/doink announce guild` / `officer` / `party` / `raid` / `off` | Choose where announcements go |
 | `/doink announce loot rare` | Change a rule (any event type, values as listed above) |
 | `/doink announce test` | Whisper yourself a sample of every announcement, with whether the current rules would send it |
-| `/doink enable <type>` / `disable <type>` | Turn an event type off entirely (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`) |
+| `/doink enable <type>` / `disable <type>` | Turn an event type off entirely (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`) |
 | `/doink options [type]` | Show the event settings (for example the loot quality and vendor-value thresholds used for Discord) |
 | `/doink set <type> <option> <value>` | Change one, e.g. `/doink set loot min_quality 4` |
 | `/doink reset <type>` | Back to defaults |
@@ -124,10 +147,11 @@ the settings page or by command; the two are the same settings.
 
 ## Compatibility
 
-- Built for World of Warcraft: Forever (beta client 1.60.1, Interface
-  16001). It uses the Classic-era API only.
+- Built for World of Warcraft: Forever (client 1.60.1, Interface 16001).
+  It uses the Classic-era API only.
 - Chat patterns are built from the game's own strings (`LOOT_ITEM_SELF`,
-  `SKILL_RANK_UP`), so loot and skill detection work on any client language.
+  `SKILL_RANK_UP`, `DUEL_WINNER_KNOCKOUT`), so loot, skill and duel
+  detection work on any client language.
 - Forever surnames are supported: characters are tracked by full name, and
   whispers use the full name.
 
@@ -142,6 +166,25 @@ the settings page or by command; the two are the same settings.
   Boss kills themselves and anything after the fight work normally.
 - Boss kills are detected through `ENCOUNTER_END`, verified in Forever
   dungeons during the beta. Raids haven't been tested yet.
+- Mounts, duels (including Mak'gora) and battlegrounds are new in v0.12
+  and couldn't be fully tested in the beta; they are built to try more than
+  one route where the game's behaviour wasn't known. Reports welcome.
+
+## Already linking your guild to Discord?
+
+Forever can link guild chat to a Discord channel itself. A player turns on
+*Esc → Options → Social → Enable Discord Functionality* (this links their
+Battle.net and Discord accounts); a guild leader or officer who is also an
+admin of the Discord server sets it up under *Guild Settings → Guild
+Control → Discord Settings* (server, channel, Link).
+
+Once that's done, every DOINK line you send to guild chat also shows in the
+linked channel, as a plain message from you, as long as you have linked
+your own account. No companion needed.
+
+The companion is still worth it if you want rich embeds with item icons and
+Wowhead links, a different channel per character, or events you'd rather
+not put in guild chat (quests, skill-ups, every rare drop).
 
 ## Discord mirroring with the DOINK companion
 
@@ -179,15 +222,18 @@ Every two seconds it checks whether the game has written `DOINK.lua`; when
 it has, it reads the event buffer and posts each new event to a Discord
 webhook you provide, as an embed (class-coloured, with a Wowhead link for
 items and quests). It remembers what it has posted so nothing is posted
-twice. It reads only `DOINK.lua`, writes only its own three files
-(settings, posting history, log) in its own folder, and makes only HTTPS
-requests to the Discord webhook URL you paste into it.
+twice. It reads only `DOINK.lua` and writes only its own three files
+(settings, posting history, log) in its own folder; see
+[What doink.exe does](#what-doinkexe-does-and-doesnt) for its network
+requests.
 
 > **Discord posts arrive when WoW saves addon data:** on `/reload`, logout,
 > or exit. That's a WoW limitation, not a setting. Play normally and your
 > session posts when you log out, or type `/doink flush` to post right away.
-> The experimental **realtime** mode is paused: this companion version
-> doesn't read it. Guild chat announcements are always instant.
+> Guild chat announcements are always instant.
+>
+> **Realtime** (posting without a reload) is temporarily not read by the
+> companion; it's coming back as a screenshot-based channel.
 
 ### Setting it up
 
@@ -208,7 +254,10 @@ Set `wow_dir` in `config.toml` (tray menu → **Edit settings**) to your
 World of Warcraft folder.
 
 To check the whole loop in game: `/doink test levelup`, then `/doink flush`.
-A `[TEST]` post should appear a few seconds after the reload.
+A `[TEST]` post should appear a few seconds after the reload. To see what
+every embed looks like without logging in, run `doink.exe test all` from a
+command prompt (or `test loot`, `test death`, ...): it posts the same
+`[TEST]` events as `/doink test` to your webhook.
 
 Hover over the tray icon for the last post or the current problem; if
 something goes wrong (no webhook, Discord unreachable) you get a Windows
@@ -236,11 +285,32 @@ Download `DOINK-<version>-linux-amd64.tar.gz`, unpack it somewhere
 permanent and run `./doink` (a console program; keep it running while you
 play). It finds World of Warcraft inside Lutris, Steam (Proton) and Wine
 prefixes by itself; if yours lives elsewhere, set `wow_dir` in a
-`config.toml` next to `doink`. Set the webhook in game as above, or with
-`webhook_url` in `config.toml`. `./doink --test-webhook <url>` posts a test
-message, and `./doink test all` (or `test loot`, `test death`, ...) posts
-the same `[TEST]` events as `/doink test` in game, without the game:
-`doink.exe test all` from a command prompt does the same on Windows.
+`config.toml` next to `doink` (see `config.example.toml`). Set the webhook
+in game as above, or with `webhook_url` in `config.toml`.
+`./doink --test-webhook <url>` posts a test message, and `./doink test all`
+posts every sample embed. There's no tray on Linux; it logs to the
+terminal.
+
+To start it with your desktop session, a systemd user unit does the job.
+Save this as `~/.config/systemd/user/doink.service` (adjust the path):
+
+```ini
+[Unit]
+Description=DOINK companion (WoW: Forever events to Discord)
+
+[Service]
+ExecStart=%h/DOINK/doink
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+```
+
+Then `systemctl --user enable --now doink`, and
+`journalctl --user -u doink -f` to watch its log. If it can't find WoW it
+exits with an error in that log; set `wow_dir` and it starts on the next
+retry.
 
 ### Notifiers (what gets recorded for Discord)
 
@@ -250,11 +320,14 @@ rules above are applied on top.
 | Type | Posts when | Options (defaults) |
 |---|---|---|
 | `level_up` | You level up | `milestones_only` off (on = every 10 levels) |
-| `loot` | You loot something good | `min_quality` 3 (rare), `min_vendor_value` 1g (whole stack). Either one is enough |
+| `loot` | You loot something good | `min_quality` 3 (rare), `min_vendor_value` 1g (whole stack). Either one is enough. `rares_boe_only` on: a rare counts only if it is Bind on Equip. Legendaries always post when they are a weapon or armour, never when they aren't |
 | `death` | You die | |
 | `quest` | You turn in a quest | |
-| `boss_kill` | Your group kills a dungeon or raid boss | |
+| `boss_kill` | Your group kills a dungeon or raid boss (the embed lists your party and says `First kill!` the first time) | `first_kill_only` off |
 | `skill_up` | A skill reaches a milestone | `milestones_only` on (75/150/225/300) |
+| `mount` | You get a new mount | |
+| `duel` | A duel or Mak'gora ends | `wins_only` on |
+| `battleground` | A battleground match ends | `wins_only` on |
 
 Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
@@ -273,9 +346,13 @@ newest 10 queued events.
 
 ### What doink.exe does (and doesn't)
 
+- **One file.** `doink.exe` is a single program with nothing to install
+  and no `_internal` folder (versions up to v0.11 were Python and had one;
+  if you update by hand you can delete it).
 - **Reads** `WTF\Account\*\SavedVariables\DOINK.lua` in your WoW folders.
 - **Writes** only inside its own folder: `config.toml` (your settings),
-  `state.json` (what it has already posted), `doink.log` (capped at ~2 MB).
+  `state.json` (what it has already posted), `doink.log` (capped at ~2 MB;
+  the Linux build logs to the terminal instead).
 - **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
@@ -296,72 +373,16 @@ the release's workflow run. Check your download against the `.sha256` file on
 the release page:
 
 ```powershell
-Get-FileHash DOINK-v0.9.5.zip -Algorithm SHA256
+Get-FileHash DOINK-v0.12.0.zip -Algorithm SHA256
 ```
 
 > Windows SmartScreen may warn about `doink.exe` because it isn't code-signed
 > (*More info → Run anyway*). Code signing costs money per year; it may come
 > later.
 
-### How realtime works (experimental)
-
-> **Paused:** companion v0.12 (the Go rewrite) doesn't read the strip yet,
-> so turning it on in game does nothing for Discord. It's coming back in a
-> later version. The text below describes how it worked in v0.6–v0.11.
-
-WoW only writes addon data on `/reload` or logout, and in the Forever beta
-every other way out of the client is shut: addons can't read the combat log,
-and the chat and combat log *files* are written minutes or hours late. The
-one thing an addon can always do is draw on the screen. So realtime mode
-works like this:
-
-1. **In game**, after an event, the addon shows a strip of small black and
-   white blocks, a bit like a barcode, in a corner of the screen. It's
-   9 pixels tall and up to 1200 wide, shows the event's text encoded as bits,
-   and disappears after about two seconds. Nothing shows between events.
-2. **The companion** looks at the top and bottom 24 pixel rows of the WoW
-   window a few times a second, finds the strip, checks it (every strip
-   carries checksums), and posts the event. Typical delay: under a second.
-
-What it does **not** do: it doesn't read the game's memory, doesn't send any
-input to the game, and doesn't inject anything into it. It reads pixels that
-your own addon put on screen, the same technique the DiscordRichPresence
-addon has used for years. We can't speak for Blizzard, which is why it's
-opt-in and labelled experimental.
-
-**Cost.** Each look copies two thin bands of the window (about 250 KB) into a
-buffer that is allocated once and reused, and decodes them in place.
-Measured on the author's PC with a 3438×1408 window: about 8 looks a second,
-roughly 1% of one CPU core, 46 MB of memory, and a flat handle count; each
-look takes ~15 ms of waiting on the graphics driver but only ~1 ms of CPU.
-The companion measures its own capture cost, memory and Windows handle count
-while realtime is on, shows them in the settings window, and **turns
-realtime off by itself** if captures start costing real CPU, handles pile
-up, or memory keeps climbing. The normal posting path is unaffected either
-way.
-
-**Reliability.** Realtime is best effort on top of the normal path. If the
-companion misses a strip (WoW was behind another window, or something
-covered the strip), the event still posts at the next `/reload` or logout,
-and nothing ever posts twice.
-
-**Turning it on** takes two steps, because the companion can't reach into the
-game:
-
-1. Settings window → tick **Realtime posting**.
-2. In game: `/doink realtime on`. Then `/doink realtime test` shows a test
-   pattern for ten seconds; the settings window should report it.
-
-If something external sits in that corner (the Discord overlay's voice widget
-defaults to the top-left), move the strip: `/doink realtime position
-bottomright` (or `topright`, `bottomleft`). Realtime only reads while WoW is
-the active window; events that happen while you're alt-tabbed, or with the
-UI hidden (Alt-Z), post at the next reload. `/doink realtime off` removes the
-strip entirely.
-
 ## How it works: what is in the package
 
-One folder, `DOINK`, 13 files, about 1,700 lines of Lua, no third-party code:
+One folder, `DOINK`, 16 files, about 2,200 lines of Lua, no third-party code:
 
 | File | Purpose |
 |---|---|
@@ -377,10 +398,13 @@ One folder, `DOINK`, 13 files, about 1,700 lines of Lua, no third-party code:
 | `Notifiers/Quest.lua` | Listens to `QUEST_COMPLETE` and `QUEST_TURNED_IN`. |
 | `Notifiers/BossKill.lua` | Listens to `ENCOUNTER_END`. |
 | `Notifiers/SkillUp.lua` | Listens to `CHAT_MSG_SKILL`. |
+| `Notifiers/Mount.lua` | Listens to `NEW_MOUNT_ADDED`, `CHAT_MSG_LOOT`, `MERCHANT_SHOW` and `MERCHANT_CLOSED`. |
+| `Notifiers/Duel.lua` | Listens to `CHAT_MSG_SYSTEM`. |
+| `Notifiers/Battleground.lua` | Listens to `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE` and `PLAYER_ENTERING_WORLD`. |
 | `Transports/Pixel.lua` | The optional, off-by-default "realtime" strip for the companion. Creates nothing unless enabled. |
 
-The addon registers only the events listed above (plus `ADDON_LOADED` and
-`PLAYER_LOGIN`). It does not register the combat log event, which Forever
+The addon registers only the events listed above (plus `ADDON_LOADED`,
+`PLAYER_LOGIN` and `PLAYER_LEVEL_UP`). It does not register the combat log event, which Forever
 protects, and it does not hook or replace any Blizzard function. It makes
 no network connections (addons can't) and reads nothing from disk.
 
@@ -389,17 +413,18 @@ no network connections (addons can't) and reads nothing from disk.
 Everything is kept in one saved variable, `DOINKDB`, written by the game to
 `WTF\Account\<account>\SavedVariables\DOINK.lua` on `/reload` and logout:
 
-- Per character: your settings (only the ones you changed), a counter, and a
-  ring buffer of the last 500 events as JSON text (type, time, character,
-  realm, class, level, and event details such as item id and name). This
-  buffer exists for the optional companion; the addon itself never reads it
-  back.
+- Per character: your settings (only the ones you changed), a counter,
+  which bosses you have killed (for `First kill!`), and a ring buffer of the
+  last 500 events as JSON text (type, time, character, realm, class, level,
+  and event details such as item id and name). This buffer exists for the
+  optional companion; the addon itself never reads it back.
 - Account-wide: the debug flag, the realtime settings (off by default), and
   any Discord webhook URL you set with `/doink webhook`. If you never set
   one, nothing is stored there.
 
-The addon does not store chat, names of other players, or anything about
-other characters.
+The addon does not store chat or anything about other characters, with two
+exceptions inside events: a boss kill lists your party members' names,
+classes and levels, and a duel records your opponent's name.
 
 ## Development, source and AI use
 
