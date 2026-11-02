@@ -591,6 +591,13 @@ fixture included; that's a stand-in for the real name, by decision.)
   `C:\Program Files (x86)\World of Warcraft\`.
 - [x] TOC `## Interface:` version: `16001` (client `1.60.1 70124`, Sep 29
   2026); still current 2026-11-01.
+- [x] **Retail 12.1.5 blocks GUILD chat from addon code without a key
+  press** (2026-11-02): `SendChatMessage(..., "GUILD")` from a
+  `C_Timer.After` callback → "Interface action failed because of an
+  addon"; the same call straight from `/run` (the Enter key press) posts,
+  and a WHISPER from a timer posts. So on retail, DOINK's guild
+  announcements (sent from game events and a timer queue) can't go out
+  by themselves. Forever: untested, see the launch checklist.
 - [x] **Blizzard's Discord guild-chat link** (Forever beta; from
   Blizzard/Discord posts, the kami-labs guide and Blizzard forums, not
   tried by us). Server-side relay of guild chat ↔ one Discord channel.
@@ -608,6 +615,12 @@ fixture included; that's a stand-in for the real name, by decision.)
   item-link rendering, any filtering, whether a Discord chat type is
   exposed to addons.
 - [ ] **Launch-day checklist** (2026-11-04; nothing here is verified yet):
+  - [ ] **First: can an addon post to GUILD without a key press?**
+    `/run C_Timer.After(1,function() SendChatMessage("test","GUILD") end)`.
+    Retail 12.1.5 blocks it (see below); if Forever does too, every
+    automatic guild announcement fails with "Interface action failed
+    because of an addon", and `Announce.lua` must change before anyone
+    levels (announce on a click or key press instead).
   - [ ] DOINK guild lines appear in the linked Discord channel; how
     `[Item]` links render there.
   - [ ] `/dump ChatTypeInfo` and `/etrace` while someone types from
