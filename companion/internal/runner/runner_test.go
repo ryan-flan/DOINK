@@ -442,6 +442,31 @@ func TestLootLooksUpWowhead(t *testing.T) {
 	}
 }
 
+func TestMountLooksUpWowhead(t *testing.T) {
+	f := newFixture(t)
+	var asked []int
+	s := f.state()
+	d := f.deps(s)
+	d.Items = wowhead.NewCache(func(id int) *wowhead.Item {
+		asked = append(asked, id)
+		return &wowhead.Item{ID: id, Name: "Reins of the Gray Wolf", IconURL: "https://x/i.jpg"}
+	})
+	byItem := savedvars.Event{Char: "Flano", Realm: "R", Seq: 1, Type: "mount",
+		Data: map[string]any{"name": "Gray Wolf", "item_id": 5656.0}}
+	bySpell := savedvars.Event{Char: "Flano", Realm: "R", Seq: 2, Type: "mount",
+		Data: map[string]any{"name": "Raptor", "item_id": nil, "spell_id": 24242.0}}
+	PostEvents(d, "Flano-R", []savedvars.Event{byItem, bySpell}, nil, 0)
+	if !reflect.DeepEqual(asked, []int{5656}) {
+		t.Errorf("asked %v", asked)
+	}
+	if f.sender.sent[0][0]["thumbnail"] == nil {
+		t.Error("no thumbnail")
+	}
+	if f.sender.sent[0][1]["thumbnail"] != nil {
+		t.Error("thumbnail without an item id")
+	}
+}
+
 func TestRunOnce(t *testing.T) {
 	f := newFixture(t)
 	os.WriteFile(f.sv, []byte(eventsFile(1)), 0o644)

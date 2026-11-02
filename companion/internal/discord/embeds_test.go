@@ -266,3 +266,110 @@ func TestConnectionTestEmbed(t *testing.T) {
 		t.Errorf("got %v", e)
 	}
 }
+
+func TestMount(t *testing.T) {
+	item := &wowhead.Item{ID: 5656, Name: "Reins of the Gray Wolf", IconURL: "https://x/wolf.jpg",
+		Lines: []string{"Use: Summons a Gray Wolf."}}
+	e := BuildEmbed(event("mount", map[string]any{"name": "Gray Wolf", "item_id": 5656.0,
+		"spell_id": nil, "link": "|cnIQ3:|Hitem:5656::::::::|h[Gray Wolf]|h|r", "bought": true}), item)
+	if e["title"] != "Flano bought a new mount: Gray Wolf" {
+		t.Errorf("title %q", e["title"])
+	}
+	if e["url"] != "https://www.wowhead.com/forever/item=5656" {
+		t.Errorf("url %q", e["url"])
+	}
+	if e["description"] != "Use: Summons a Gray Wolf." || e["thumbnail"] == nil {
+		t.Errorf("item details %v / %v", e["description"], e["thumbnail"])
+	}
+	if e["color"] != 0xC79C6E {
+		t.Errorf("color %x", e["color"])
+	}
+
+	e = BuildEmbed(event("mount", map[string]any{"name": "Swift Razzashi Raptor", "item_id": nil,
+		"spell_id": 24242.0, "link": nil, "bought": false}), nil)
+	if e["title"] != "Flano got a new mount: Swift Razzashi Raptor" {
+		t.Errorf("title %q", e["title"])
+	}
+	if e["url"] != "https://www.wowhead.com/forever/spell=24242" {
+		t.Errorf("url %q", e["url"])
+	}
+	if _, ok := e["description"]; ok {
+		t.Error("description without an item")
+	}
+
+	e = BuildEmbed(event("mount", map[string]any{"name": "Odd", "item_id": 1.5, "spell_id": "x"}), nil)
+	if _, ok := e["url"]; ok {
+		t.Errorf("url from non-integers: %v", e["url"])
+	}
+}
+
+func TestDuel(t *testing.T) {
+	cases := []struct {
+		d           map[string]any
+		title, desc string
+		colour      int
+	}{
+		{map[string]any{"opponent": "Grakkor", "won": true, "fled": false, "makgora": false},
+			"Flano won a duel against Grakkor", "", 0xC79C6E},
+		{map[string]any{"opponent": "Grakkor", "won": true, "fled": true, "makgora": false},
+			"Flano won a duel against Grakkor", "Grakkor ran away.", 0xC79C6E},
+		{map[string]any{"opponent": "Grakkor", "won": false, "fled": false, "makgora": false},
+			"Flano lost a duel to Grakkor", "", 0xC79C6E},
+		{map[string]any{"opponent": "Grakkor", "won": false, "fled": true, "makgora": false},
+			"Flano lost a duel to Grakkor", "Ran away mid-duel.", 0xC79C6E},
+		{map[string]any{"opponent": "Grakkor", "won": true, "fled": false, "makgora": true},
+			"Flano won a Mak'gora against Grakkor", "", 0x8B0000},
+		{map[string]any{"opponent": "Grakkor", "won": false, "fled": false, "makgora": true},
+			"Flano lost a Mak'gora to Grakkor", "", 0x8B0000},
+	}
+	for _, c := range cases {
+		e := BuildEmbed(event("duel", c.d), nil)
+		desc, _ := e["description"].(string)
+		if e["title"] != c.title || desc != c.desc || e["color"] != c.colour {
+			t.Errorf("%v: got %q / %q / %x", c.d, e["title"], desc, e["color"])
+		}
+	}
+}
+
+func TestBattleground(t *testing.T) {
+	e := BuildEmbed(event("battleground", map[string]any{"name": "Warsong Gulch", "won": true}), nil)
+	if e["title"] != "Flano won Warsong Gulch" || e["description"] != "Victory in Warsong Gulch." {
+		t.Errorf("won: %q / %q", e["title"], e["description"])
+	}
+	e = BuildEmbed(event("battleground", map[string]any{"name": "Arathi Basin", "won": false}), nil)
+	if e["title"] != "Flano lost Arathi Basin" || e["description"] != "Defeat in Arathi Basin." {
+		t.Errorf("lost: %q / %q", e["title"], e["description"])
+	}
+	if e["color"] != 0xC79C6E {
+		t.Errorf("color %x", e["color"])
+	}
+}
+
+func TestBossKillFirstKillAndGroup(t *testing.T) {
+	e := BuildEmbed(event("boss_kill", map[string]any{"name": "Edwin VanCleef", "instance": "Deadmines",
+		"group_size": 5.0, "first_kill": true,
+		"group": []any{"Grakkor Highmountain (Shaman 24)", "Mira (Mage 22)"}}), nil)
+	if e["title"] != "Flano defeated Edwin VanCleef" || e["description"] != "First kill!" {
+		t.Errorf("%q / %q", e["title"], e["description"])
+	}
+	if got := fieldValues(e); !reflect.DeepEqual(got, []string{"Deadmines", "5",
+		"Grakkor Highmountain (Shaman 24), Mira (Mage 22)"}) {
+		t.Errorf("fields %v", got)
+	}
+	if fs := e["fields"].([]map[string]any); fs[2]["name"] != "Group" {
+		t.Errorf("field %v", fs[2])
+	}
+
+	e = BuildEmbed(event("boss_kill", map[string]any{"name": "Edwin VanCleef", "first_kill": false,
+		"group": nil}), nil)
+	if _, ok := e["description"]; ok {
+		t.Error("description on a repeat kill")
+	}
+	if _, ok := e["fields"]; ok {
+		t.Errorf("fields %v", e["fields"])
+	}
+	e = BuildEmbed(event("boss_kill", map[string]any{"name": "X", "group": []any{}}), nil)
+	if _, ok := e["fields"]; ok {
+		t.Error("empty group made a field")
+	}
+}

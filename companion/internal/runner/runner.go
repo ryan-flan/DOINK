@@ -53,9 +53,10 @@ func WebhookFor(key string, gameHooks map[string]string, cfg *config.Config) str
 	return cfg.WebhookURL
 }
 
-// item is Wowhead's details for a loot event with an integer item id.
+// item is Wowhead's details for a loot or mount event with an integer
+// item id.
 func item(d Deps, e savedvars.Event) *wowhead.Item {
-	if d.Items == nil || e.Type != "loot" {
+	if d.Items == nil || (e.Type != "loot" && e.Type != "mount") {
 		return nil
 	}
 	id, ok := e.Data["item_id"].(float64)

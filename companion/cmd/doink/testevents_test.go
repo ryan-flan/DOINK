@@ -69,12 +69,26 @@ func TestPostTestEvents(t *testing.T) {
 	}
 	for _, want := range []string{"[TEST] Flano Wren reached level 60", "[TEST] Flano Wren died to Hogger",
 		"[TEST] Flano Wren defeated Ragnaros", "[TEST] Flano Wren reached 150 Blacksmithing",
-		"[TEST] Flano Wren completed A Threat Within"} {
+		"[TEST] Flano Wren completed A Threat Within", "[TEST] Flano Wren bought a new mount: Gray Wolf",
+		"[TEST] Flano Wren won a duel against Grakkor Highmountain", "[TEST] Flano Wren won Warsong Gulch"} {
 		if !titles[want] {
 			t.Errorf("missing %q in %v", want, titles)
 		}
 	}
-	if !reflect.DeepEqual(asked, []int{19019}) {
+	for _, e := range r.embeds[0] {
+		switch e["title"] {
+		case "[TEST] Flano Wren bought a new mount: Gray Wolf":
+			if e["thumbnail"] == nil {
+				t.Error("mount not enriched")
+			}
+		case "[TEST] Flano Wren defeated Ragnaros":
+			if e["description"] != "First kill!" {
+				t.Errorf("boss description %v", e["description"])
+			}
+		}
+	}
+	// "all" is sorted, so loot (19019) is looked up before mount (5656).
+	if !reflect.DeepEqual(asked, []int{19019, 5656}) {
 		t.Errorf("wowhead asked %v", asked)
 	}
 }

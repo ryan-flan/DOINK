@@ -232,6 +232,9 @@ func bossKill(name string, d data) Embed {
 		boss = "a boss"
 	}
 	e := Embed{"title": name + " defeated " + boss}
+	if d.truthy("first_kill") {
+		e["description"] = "First kill!"
+	}
 	var fields []map[string]any
 	if d.truthy("instance") {
 		fields = append(fields, field("Instance", text(d["instance"])))
@@ -239,10 +242,99 @@ func bossKill(name string, d data) Embed {
 	if d.truthy("group_size") {
 		fields = append(fields, field("Group size", text(d["group_size"])))
 	}
+	if group := stringList(d["group"]); len(group) > 0 {
+		fields = append(fields, field("Group", strings.Join(group, ", ")))
+	}
 	if len(fields) > 0 {
 		e["fields"] = fields
 	}
 	return e
+}
+
+// stringList is the strings in a JSON array; anything else gives nil.
+func stringList(v any) []string {
+	list, _ := v.([]any)
+	var out []string
+	for _, item := range list {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func mount(name string, d data, item *wowhead.Item) Embed {
+	what := d.str("name")
+	if what == "" && item != nil {
+		what = item.Name
+	}
+	if what == "" {
+		what = "a mount"
+	}
+	verb := " got a new mount: "
+	if d.truthy("bought") {
+		verb = " bought a new mount: "
+	}
+	e := Embed{"title": name + verb + what}
+	if d.isInt("item_id") {
+		id, _ := d.num("item_id")
+		e["url"] = Wowhead + "/item=" + number(id)
+	} else if d.isInt("spell_id") {
+		id, _ := d.num("spell_id")
+		e["url"] = Wowhead + "/spell=" + number(id)
+	}
+	if item != nil {
+		if item.IconURL != "" {
+			e["thumbnail"] = map[string]any{"url": item.IconURL}
+		}
+		if len(item.Lines) > 0 {
+			e["description"] = strings.Join(item.Lines, "\n")
+		}
+	}
+	return e
+}
+
+// makgoraColour: dark red for a duel to the death.
+const makgoraColour = 0x8B0000
+
+func duel(name string, d data) Embed {
+	opponent := d.str("opponent")
+	if opponent == "" {
+		opponent = "someone"
+	}
+	kind := "duel"
+	if d.truthy("makgora") {
+		kind = "Mak'gora"
+	}
+	won := d.truthy("won")
+	var e Embed
+	if won {
+		e = Embed{"title": name + " won a " + kind + " against " + opponent}
+	} else {
+		e = Embed{"title": name + " lost a " + kind + " to " + opponent}
+	}
+	if d.truthy("fled") {
+		if won {
+			e["description"] = opponent + " ran away."
+		} else {
+			e["description"] = "Ran away mid-duel."
+		}
+	}
+	if d.truthy("makgora") {
+		e["color"] = makgoraColour
+	}
+	return e
+}
+
+func battleground(name string, d data) Embed {
+	bg := d.str("name")
+	if bg == "" {
+		bg = "a battleground"
+	}
+	if d.truthy("won") {
+		return Embed{"title": name + " won " + bg, "description": "Victory in " + bg + "."}
+	}
+	return Embed{"title": name + " lost " + bg, "description": "Defeat in " + bg + "."}
 }
 
 func skillUp(name string, d data) Embed {
@@ -280,7 +372,8 @@ func generic(name, kind string, d data) Embed {
 }
 
 // BuildEmbed turns one event into an embed. item is Wowhead's details for a
-// loot event, when the lookup is on and succeeded; other types ignore it.
+// loot or mount event, when the lookup is on and succeeded; other types
+// ignore it.
 func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 	name := e.FullName()
 	d := data(e.Data)
@@ -298,6 +391,12 @@ func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 		embed = bossKill(name, d)
 	case "skill_up":
 		embed = skillUp(name, d)
+	case "mount":
+		embed = mount(name, d, item)
+	case "duel":
+		embed = duel(name, d)
+	case "battleground":
+		embed = battleground(name, d)
 	default:
 		embed = generic(name, e.Type, d)
 	}
