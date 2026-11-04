@@ -97,19 +97,29 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 		for _, e := range batch {
 			embeds = append(embeds, discord.BuildEmbed(e, item(d, e)))
 		}
-		if err := d.Sender.Send(url, embeds); err != nil {
-			d.Log.Error(fmt.Sprintf("%s: post failed: %v", key, err))
-			d.Status.Failed(fmt.Sprintf("posting to Discord failed: %v", err))
-			return false
-		}
 		names := make([]string, 0, len(batch))
 		for _, e := range batch {
 			names = append(names, fmt.Sprintf("#%d %s", e.Seq, e.Type))
 		}
-		d.Log.Info(fmt.Sprintf("%s: %s %s", key, verb, strings.Join(names, ", ")))
+		err := d.Sender.Send(url, embeds)
+		switch {
+		case errors.Is(err, discord.ErrRejected):
+			// The message itself is wrong; retrying would block every
+			// later event of this character behind it. Drop the batch.
+			d.Log.Error(fmt.Sprintf("%s: skipped %s: %v", key, strings.Join(names, ", "), err))
+			d.Status.Failed(fmt.Sprintf("Discord rejected %s; skipped", strings.Join(names, ", ")))
+		case err != nil:
+			d.Log.Error(fmt.Sprintf("%s: post failed: %v", key, err))
+			d.Status.Failed(fmt.Sprintf("posting to Discord failed: %v", err))
+			return false
+		default:
+			d.Log.Info(fmt.Sprintf("%s: %s %s", key, verb, strings.Join(names, ", ")))
+		}
 		for _, e := range batch {
-			d.Status.Posted(e.FullName(), e.Type)
-			d.State.MarkPosted(key, e.Seq, firstSightBacklog)
+			if err == nil {
+				d.Status.Posted(e.FullName(), e.Type)
+			}
+			d.State.MarkPosted(key, e.Seq, firstSightBacklog) // posted, or dropped for good
 		}
 	}
 	return true

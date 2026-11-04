@@ -22,6 +22,10 @@ const minPostInterval = 2 * time.Second
 
 const maxAttempts = 5
 
+// ErrRejected: Discord answered 400, so the message itself is wrong and
+// sending it again can't help. Other failures are worth a retry.
+var ErrRejected = errors.New("discord rejected the message")
+
 // Sender posts embeds to a webhook URL.
 type Sender interface {
 	Send(url string, embeds []Embed) error
@@ -131,12 +135,19 @@ func (p *Pool) Send(url string, embeds []Embed) error {
 			}
 			p.log.Info(fmt.Sprintf("rate limited; retrying in %.1fs", retry))
 			p.sleep(time.Duration(retry * float64(time.Second)))
+		case resp.StatusCode == http.StatusBadRequest:
+			return fmt.Errorf("%w: HTTP 400: %s", ErrRejected, head(detail))
 		default:
-			if len(detail) > 200 {
-				detail = detail[:200]
-			}
-			return fmt.Errorf("HTTP %d: %s", resp.StatusCode, detail)
+			return fmt.Errorf("HTTP %d: %s", resp.StatusCode, head(detail))
 		}
 	}
-	return errors.New("still rate limited after 5 attempts")
+	return fmt.Errorf("still rate limited after %d attempts", maxAttempts)
+}
+
+// head is the start of an error body, for a log line.
+func head(detail []byte) []byte {
+	if len(detail) > 200 {
+		detail = detail[:200]
+	}
+	return detail
 }

@@ -124,8 +124,25 @@ func text(v any) string {
 	return string(raw)
 }
 
+// Discord's embed limits; a message over any of them is rejected whole.
+const (
+	maxTitle       = 256
+	maxDescription = 4096
+	maxFieldValue  = 1024
+	maxFooter      = 2048
+)
+
+// clip cuts s to at most n runes, marking the cut with an ellipsis.
+func clip(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:n-1]) + "…"
+}
+
 func field(name, value string) map[string]any {
-	return map[string]any{"name": name, "value": value, "inline": true}
+	return map[string]any{"name": name, "value": clip(value, maxFieldValue), "inline": true}
 }
 
 // thousands writes n with comma separators: 1200 -> "1,200".
@@ -408,11 +425,16 @@ func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 		embed["color"] = colour
 	}
 	footer := e.Key()
+	title, _ := embed["title"].(string)
 	if e.Test {
-		embed["title"] = "[TEST] " + embed["title"].(string)
+		title = "[TEST] " + title
 		footer += " · test event"
 	}
-	embed["footer"] = map[string]any{"text": footer}
+	embed["title"] = clip(title, maxTitle)
+	if description, ok := embed["description"].(string); ok {
+		embed["description"] = clip(description, maxDescription)
+	}
+	embed["footer"] = map[string]any{"text": clip(footer, maxFooter)}
 	if e.HasTS {
 		embed["timestamp"] = time.Unix(e.TS, 0).UTC().Format("2006-01-02T15:04:05+00:00")
 	}

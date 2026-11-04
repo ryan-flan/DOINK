@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/ryan-flan/DOINK/companion/internal/savedvars"
 	"github.com/ryan-flan/DOINK/companion/internal/wowhead"
@@ -232,6 +233,25 @@ func TestUnknownTypeFallsBack(t *testing.T) {
 	d = BuildEmbed(big, nil)["description"].(string)
 	if len(d) > 3900+len("```json\n\n```") || !strings.HasSuffix(d, "\n```") {
 		t.Errorf("len %d", len(d))
+	}
+}
+
+func TestClip(t *testing.T) {
+	if clip("abc", 3) != "abc" || clip("abcd", 3) != "ab…" || clip("ééé", 2) != "é…" {
+		t.Errorf("%q %q %q", clip("abc", 3), clip("abcd", 3), clip("ééé", 2))
+	}
+	long := strings.Repeat("x", 300)
+	e := BuildEmbed(event("loot", map[string]any{"name": long}), nil)
+	if n := utf8.RuneCountInString(e["title"].(string)); n != maxTitle {
+		t.Errorf("title %d runes", n)
+	}
+	fv := fieldValues(BuildEmbed(event("boss_kill", map[string]any{"name": "B", "group": []any{strings.Repeat("y", 2000)}}), nil))
+	if n := utf8.RuneCountInString(fv[0]); n != maxFieldValue {
+		t.Errorf("field %d runes", n)
+	}
+	g := BuildEmbed(savedvars.Event{Char: "Flano", Realm: "R", Type: "odd", Data: map[string]any{"x": strings.Repeat("z", 5000)}}, nil)
+	if n := utf8.RuneCountInString(g["description"].(string)); n > maxDescription {
+		t.Errorf("description %d runes", n)
 	}
 }
 

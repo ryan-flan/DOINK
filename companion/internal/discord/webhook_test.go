@@ -3,6 +3,7 @@ package discord
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -147,6 +148,25 @@ func rateLimited(body string) func(w http.ResponseWriter) {
 
 func ok(w http.ResponseWriter) { w.WriteHeader(204) }
 
+func TestSendRejected(t *testing.T) {
+	srv, calls := sequence(func(w http.ResponseWriter) {
+		w.WriteHeader(400)
+		_, _ = io.WriteString(w, `{"message": "Invalid Form Body"}`)
+	})
+	defer srv.Close()
+	p, _ := testPool(t, false, nil)
+	err := p.Send(srv.URL, embeds)
+	if !errors.Is(err, ErrRejected) || *calls != 1 || !strings.Contains(err.Error(), "Invalid Form Body") {
+		t.Errorf("err %v calls %d", err, *calls)
+	}
+	// Only 400 means "the message is wrong"; a 5xx is worth a retry later.
+	srv2, _ := sequence(func(w http.ResponseWriter) { w.WriteHeader(502) })
+	defer srv2.Close()
+	if err := p.Send(srv2.URL, embeds); err == nil || errors.Is(err, ErrRejected) {
+		t.Errorf("502: %v", err)
+	}
+}
+
 func TestSend429ThenOK(t *testing.T) {
 	srv, calls := sequence(rateLimited(`{"retry_after": 0.25}`), ok)
 	defer srv.Close()
@@ -183,16 +203,16 @@ func TestSendStillRateLimited(t *testing.T) {
 
 func TestSendHTTPError(t *testing.T) {
 	srv, calls := sequence(func(w http.ResponseWriter) {
-		w.WriteHeader(400)
-		io.WriteString(w, `{"message": "Invalid Form Body"}`+strings.Repeat("x", 300))
+		w.WriteHeader(403)
+		io.WriteString(w, `{"message": "Invalid Webhook Token"}`+strings.Repeat("x", 300))
 	})
 	defer srv.Close()
 	p, _ := testPool(t, false, nil)
 	err := p.Send(srv.URL, embeds)
-	if err == nil || !strings.HasPrefix(err.Error(), `HTTP 400: {"message": "Invalid Form Body"}`) || *calls != 1 {
+	if err == nil || !strings.HasPrefix(err.Error(), `HTTP 403: {"message": "Invalid Webhook Token"}`) || *calls != 1 {
 		t.Fatalf("err %v calls %d", err, *calls)
 	}
-	if len(err.Error()) != len("HTTP 400: ")+200 {
+	if len(err.Error()) != len("HTTP 403: ")+200 {
 		t.Errorf("body not cut at 200 bytes: %d", len(err.Error()))
 	}
 }

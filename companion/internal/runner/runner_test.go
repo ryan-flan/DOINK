@@ -35,6 +35,8 @@ type fakeSender struct {
 	sent [][]discord.Embed
 	urls []string
 	fail bool
+	// rejectNext: this many sends answer as Discord does to a bad embed.
+	rejectNext int
 }
 
 func (f *fakeSender) Send(url string, embeds []discord.Embed) error {
@@ -42,6 +44,10 @@ func (f *fakeSender) Send(url string, embeds []discord.Embed) error {
 	defer f.mu.Unlock()
 	if f.fail {
 		return errors.New("boom")
+	}
+	if f.rejectNext > 0 {
+		f.rejectNext--
+		return fmt.Errorf("%w: HTTP 400: Invalid Form Body", discord.ErrRejected)
 	}
 	f.sent = append(f.sent, embeds)
 	f.urls = append(f.urls, url)
@@ -487,6 +493,32 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 			t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A batch Discord rejects (HTTP 400) can never succeed; it is dropped so
+// the character's later events aren't stuck behind it forever.
+func TestPostEventsSkipsRejected(t *testing.T) {
+	f := newFixture(t)
+	s := f.state()
+	f.sender.rejectNext = 1
+	if !PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(1), event(2)}, nil, 0) {
+		t.Fatal("a rejected batch must count as handled, not retried")
+	}
+	if s.IsPending("Flano-R", 1) || s.IsPending("Flano-R", 2) || len(f.sender.titles()) != 0 {
+		t.Errorf("pending %v %v, sent %v", s.IsPending("Flano-R", 1), s.IsPending("Flano-R", 2), f.sender.titles())
+	}
+	if !f.logs.has("ERROR", "skipped #1 ") || !strings.Contains(f.status.Error(), "rejected #1 ") {
+		t.Errorf("logs %v status %q", f.logs.recs, f.status.Error())
+	}
+	// The next one posts as usual and clears the problem.
+	if !PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 0) || len(f.sender.titles()) != 1 || f.status.Error() != "" {
+		t.Errorf("sent %v status %q", f.sender.titles(), f.status.Error())
+	}
+	// Anything else is still retried.
+	f.sender.fail = true
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(4)}, nil, 0) || !s.IsPending("Flano-R", 4) {
+		t.Error("a network failure must be retried")
 	}
 }
 
