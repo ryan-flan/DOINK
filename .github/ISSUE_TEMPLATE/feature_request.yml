@@ -1,0 +1,29 @@
+name: Feature request
+description: An event DOINK should announce, or something it should do differently.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: half
+    attributes:
+      label: Which part
+      options:
+        - In-game announcements (addon)
+        - Discord posts (companion / embeds)
+        - Both / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What should happen
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters to you or your guild
+  - type: textarea
+    id: api
+    attributes:
+      label: Anything you know about the WoW API or event involved
+      description: Optional. `/etrace` output or an event name saves a lot of guessing.

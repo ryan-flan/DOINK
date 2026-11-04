@@ -1,0 +1,41 @@
+name: Bug report
+description: Something DOINK does wrong, in game or in the companion.
+labels: [bug]
+body:
+  - type: checkboxes
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I removed webhook URLs from anything I'm pasting below.
+          required: true
+  - type: input
+    id: addon
+    attributes:
+      label: Addon version
+      description: "`/doink` in game prints it."
+      placeholder: "0.16.0"
+  - type: input
+    id: companion
+    attributes:
+      label: Companion version (if you use it)
+      description: The tray menu's first line, or `doink --version`.
+      placeholder: "0.16.0, Windows 11"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      placeholder: "1. ... 2. ... (which event, which command, solo or in a group)"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "In game: `/doink debug`, reproduce, paste the chat lines. Companion: the relevant part of `doink.log` (tray menu → Open log). Lua errors: the BugSack text."
+      render: text
