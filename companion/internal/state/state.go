@@ -217,18 +217,18 @@ func (s *State) Forget(key string) {
 	}
 }
 
-// Rename moves old's entry to new if new has none. Reports whether it moved.
-func (s *State) Rename(old, new string) bool {
+// Rename moves old's entry to key if key has none. Reports whether it moved.
+func (s *State) Rename(old, key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.chars[old]
 	if !ok {
 		return false
 	}
-	if _, taken := s.chars[new]; taken {
+	if _, taken := s.chars[key]; taken {
 		return false
 	}
-	s.chars[new] = e
+	s.chars[key] = e
 	delete(s.chars, old)
 	s.save()
 	return true

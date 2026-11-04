@@ -57,7 +57,7 @@ func Set(path string, values []KV) error {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return nil
@@ -127,7 +127,7 @@ func Quote(s string) string {
 func verify(out string, values []KV) error {
 	raw := map[string]any{}
 	if _, err := toml.Decode(out, &raw); err != nil {
-		return fmt.Errorf("config.toml couldn't be updated safely (%v); edit it by hand", err)
+		return fmt.Errorf("config.toml couldn't be updated safely (%w); edit it by hand", err)
 	}
 	for _, kv := range values {
 		got, present := raw[kv.Key]

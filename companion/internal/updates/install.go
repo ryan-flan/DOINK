@@ -207,13 +207,13 @@ func (in *Installer) writeNew(exe []byte) error {
 	_, werr := tmp.Write(exe)
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil {
-		os.Remove(name)
+		_ = os.Remove(name)
 		return fmt.Errorf("couldn't write the update: %w", errors.Join(werr, cerr))
 	}
 	dst := filepath.Join(in.Dir, NewName)
-	os.Remove(dst)
+	_ = os.Remove(dst)
 	if err := os.Rename(name, dst); err != nil {
-		os.Remove(name)
+		_ = os.Remove(name)
 		return fmt.Errorf("couldn't write the update: %w", err)
 	}
 	return nil
@@ -228,12 +228,12 @@ func (in *Installer) Swap() error {
 	if _, err := os.Stat(newer); err != nil {
 		return fmt.Errorf("the downloaded update is missing: %w", err)
 	}
-	os.Remove(old)
+	_ = os.Remove(old)
 	if err := os.Rename(exe, old); err != nil {
 		return fmt.Errorf("couldn't replace doink.exe (is the folder writable?): %w", err)
 	}
 	if err := os.Rename(newer, exe); err != nil {
-		os.Rename(old, exe)
+		_ = os.Rename(old, exe) // best effort: put the old exe back
 		return fmt.Errorf("couldn't replace doink.exe: %w", err)
 	}
 	return nil
@@ -249,7 +249,7 @@ func (in *Installer) Rollback() error {
 		return err
 	}
 	if err := os.Rename(old, exe); err != nil {
-		os.Rename(newer, exe) // keep some doink.exe in place
+		_ = os.Rename(newer, exe) // keep some doink.exe in place
 		return err
 	}
 	return nil

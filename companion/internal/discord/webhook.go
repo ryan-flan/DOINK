@@ -101,13 +101,13 @@ func (p *Pool) Send(url string, embeds []Embed) error {
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(body))
 		if err != nil {
-			return fmt.Errorf("network error: %v", err)
+			return fmt.Errorf("network error: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "DOINK-companion/"+p.version)
 		resp, err := p.client.Do(req)
 		if err != nil {
-			return fmt.Errorf("network error: %v", err)
+			return fmt.Errorf("network error: %w", err)
 		}
 		detail, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()

@@ -2,6 +2,7 @@ package shot
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -101,7 +102,7 @@ func TestRowsTooLong(t *testing.T) {
 	if rows, err := Rows(make([]byte, MaxPayload), false, MinCols); err != nil || len(rows) != 1+MaxRows {
 		t.Errorf("1024 bytes at the narrowest: %d rows, %v", len(rows), err)
 	}
-	if _, err := Rows(make([]byte, MaxPayload+1), false, MaxCols); err != ErrTooLong {
+	if _, err := Rows(make([]byte, MaxPayload+1), false, MaxCols); !errors.Is(err, ErrTooLong) {
 		t.Errorf("1025 bytes: %v", err)
 	}
 }

@@ -158,7 +158,9 @@ func runConsole(o options) int {
 	slog.SetDefault(log)
 
 	cfg, err := config.Load(o.config, o.dryRun)
-	if err != nil && !(errors.Is(err, config.ErrNoWoW) && (o.testWebhook.set || o.testEvents)) {
+	// The one-shot test commands can run without a WoW install.
+	noWoWIsFine := errors.Is(err, config.ErrNoWoW) && (o.testWebhook.set || o.testEvents)
+	if err != nil && !noWoWIsFine {
 		log.Error(err.Error())
 		return 1
 	}

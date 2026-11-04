@@ -17,7 +17,8 @@ func TestSettle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "DOINK.lua")
 	w := New(path)
 
-	if w.Poll() || w.Poll() {
+	first, second := w.Poll(), w.Poll()
+	if first || second {
 		t.Error("missing file reported")
 	}
 	if n := strings.Count(buf.String(), "waiting for"); n != 1 {

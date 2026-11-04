@@ -62,8 +62,8 @@ type rotatingFile struct {
 	size int64
 }
 
-func openRotating(path string, max int64) (*rotatingFile, error) {
-	r := &rotatingFile{path: path, max: max}
+func openRotating(path string, limit int64) (*rotatingFile, error) {
+	r := &rotatingFile{path: path, max: limit}
 	return r, r.open()
 }
 
@@ -86,8 +86,8 @@ func (r *rotatingFile) Write(p []byte) (int, error) {
 	defer r.mu.Unlock()
 	if r.size > 0 && r.size+int64(len(p)) > r.max {
 		r.f.Close()
-		os.Remove(r.path + ".1")
-		os.Rename(r.path, r.path+".1")
+		_ = os.Remove(r.path + ".1")
+		_ = os.Rename(r.path, r.path+".1")
 		if err := r.open(); err != nil {
 			return 0, err
 		}
