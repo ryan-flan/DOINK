@@ -350,7 +350,6 @@ test("secret values (encounter restrictions) never take dispatch down", function
   issecretvalue = function(v) return v == secret end
   local n = count()
   DOINKDB.debug = true
-  local before = #chat
   fire("CHAT_MSG_LOOT", secret, secret, "", "", secret)
   fire("CHAT_MSG_SKILL", secret)
   DOINKDB.debug = false
