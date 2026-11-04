@@ -50,8 +50,8 @@ within what a WoW addon is allowed to do. If you play OSRS, go use Dink.
 
 ## Install
 
-Install **DOINK** from CurseForge or Wago Addons (or through an addon
-manager such as WowUp), or download `DOINK-<version>.zip` from
+Install **DOINK** from CurseForge or Wago Addons (or through WowUp,
+which lists it from GitHub Releases), or download `DOINK-<version>.zip` from
 [Releases](https://github.com/ryan-flan/DOINK/releases) and copy
 `AddOns\DOINK` into your WoW AddOns folder, e.g.
 `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\`

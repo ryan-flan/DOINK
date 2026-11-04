@@ -570,6 +570,17 @@ tests/test_addon.lua`.
      so it stays features-first, store-neutral, with the "how it works" and
      AI-use sections at the end (`docs/store-description.md` was folded into
      it). Logo: `docs/logo-400.png`.
+     **WowUp Hub** (wowup.io/guide/wowup/hub) has no upload or key: it
+     lists addons from GitHub releases. So the `release` job also attaches
+     the packager's addon-only zip (`DOINK-vX.Y.Z-forever.zip`, addon
+     folder at the zip root) and `release.json` (which the Hub uses to
+     match zips to game versions) to the release; the companion updaters
+     match `DOINK-<tag>.zip` by exact name and ignore them. `release`
+     runs even if `addon` fails (store hiccup), without those files.
+     Hub icon = repo social preview; categories = repo topics (`guild`,
+     `chat`). Unverified: whether the Hub maps Interface 16xxx /
+     `release.json` to Forever (its guide names `Addon_Forever.toc`); if
+     DOINK doesn't appear for Forever, ask on WowUp's Discord.
      Secrets go in through the GitHub web UI, never via chat; `gh secret
      set` once stored an empty value.
 
