@@ -220,6 +220,29 @@ func TestShotAgeRules(t *testing.T) {
 	}
 }
 
+// A Screenshots folder that appears after the companion started still
+// gets the first-scan age rule (older files are never opened).
+func TestShotFolderAppearingLaterKeepsAgeRule(t *testing.T) {
+	sf := newShotFixture(t)
+	if err := os.Remove(sf.shots); err != nil {
+		t.Fatal(err)
+	}
+	s := sf.state()
+	sf.scan(s) // nothing there yet
+	if err := os.Mkdir(sf.shots, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := sf.write("WoWScrnShot_101526_120000.jpg", pngOf(t, eventJSON(3), false))
+	longAgo := time.Now().Add(-15 * 24 * time.Hour)
+	if err := os.Chtimes(old, longAgo, longAgo); err != nil {
+		t.Fatal(err)
+	}
+	sf.scan(s)
+	if sf.decodes != 0 || !exists(old) || len(sf.sender.sent) != 0 {
+		t.Errorf("decoded %d, exists %v, sent %d", sf.decodes, exists(old), len(sf.sender.sent))
+	}
+}
+
 func TestShotStillBeingWrittenIsRetried(t *testing.T) {
 	sf := newShotFixture(t)
 	full := pngOf(t, eventJSON(5), false)

@@ -85,11 +85,11 @@ func (s *Shots) Scan(d Deps, dirs []string, svByDir map[string][]string) {
 
 func (s *Shots) scanDir(d Deps, dir string, svPaths []string) {
 	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return // no Screenshots folder yet: the first real scan is still ahead
+	}
 	first := !s.scanned[dir]
 	s.scanned[dir] = true
-	if err != nil {
-		return // no Screenshots folder yet
-	}
 	now := s.now()
 	for _, entry := range entries {
 		if entry.IsDir() || !shotName.MatchString(entry.Name()) {
