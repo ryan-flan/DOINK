@@ -142,6 +142,7 @@ func runTray(o options) int {
 		AutostartSet: func(on bool) error {
 			return autostart.SetEnabled(on, autostart.Name, autostart.Command())
 		},
+		Install: su.Install,
 		Open: func(what string) {
 			switch what {
 			case "log":

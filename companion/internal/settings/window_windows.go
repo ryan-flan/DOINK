@@ -239,6 +239,11 @@ func (w *Window) bind(wv webview2.WebView, hwnd uintptr) {
 			go b.Open(what)
 		}
 	}))
+	must(wv.Bind("doinkInstall", func() {
+		if b.Install != nil {
+			go b.Install()
+		}
+	}))
 	must(wv.Bind("doinkClose", func() { wv.Destroy() }))
 }
 

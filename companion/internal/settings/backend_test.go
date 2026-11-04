@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ryan-flan/DOINK/companion/internal/status"
+	"github.com/ryan-flan/DOINK/companion/internal/updates"
 )
 
 // fakeWoW makes <dir>/World of Warcraft/_forever_ with the addon installed
@@ -135,5 +136,26 @@ func TestLiveHidesUpdateFromSummary(t *testing.T) {
 	}
 	if !strings.HasPrefix(l.Summary, "last post") {
 		t.Errorf("summary: %q", l.Summary)
+	}
+}
+
+func TestLiveInstallable(t *testing.T) {
+	b := backend(t, "")
+	newer := &updates.Info{Current: "0.14.0", Latest: "0.15.0", ZipURL: "z", SHA256URL: "s"}
+	b.Status.UpdateChecked(newer)
+	if l := b.Live(); l.Update != "0.15.0" || l.Installable {
+		t.Errorf("no Install hook: %+v", l)
+	}
+	b.Install = func() {}
+	if l := b.Live(); !l.Installable || l.Installing != "" {
+		t.Errorf("with hook: %+v", l)
+	}
+	b.Status.UpdateChecked(&updates.Info{Current: "0.14.0", Latest: "0.15.0"}) // no assets
+	if l := b.Live(); l.Update != "0.15.0" || l.Installable {
+		t.Errorf("no assets: %+v", l)
+	}
+	b.Status.Installing("Downloading v0.15.0… 1.0 MB")
+	if l := b.Live(); l.Installing != "Downloading v0.15.0… 1.0 MB" {
+		t.Errorf("installing: %+v", l)
 	}
 }

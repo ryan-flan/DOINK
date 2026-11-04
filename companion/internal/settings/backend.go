@@ -39,6 +39,9 @@ type Backend struct {
 	AutostartSet func(on bool) error
 	// Open opens "log", "folder", "config" or "update" (the release page).
 	Open func(what string)
+	// Install downloads and installs the newer version (the tray's
+	// "Update to vX"); nil where updates can't install themselves.
+	Install func()
 }
 
 // Post is one line of the recent-posts list.
@@ -53,7 +56,11 @@ type Live struct {
 	Problem string `json:"problem"` // "" when all is well
 	Summary string `json:"summary"`
 	Update  string `json:"update"` // a newer version, or ""
-	Recent  []Post `json:"recent"`
+	// Installable: Update can be installed from here; Installing is the
+	// progress line while that runs.
+	Installable bool   `json:"installable"`
+	Installing  string `json:"installing"`
+	Recent      []Post `json:"recent"`
 }
 
 // View is everything the window shows.
@@ -91,7 +98,9 @@ func (b *Backend) Live() Live {
 	l.Summary = summary
 	if u := b.Status.Update(); u != nil && u.Newer() {
 		l.Update = u.Latest
+		l.Installable = u.Installable() && b.Install != nil
 	}
+	l.Installing = b.Status.Install()
 	for _, p := range b.Status.Recent() {
 		l.Recent = append(l.Recent, Post{At: p.At.Local().Format("Jan 2 15:04"), Who: p.Who, What: p.What})
 	}

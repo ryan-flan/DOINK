@@ -130,7 +130,7 @@ footer .links { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; }
 </header>
 <div id="status-line"><span class="pill" id="pill"><i class="dot"></i><span id="summary">Starting…</span></span></div>
 
-<div class="banner update" id="update"><span class="grow" id="update-text"></span><button class="primary" data-open="update">Download</button></div>
+<div class="banner update" id="update"><span class="grow" id="update-text"></span><button class="primary" id="update-install">Update now</button><button id="update-download" data-open="update">Download</button></div>
 <div class="banner problem" id="problem"><span class="grow" id="problem-text"></span></div>
 <div class="banner error" id="config-error"><span class="grow" id="config-error-text"></span><button data-open="config">Edit config.toml</button></div>
 
@@ -190,8 +190,12 @@ function renderLive(l) {
   setText("summary", problem ? "Needs attention" : (l.summary || "Running"));
   setText("problem-text", problem.charAt(0).toUpperCase() + problem.slice(1));
   show("problem", problem);
-  setText("update-text", l.update ? "DOINK v" + l.update + " is available." : "");
-  show("update", l.update);
+  const installing = l.installing || "";
+  setText("update-text", installing || (l.update ? "DOINK v" + l.update + " is available." : ""));
+  show("update", l.update || installing);
+  $("update-install").style.display = l.installable && !installing ? "" : "none";
+  $("update-download").style.display = installing ? "none" : ""; // the way out if installing keeps failing
+  $("update-download").classList.toggle("primary", !l.installable);
   const posts = $("posts");
   posts.replaceChildren();
   for (const p of l.recent || []) {
@@ -294,6 +298,7 @@ $("autostart").addEventListener("change", async e => {
   const msg = await doinkAutostart(e.target.checked);
   if (msg) { e.target.checked = !e.target.checked; alert(msg); }
 });
+$("update-install").addEventListener("click", () => { $("update-install").style.display = "none"; doinkInstall(); });
 document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => doinkOpen(b.dataset.open)));
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") doinkClose();
