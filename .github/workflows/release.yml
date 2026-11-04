@@ -1,16 +1,69 @@
 name: Release
 
-# Push a tag like v0.4.0 to publish a GitHub release with DOINK-<tag>.zip and
-# its SHA-256. Run manually (Actions tab) to build the zip as an artifact only.
+# One tag namespace, one shared version counter. Push vX.Y.Z and each half
+# ships only if its own version equals the tag number (tag without the v):
+#   addon      `## Version:` in addon/DOINK/DOINK.toc
+#   companion  companion/VERSION (one line, e.g. 0.16.0)
+# A release may carry either half or both; a tag matching neither fails in
+# `plan`. Installed companions (v0.11–v0.15) poll releases/latest and look
+# for DOINK-<tag>.zip there, so a release without the companion is created
+# with --latest=false and the Latest badge stays on the newest companion.
+# Run manually (Actions tab) to build everything as artifacts only: no
+# store upload, no GitHub release.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
 
+# Every job only reads the repo; `release` alone gets contents: write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  # Reads the tag and the two version sources and decides which halves
+  # ship. Manual runs build both. Both outputs are the strings 'true' /
+  # 'false' (job outputs are always strings; a skipped job's are empty).
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      addon: ${{ steps.plan.outputs.addon }}
+      companion: ${{ steps.plan.outputs.companion }}
+      addon_version: ${{ steps.plan.outputs.addon_version }}
+      companion_version: ${{ steps.plan.outputs.companion_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          set -euo pipefail
+          toc="$(sed -n 's/^## Version:[[:space:]]*//p' addon/DOINK/DOINK.toc | tr -d '[:space:]')"
+          ver="$(tr -d '[:space:]' < companion/VERSION)"
+          echo "addon_version=$toc" >> "$GITHUB_OUTPUT"
+          echo "companion_version=$ver" >> "$GITHUB_OUTPUT"
+          echo "TOC ## Version: $toc, companion/VERSION: $ver"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "Manual run: building both halves as artifacts only."
+            printf 'addon=true\ncompanion=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          want="${GITHUB_REF_NAME#v}"
+          # Neither version source may be ahead of the tag: that is a bump
+          # that was never released, or a mistyped tag.
+          newest="$(printf '%s\n%s\n%s\n' "$want" "$toc" "$ver" | sort -V | tail -n 1)"
+          if [ "$newest" != "$want" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME is older than a version source (TOC $toc, companion/VERSION $ver). Fix the tag or the file."
+            exit 1
+          fi
+          addon=false; companion=false
+          if [ "$toc" = "$want" ]; then addon=true; fi
+          if [ "$ver" = "$want" ]; then companion=true; fi
+          if [ "$addon" = false ] && [ "$companion" = false ]; then
+            echo "::error::Tag $GITHUB_REF_NAME matches neither addon/DOINK/DOINK.toc (## Version: $toc) nor companion/VERSION ($ver). Bump one of them to $want, or fix the tag."
+            exit 1
+          fi
+          echo "addon=$addon companion=$companion"
+          printf 'addon=%s\ncompanion=%s\n' "$addon" "$companion" >> "$GITHUB_OUTPUT"
+
   # The addon alone, via the BigWigs packager (needs >= v2.6.0 for Forever:
   # it maps Interface 16xxx to the "forever" game type). On tags it uploads
   # to each store whose project id variable and API secret are set, and
@@ -21,7 +74,13 @@ jobs:
   # A project id stored as a secret instead of a variable works too (ids
   # aren't secret, but it's an easy mix-up in the GitHub UI).
   addon:
+    needs: plan
+    # Only when the TOC version equals the tag (plan says so); 'true' on
+    # manual runs. Skipped otherwise, so the stores never get a zip whose
+    # TOC version differs from its tag.
+    if: needs.plan.outputs.addon == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +111,11 @@ jobs:
           if-no-files-found: warn
 
   build:
+    needs: plan
+    # Only when companion/VERSION equals the tag; 'true' on manual runs.
+    if: needs.plan.outputs.companion == 'true'
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -63,7 +126,8 @@ jobs:
         run: go test ./...
 
       # One self-contained exe: icon and version info come from winres.json
-      # (go-winres writes a .syso that go build links in).
+      # (go-winres writes a .syso that go build links in). The tag number
+      # equals companion/VERSION here (plan checked), so the tag is the version.
       - name: Build doink.exe
         working-directory: companion
         shell: pwsh
@@ -120,7 +184,11 @@ jobs:
             ${{ env.ZIP }}.sha256
 
   linux:
+    needs: plan
+    # Same gate as build: the companion ships as a whole or not at all.
+    if: needs.plan.outputs.companion == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -167,28 +235,110 @@ jobs:
             ${{ env.TARBALL }}.sha256
 
   release:
-    # A failed store upload (the addon job) must not block the release: the
-    # companion's self-update depends on it.
-    if: always() && github.ref_type == 'tag' && needs.build.result == 'success' && needs.linux.result == 'success'
-    needs: [build, linux, addon]
+    needs: [plan, addon, build, linux]
+    # !cancelled(): without a status function a job needs ALL of its needs
+    #   to succeed, and a skipped or failed need counts as not succeeded.
+    #   !cancelled() lifts that (like always()) but stays off when the whole
+    #   run was cancelled.
+    # ref_type == 'tag': manual runs stop at the artifacts.
+    # plan.result == 'success': a tag matching neither half fails in plan;
+    #   then every other job is skipped and nothing is released.
+    # companion != 'true' || build == 'success' (same for linux): when the
+    #   companion is part of this release its jobs must have succeeded;
+    #   when it isn't, they are 'skipped' and that is fine. (needs.<job>.result
+    #   is one of success / failure / cancelled / skipped.)
+    # addon is deliberately not checked: a failed store upload must not
+    #   block the release (the companion's self-update depends on it); the
+    #   addon zip is simply missing then, as today.
+    if: >-
+      !cancelled() && github.ref_type == 'tag'
+      && needs.plan.result == 'success'
+      && (needs.plan.outputs.companion != 'true' || needs.build.result == 'success')
+      && (needs.plan.outputs.companion != 'true' || needs.linux.result == 'success')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # creates the release and uploads its assets
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      ADDON: ${{ needs.plan.outputs.addon }}
+      COMPANION: ${{ needs.plan.outputs.companion }}
+      ADDON_VERSION: ${{ needs.plan.outputs.addon_version }}
+      COMPANION_VERSION: ${{ needs.plan.outputs.companion_version }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags: the previous one is where the generated notes start
+      # Companion files only when the companion is in this release (the
+      # build/linux jobs were skipped otherwise and there is nothing to get).
       - uses: actions/download-artifact@v4
+        if: needs.plan.outputs.companion == 'true'
         with:
           pattern: doink-*
           path: dist
           merge-multiple: true
       # The addon-only zip (addon folder at the zip root) and release.json,
       # for WowUp Hub. The companion updaters match DOINK-<tag>.zip by exact
-      # name, so these extra assets don't affect them.
+      # name, so these extra assets don't affect them. continue-on-error: a
+      # failed addon job (store hiccup) leaves no artifact; release anyway.
       - uses: actions/download-artifact@v4
+        if: needs.plan.outputs.addon == 'true'
         continue-on-error: true
         with:
           name: addon-package
           path: dist
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Check the files
         run: |
-          gh release create "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" \
-            --title "DOINK ${{ github.ref_name }}" --generate-notes
+          set -euo pipefail
+          mkdir -p dist
+          ls -l dist
+          if [ "$COMPANION" = true ]; then
+            for f in "DOINK-$TAG.zip" "DOINK-$TAG.zip.sha256" "DOINK-$TAG-linux-amd64.tar.gz" "DOINK-$TAG-linux-amd64.tar.gz.sha256"; do
+              [ -f "dist/$f" ] || { echo "::error::dist/$f is missing; the installed updaters need DOINK-<tag>.zip and its .sha256"; exit 1; }
+            done
+          fi
+          [ -n "$(ls -A dist)" ] || { echo "::error::nothing to release"; exit 1; }
+      # First line says what the release contains; then GitHub's generated
+      # notes for the commits since the previous tag (any tag: addon-only
+      # and companion-only releases share the namespace).
+      - name: Write the notes
+        run: |
+          set -euo pipefail
+          if [ "$ADDON" = true ]; then a="Addon v$ADDON_VERSION"; else a="Addon unchanged (latest v$ADDON_VERSION)"; fi
+          if [ "$COMPANION" = true ]; then c="Companion v$COMPANION_VERSION"; else c="Companion unchanged (latest v$COMPANION_VERSION)"; fi
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)"
+          args=(-f "tag_name=$TAG")
+          if [ -n "$prev" ]; then args+=(-f "previous_tag_name=$prev"); fi
+          {
+            printf '**%s · %s**\n\n' "$a" "$c"
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body
+          } > notes.md
+          cat notes.md
+      # --latest=false when the companion is not in this release: installed
+      # companions (v0.11–v0.15) poll releases/latest for DOINK-<tag>.zip, so
+      # the Latest badge must stay on the newest companion release.
+      - name: Publish release
+        run: |
+          set -euo pipefail
+          if [ "$COMPANION" = true ]; then latest=--latest; else latest=--latest=false; fi
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "DOINK $TAG" --notes-file notes.md "$latest"
+      # Belt and braces: the old updaters only work if releases/latest is
+      # the newest companion release. Repair if GitHub disagrees, fail if
+      # that doesn't take.
+      - name: Check what Latest points at
+        run: |
+          set -euo pipefail
+          if [ "$COMPANION" = true ]; then want="$TAG"; else want="v$COMPANION_VERSION"; fi
+          got="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [ "$got" != "$want" ]; then
+            echo "::warning::releases/latest is $got, expected $want; marking $want as Latest"
+            gh release edit "$want" --repo "$GITHUB_REPOSITORY" --latest
+            got="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          fi
+          if [ "$got" != "$want" ]; then
+            echo "::error::releases/latest is $got, expected $want: installed companions poll this. Fix by hand: gh release edit $want --latest"
+            exit 1
+          fi
+          echo "releases/latest = $got"
