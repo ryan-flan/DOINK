@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -72,72 +73,100 @@ func server(t *testing.T, code int, body string) (*httptest.Server, *http.Header
 	return srv, &headers
 }
 
+func asset(name, url string) string {
+	return `{"name":"` + name + `","browser_download_url":"` + url + `"}`
+}
+
+// releaseJSON is one list entry; extra is appended inside the object, e.g.
+// `,"draft":true`.
+func releaseJSON(tag, extra string, assets ...string) string {
+	return `{"tag_name":"` + tag + `","html_url":"https://github.com/ryan-flan/DOINK/releases/tag/` + tag + `"` +
+		extra + `,"assets":[` + strings.Join(assets, ",") + `]}`
+}
+
+func companionAssets(tag string) []string {
+	zip := DownloadPrefix + tag + "/DOINK-" + tag + ".zip"
+	return []string{
+		asset("DOINK-"+tag+".zip", zip),
+		asset("DOINK-"+tag+".zip.sha256", zip+".sha256"),
+		asset("DOINK-"+tag+"-linux-amd64.tar.gz", DownloadPrefix+tag+"/DOINK-"+tag+"-linux-amd64.tar.gz"),
+	}
+}
+
+func addonAssets(tag string) []string {
+	return []string{
+		asset("DOINK-"+tag+"-forever.zip", DownloadPrefix+tag+"/DOINK-"+tag+"-forever.zip"),
+		asset("release.json", DownloadPrefix+tag+"/release.json"),
+	}
+}
+
+func list(releases ...string) string { return "[" + strings.Join(releases, ",") + "]" }
+
 func TestFetchLatest(t *testing.T) {
 	quiet(t)
-	srv, headers := server(t, 200, `{"tag_name":"v0.13.0","html_url":"https://github.com/ryan-flan/DOINK/releases/tag/v0.13.0"}`)
+	srv, headers := server(t, 200, list(releaseJSON("v0.13.0", "", companionAssets("v0.13.0")...)))
 	info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0")
 	if err != nil {
 		t.Fatal(err)
 	}
+	zip := DownloadPrefix + "v0.13.0/DOINK-v0.13.0.zip"
 	if info.Current != "0.12.0" || info.Latest != "0.13.0" || info.URL != "https://github.com/ryan-flan/DOINK/releases/tag/v0.13.0" ||
-		!info.Newer() || info.CheckedAt.IsZero() {
+		info.ZipURL != zip || info.SHA256URL != zip+".sha256" || !info.Newer() || !info.Installable() || info.CheckedAt.IsZero() {
 		t.Errorf("info %+v", info)
 	}
 	if headers.Get("Accept") != "application/vnd.github+json" ||
 		headers.Get("User-Agent") != "DOINK-companion/0.12.0 (+https://github.com/ryan-flan/DOINK)" {
 		t.Errorf("headers %v", *headers)
 	}
+	if (Info{Current: "0.13.0", Latest: "0.13.0", ZipURL: zip, SHA256URL: zip + ".sha256"}).Installable() {
+		t.Error("installable when not newer")
+	}
 }
 
 func TestFetchLatestNonGitHubURL(t *testing.T) {
 	quiet(t)
-	srv, _ := server(t, 200, `{"tag_name":"v0.13.0","html_url":"https://evil.example/x"}`)
+	assets := strings.Join(companionAssets("v0.13.0"), ",")
+	srv, _ := server(t, 200, `[{"tag_name":"v0.13.0","html_url":"https://evil.example/x","assets":[`+assets+`]}]`)
 	info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0")
 	if err != nil || info.URL != ReleasesURL {
 		t.Errorf("err %v info %+v", err, info)
 	}
-	srv, _ = server(t, 200, `{"tag_name":"v0.13.0"}`)
+	srv, _ = server(t, 200, `[{"tag_name":"v0.13.0","assets":[`+assets+`]}]`)
 	if info, _ := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0"); info.URL != ReleasesURL {
 		t.Errorf("info %+v", info)
 	}
 }
 
-func TestFetchLatestAssets(t *testing.T) {
+// The first usable release wins; everything ahead of it is skipped, and
+// alone each of those is "no companion release found".
+func TestFetchLatestPicksCompanionRelease(t *testing.T) {
 	quiet(t)
-	zip := DownloadPrefix + "v0.13.0/DOINK-v0.13.0.zip"
-	sha := zip + ".sha256"
-	tarball := DownloadPrefix + "v0.13.0/DOINK-v0.13.0-linux-amd64.tar.gz"
-	body := func(assets string) string { return `{"tag_name":"v0.13.0","assets":[` + assets + `]}` }
-	asset := func(name, url string) string {
-		return `{"name":"` + name + `","browser_download_url":"` + url + `"}`
+	good := releaseJSON("v0.13.0", "", companionAssets("v0.13.0")...)
+	zip14 := DownloadPrefix + "v0.14.0/DOINK-v0.14.0.zip"
+	skipped := map[string]string{
+		"addon-only release":    releaseJSON("v0.14.0", "", addonAssets("v0.14.0")...),
+		"draft":                 releaseJSON("v0.14.0", `,"draft":true`, companionAssets("v0.14.0")...),
+		"prerelease":            releaseJSON("v0.14.0-beta.1", `,"prerelease":true`, companionAssets("v0.14.0-beta.1")...),
+		"zip from another host": releaseJSON("v0.14.0", "", asset("DOINK-v0.14.0.zip", "https://evil.example/DOINK-v0.14.0.zip"), asset("DOINK-v0.14.0.zip.sha256", zip14+".sha256")),
+		"zip without sha256":    releaseJSON("v0.14.0", "", asset("DOINK-v0.14.0.zip", zip14)),
+		"odd tag":               releaseJSON("latest", "", companionAssets("latest")...),
+		"no assets":             `{"tag_name":"v0.14.0"}`,
 	}
-	fetch := func(b string) *Info {
-		srv, _ := server(t, 200, b)
+	for name, first := range skipped {
+		srv, _ := server(t, 200, list(first, good))
 		info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0")
-		if err != nil {
-			t.Fatal(err)
+		if err != nil || info.Latest != "0.13.0" || !info.Installable() {
+			t.Errorf("%s then good: err %v info %+v", name, err, info)
 		}
-		return info
+		srv, _ = server(t, 200, list(first))
+		if info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0"); err == nil || err.Error() != "no companion release found" || info != nil {
+			t.Errorf("%s alone: err %v info %+v", name, err, info)
+		}
 	}
-
-	info := fetch(body(asset("DOINK-v0.13.0.zip", zip) + "," + asset("DOINK-v0.13.0.zip.sha256", sha) + "," + asset("DOINK-v0.13.0-linux-amd64.tar.gz", tarball)))
-	if info.ZipURL != zip || info.SHA256URL != sha || !info.Installable() {
-		t.Errorf("both assets: %+v", info)
-	}
-	info = fetch(body(asset("DOINK-v0.13.0.zip", "https://evil.example/DOINK-v0.13.0.zip") + "," + asset("DOINK-v0.13.0.zip.sha256", sha)))
-	if info.ZipURL != "" || info.Installable() {
-		t.Errorf("other host: %+v", info)
-	}
-	info = fetch(body(asset("DOINK-v0.13.0.zip", zip)))
-	if info.ZipURL != zip || info.Installable() {
-		t.Errorf("zip only: %+v", info)
-	}
-	info = fetch(`{"tag_name":"v0.13.0","assets":"nope"}`)
-	if info.Installable() {
-		t.Errorf("odd assets: %+v", info)
-	}
-	if (Info{Current: "0.13.0", Latest: "0.13.0", ZipURL: zip, SHA256URL: sha}).Installable() {
-		t.Error("installable when not newer")
+	// Newest first: an older companion release further down never wins.
+	srv, _ := server(t, 200, list(good, releaseJSON("v0.12.1", "", companionAssets("v0.12.1")...)))
+	if info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0"); err != nil || info.Latest != "0.13.0" {
+		t.Errorf("two companion releases: err %v info %+v", err, info)
 	}
 }
 
@@ -147,11 +176,13 @@ func TestFetchLatestFailures(t *testing.T) {
 		code int
 		body string
 	}{
-		"HTTP 500":   {500, `{}`},
-		"garbage":    {200, `<html>`},
-		"odd tag":    {200, `{"tag_name":"latest"}`},
-		"no tag":     {200, `{"html_url":"https://github.com/x"}`},
-		"number tag": {200, `{"tag_name":13}`},
+		"HTTP 500":       {500, `[]`},
+		"garbage":        {200, `<html>`},
+		"single release": {200, `{"tag_name":"v0.13.0"}`}, // the old releases/latest shape
+		"number tag":     {200, `[{"tag_name":14,"assets":[]}]`},
+		"odd assets":     {200, `[{"tag_name":"v0.14.0","assets":"nope"}]`},
+		"empty list":     {200, `[]`},
+		"addon only":     {200, list(releaseJSON("v0.14.0", "", addonAssets("v0.14.0")...))},
 	} {
 		srv, _ := server(t, c.code, c.body)
 		if info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0"); err == nil || info != nil {

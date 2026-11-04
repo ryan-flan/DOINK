@@ -23,8 +23,10 @@ func logger() *slog.Logger {
 }
 
 const (
-	// LatestURL is GitHub's API for the newest release.
-	LatestURL = "https://api.github.com/repos/ryan-flan/DOINK/releases/latest"
+	// ReleaseListURL is GitHub's API for the 20 newest releases, newest
+	// first. The newest one carrying the companion zip is the latest
+	// companion; addon-only releases (no DOINK-<tag>.zip) are skipped.
+	ReleaseListURL = "https://api.github.com/repos/ryan-flan/DOINK/releases?per_page=20"
 	// ReleasesURL is the download page used when the API's link looks odd.
 	ReleasesURL = "https://github.com/ryan-flan/DOINK/releases"
 	// DownloadPrefix is where a release's files must come from.
@@ -39,8 +41,12 @@ func userAgent(version string) string {
 	return "DOINK-companion/" + version + " (+https://github.com/ryan-flan/DOINK)"
 }
 
-// FetchLatest asks GitHub for the latest release. A nil client gets one
-// with a 10 s timeout. Failures are logged at INFO and returned.
+// FetchLatest asks GitHub for the newest companion release: the first
+// entry of the release list (newest first) that is neither a draft nor a
+// prerelease, whose tag is a version, and that carries DOINK-<tag>.zip
+// and its .sha256 on github.com. Releases without them (addon-only) are
+// skipped, whatever the Latest badge says. A nil client gets one with a
+// 10 s timeout. Failures are logged at INFO and returned.
 func FetchLatest(client *http.Client, apiURL, current, version string) (*Info, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -67,40 +73,50 @@ func FetchLatest(client *http.Client, apiURL, current, version string) (*Info, e
 	if err != nil {
 		return fail(err)
 	}
-	var data struct {
-		TagName any `json:"tag_name"`
-		HTMLURL any `json:"html_url"`
-		Assets  any `json:"assets"`
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		HTMLURL    string `json:"html_url"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+		} `json:"assets"`
 	}
-	if err := json.Unmarshal(body, &data); err != nil {
+	if err := json.Unmarshal(body, &releases); err != nil {
 		return fail(errors.New("unexpected answer from GitHub"))
 	}
-	tag, _ := data.TagName.(string)
-	if _, ok := ParseVersion(tag); !ok {
-		return fail(errors.New("unexpected answer from GitHub"))
-	}
-	url, _ := data.HTMLURL.(string)
-	if !strings.HasPrefix(url, "https://github.com/") {
-		url = ReleasesURL
-	}
-	tag = strings.TrimSpace(tag)
-	info := &Info{Current: current, Latest: strings.TrimPrefix(tag, "v"), URL: url, CheckedAt: time.Now()}
-	assets, _ := data.Assets.([]any)
-	for _, a := range assets {
-		m, _ := a.(map[string]any)
-		name, _ := m["name"].(string)
-		link, _ := m["browser_download_url"].(string)
-		if !strings.HasPrefix(link, DownloadPrefix) {
+	for _, r := range releases {
+		if r.Draft || r.Prerelease {
 			continue
 		}
-		switch name {
-		case "DOINK-" + tag + ".zip":
-			info.ZipURL = link
-		case "DOINK-" + tag + ".zip.sha256":
-			info.SHA256URL = link
+		tag := strings.TrimSpace(r.TagName)
+		if _, ok := ParseVersion(tag); !ok {
+			continue
 		}
+		var zip, sha string
+		for _, a := range r.Assets {
+			if !strings.HasPrefix(a.URL, DownloadPrefix) {
+				continue
+			}
+			switch a.Name {
+			case "DOINK-" + tag + ".zip":
+				zip = a.URL
+			case "DOINK-" + tag + ".zip.sha256":
+				sha = a.URL
+			}
+		}
+		if zip == "" || sha == "" {
+			continue
+		}
+		url := r.HTMLURL
+		if !strings.HasPrefix(url, "https://github.com/") {
+			url = ReleasesURL
+		}
+		return &Info{Current: current, Latest: strings.TrimPrefix(tag, "v"), URL: url,
+			ZipURL: zip, SHA256URL: sha, CheckedAt: time.Now()}, nil
 	}
-	return info, nil
+	return fail(errors.New("no companion release found"))
 }
 
 // Checker runs checks in the background: the first after `first`, then

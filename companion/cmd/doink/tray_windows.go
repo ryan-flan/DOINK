@@ -106,7 +106,7 @@ func runTray(o options) int {
 
 	checker := updates.NewChecker(
 		func() (*updates.Info, error) {
-			return updates.FetchLatest(nil, updates.LatestURL, version, version)
+			return updates.FetchLatest(nil, updates.ReleaseListURL, version, version)
 		},
 		st.UpdateChecked, updates.FirstCheck, updates.Interval, updates.Retry)
 
