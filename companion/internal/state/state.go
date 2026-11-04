@@ -13,10 +13,21 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"sort"
 	"sync"
 )
+
+// Log receives save warnings; nil means slog.Default().
+var Log *slog.Logger
+
+func logger() *slog.Logger {
+	if Log != nil {
+		return Log
+	}
+	return slog.Default()
+}
 
 // MissingMax is the addon's ring buffer size; older gaps can't be filled.
 const MissingMax = 500
@@ -33,6 +44,8 @@ type State struct {
 	path    string
 	persist bool
 	chars   map[string]*entry
+	// lastSaveErr is the standing save failure, warned about once.
+	lastSaveErr string
 }
 
 // Load reads path; a missing file is an empty state. A file that exists but
@@ -235,19 +248,31 @@ func (s *State) Rename(old, key string) bool {
 }
 
 // save writes the file (caller holds mu). Write-then-rename, so a crash
-// mid-write can't corrupt it. Errors are logged by nobody: the next save
-// tries again, and the in-memory state stays correct.
+// mid-write can't corrupt it. A failure is warned about once (until it
+// changes or clears): the next save tries again, the in-memory state
+// stays correct, but a restart would re-post what wasn't recorded.
 func (s *State) save() {
 	if !s.persist {
 		return
 	}
+	err := s.write()
+	switch {
+	case err == nil:
+		s.lastSaveErr = ""
+	case err.Error() != s.lastSaveErr:
+		s.lastSaveErr = err.Error()
+		logger().Warn(fmt.Sprintf("can't save %s (a restart may re-post events): %v", s.path, err))
+	}
+}
+
+func (s *State) write() error {
 	raw, err := json.MarshalIndent(s.chars, "", "  ")
 	if err != nil {
-		return
+		return err
 	}
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
-		return
+		return err
 	}
-	_ = os.Rename(tmp, s.path)
+	return os.Rename(tmp, s.path)
 }

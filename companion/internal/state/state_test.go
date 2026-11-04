@@ -1,11 +1,30 @@
 package state
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+// A save failure is reported once, not on every event.
+func TestSaveFailureWarnsOnce(t *testing.T) {
+	var buf bytes.Buffer
+	Log = slog.New(slog.NewTextHandler(&buf, nil))
+	t.Cleanup(func() { Log = nil })
+	s, err := Load(filepath.Join(t.TempDir(), "missing", "state.json"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.MarkPosted("k", 1, 0)
+	s.MarkPosted("k", 2, 0)
+	if n := strings.Count(buf.String(), "level=WARN"); n != 1 || !strings.Contains(buf.String(), "can't save") {
+		t.Errorf("%d warnings: %s", n, buf.String())
+	}
+}
 
 func fresh(t *testing.T) (*State, string) {
 	path := filepath.Join(t.TempDir(), "state.json")
