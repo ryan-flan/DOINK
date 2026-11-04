@@ -37,12 +37,19 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
           WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+      # The zip and release.json also go onto the GitHub release (see the
+      # release job): WowUp Hub reads GitHub releases, and uses release.json
+      # to match each zip to a game version. always(): a failed store upload
+      # must not lose the files the Hub needs.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: addon-package
-          path: .release/*.zip
+          path: |
+            .release/*.zip
+            .release/release.json
           include-hidden-files: true # .release is a dot-directory
-          if-no-files-found: error
+          if-no-files-found: warn
 
   build:
     runs-on: windows-latest
@@ -160,15 +167,25 @@ jobs:
             ${{ env.TARBALL }}.sha256
 
   release:
-    if: github.ref_type == 'tag'
-    needs: [build, linux]
+    # A failed store upload (the addon job) must not block the release: the
+    # companion's self-update depends on it.
+    if: always() && github.ref_type == 'tag' && needs.build.result == 'success' && needs.linux.result == 'success'
+    needs: [build, linux, addon]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: doink-* # not the store-only addon zip
+          pattern: doink-*
           path: dist
           merge-multiple: true
+      # The addon-only zip (addon folder at the zip root) and release.json,
+      # for WowUp Hub. The companion updaters match DOINK-<tag>.zip by exact
+      # name, so these extra assets don't affect them.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: addon-package
+          path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
