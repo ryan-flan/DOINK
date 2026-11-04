@@ -87,9 +87,14 @@ func (r *rotatingFile) Write(p []byte) (int, error) {
 	if r.size > 0 && r.size+int64(len(p)) > r.max {
 		r.f.Close()
 		_ = os.Remove(r.path + ".1")
-		_ = os.Rename(r.path, r.path+".1")
+		rotated := os.Rename(r.path, r.path+".1") == nil
 		if err := r.open(); err != nil {
 			return 0, err
+		}
+		if !rotated {
+			// Something holds the file (a viewer?): keep appending to it
+			// and try again after another max bytes, not on every write.
+			r.size = 0
 		}
 	}
 	n, err := r.f.Write(p)

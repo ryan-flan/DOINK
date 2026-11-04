@@ -44,6 +44,30 @@ func TestRotatingFile(t *testing.T) {
 	}
 }
 
+// When the old log can't be moved aside, writes keep going to the same
+// file and rotation is retried only after another limit's worth.
+func TestRotatingFileWhenRenameFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "doink.log")
+	// A non-empty directory in the way: Remove and Rename both fail.
+	if err := os.MkdirAll(filepath.Join(path+".1", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r, err := openRotating(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"12345678\n", "abc\n", "def\n", "ghijklmnop\n"} {
+		if _, err := r.Write([]byte(line)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.Close()
+	cur, _ := os.ReadFile(path)
+	if string(cur) != "12345678\nabc\ndef\nghijklmnop\n" {
+		t.Errorf("cur %q", cur)
+	}
+}
+
 func TestOptionalString(t *testing.T) {
 	var o optionalString
 	o.Set("true")
