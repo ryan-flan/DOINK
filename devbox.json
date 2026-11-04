@@ -3,7 +3,9 @@
   "packages": [
     "go@latest",
     "luajit@latest",
-    "gh@latest"
+    "gh@latest",
+    "golangci-lint@latest",
+    "luajitPackages.luacheck@latest"
   ],
   "shell": {
     "init_hook": [],
@@ -26,6 +28,16 @@
       ],
       "dry-run": [
         "cd companion && go run ./cmd/doink --dry-run \"$@\""
+      ],
+      "lint": [
+        "devbox run lint:addon",
+        "devbox run lint:companion"
+      ],
+      "lint:addon": [
+        "luacheck addon --config .luacheckrc"
+      ],
+      "lint:companion": [
+        "cd companion && gofmt -l . && go vet ./... && golangci-lint run ./..."
       ]
     }
   }

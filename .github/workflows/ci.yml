@@ -1,25 +1,75 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["v*"] # release.yml tests the tag build itself
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # weekly govulncheck against new advisories
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  addon:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y luajit
+      - run: sudo apt-get update && sudo apt-get install -y luajit lua-check
       - name: Addon tests
         working-directory: addon
         run: luajit tests/test_addon.lua
-      - uses: actions/setup-go@v5
-        with: { go-version-file: companion/go.mod }
-      - name: Companion tests
-        working-directory: companion
-        run: go vet ./... && go test ./...
-  # The tray, autostart and single-instance code only runs on Windows.
-  test-windows:
-    runs-on: windows-latest
+      - name: luacheck
+        run: luacheck addon --config .luacheckrc
+
+  companion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: companion }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version-file: companion/go.mod }
-      - working-directory: companion
-        run: go vet ./... ; go test ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: go mod tidy is clean
+        run: go mod tidy && git diff --exit-code -- go.mod go.sum
+      - run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+          working-directory: companion
+      - name: Tests (race detector)
+        run: go test -race -count=1 ./...
+
+  companion-windows:
+    # The tray, autostart, settings window and single-instance code only
+    # build on Windows.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: companion }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: golang/govulncheck-action@v1
+        with:
+          work-dir: companion
+          go-version-file: companion/go.mod
+          go-package: ./...

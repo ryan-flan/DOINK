@@ -89,6 +89,44 @@
         }
       }
     },
+    "golangci-lint@latest": {
+      "last_modified": "2026-11-03T19:55:20Z",
+      "resolved": "github:NixOS/nixpkgs/9d3b8db48266c17be0b5f9c6360c3ecfbac3d1f5#golangci-lint",
+      "source": "devbox-search",
+      "version": "2.15.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/858pfyzissfrlcspn1whpcvlcyhcdrn3-golangci-lint-2.15.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/858pfyzissfrlcspn1whpcvlcyhcdrn3-golangci-lint-2.15.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/6jczr694l11llm2szd2arikq3b4mg5lp-golangci-lint-2.15.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/6jczr694l11llm2szd2arikq3b4mg5lp-golangci-lint-2.15.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/4ifdzaja36bkb7x7za9lz9z7nckv80wj-golangci-lint-2.15.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/4ifdzaja36bkb7x7za9lz9z7nckv80wj-golangci-lint-2.15.0"
+        }
+      }
+    },
     "luajit@latest": {
       "last_modified": "2026-10-07T09:43:42Z",
       "resolved": "github:NixOS/nixpkgs/39ad350a0602fa0a58a544344e3e9187526ea45c#luajit",
@@ -124,6 +162,54 @@
             }
           ],
           "store_path": "/nix/store/0psrzx72klpvn5hjz79ja0d74j03drsw-luajit-2.1.1785763465"
+        }
+      }
+    },
+    "luajitPackages.luacheck@latest": {
+      "last_modified": "2026-11-03T19:55:20Z",
+      "resolved": "github:NixOS/nixpkgs/9d3b8db48266c17be0b5f9c6360c3ecfbac3d1f5#luajitPackages.luacheck",
+      "source": "devbox-search",
+      "version": "1.2.0-1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/h68h8zba480xv5nf8d3489qhrl238y6f-luajit2.1-luacheck-1.2.0-1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/h68h8zba480xv5nf8d3489qhrl238y6f-luajit2.1-luacheck-1.2.0-1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/w7nqkdcgik4y7m7xydfrg2m88cll5b71-luajit2.1-luacheck-1.2.0-1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/w7nqkdcgik4y7m7xydfrg2m88cll5b71-luajit2.1-luacheck-1.2.0-1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/k0sz90x31w9qq5m7i13qzrpbsh9gv8v9-luajit2.1-luacheck-1.2.0-1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/k0sz90x31w9qq5m7i13qzrpbsh9gv8v9-luajit2.1-luacheck-1.2.0-1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/kc1ysnfybq0svzlk5vy8p1p38r0r2a6g-luajit2.1-luacheck-1.2.0-1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/kc1ysnfybq0svzlk5vy8p1p38r0r2a6g-luajit2.1-luacheck-1.2.0-1"
         }
       }
     }
