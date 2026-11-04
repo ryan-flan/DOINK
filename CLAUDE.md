@@ -68,7 +68,7 @@ DOINK/
         ├── watcher/          # (mtime, size) polling with a settle poll
         ├── status/           # thread-safe state for the tooltip/notifications
         ├── runner/           # the watch-and-post loop (Process, Run, RunOnce)
-        ├── updates/          # GitHub release check (check only, no install)
+        ├── updates/          # GitHub release check + one-click install
         ├── tray/             # Windows tray icon + menu + single instance (x/sys)
         ├── settings/         # settings window (WebView2, Windows) + config.toml editing
         └── autostart/        # "Start with Windows": HKCU\...\Run\DOINK
@@ -482,13 +482,30 @@ tests/test_addon.lua`.
   after start and then daily (1 h retry after a failure; `update_check =
   false` disables; the tray's "Check for updates" always works). A newer
   version swaps the tray icon to `doink-update.ico` (orange dot) and the
-  menu offers to open the download page. **Check only**: no download, no
-  self-install (that's a later milestone). Notifications only with
-  `update_notify = true`, once per version per session. Console mode
-  doesn't check. Lesson kept from the Python self-updater, for when Go
-  gets one: launch the hand-off script with `CREATE_NO_WINDOW`, never
+  menu offers **Update to vX**; the settings banner has "Update now".
+  Notifications only with `update_notify = true`, once per version per
+  session. Console mode doesn't check, and Linux has no installer.
+  **Install is one click, never automatic** (`install.go`,
+  `cmd/doink/selfupdate_windows.go`): `Info` carries the release's
+  `DOINK-vX.zip` and `.zip.sha256` links (github.com download URLs only,
+  else not `Installable`). `Installer.Download` fetches both into memory
+  (64 MB cap; no total time limit, only 30 s without data; the menu and
+  banner keep an "Open download page" fallback), verifies the SHA-256, takes `<top>/Companion/doink.exe`
+  out of the zip (must start with `MZ`; `AddOns/` is ignored: the
+  companion never touches the addon) and writes `doink.exe.new`. `Swap`
+  then **renames** `doink.exe` to `doink.exe.old` and `.new` to
+  `doink.exe` (a running exe can be renamed on NTFS, so no batch script;
+  it refuses to run if the exe isn't named `doink.exe`);
+  the old process starts the new exe with `--updated-from <old version>`
+  and quits. The new one waits up to 30 s for the `Local\DOINK-companion`
+  mutex, deletes `.old` (retrying while the old process exits) and shows
+  "DOINK updated to vX". A failed start rolls the rename back. The
+  release zip's names and layout must stay as they are (the Python-era
+  updaters and this one both read them). History: the Python updater
+  used a cmd.exe hand-off script; lesson kept: `CREATE_NO_WINDOW`, never
   `DETACHED_PROCESS` (a detached cmd.exe from a windowless exe never ran,
-  2026-10-03), and sleep with `ping`, not `timeout`.
+  2026-10-03), and sleep with `ping`, not `timeout`. Not tested end to
+  end on Linux: needs two releases and a Windows machine.
 - Trust is a feature: autostart is off by default and writes exactly one
   per-user Run value; a named mutex stops a second copy (double posts); the
   exe has a version resource and icon; releases ship a `.sha256`. Keep the

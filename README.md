@@ -277,11 +277,15 @@ window is drawn by Microsoft Edge WebView2, which comes with Windows 11 and
 current Windows 10; without it, Settings opens `config.toml` instead.
 
 **Updates.** DOINK checks GitHub once a day for a newer release. When
-there is one, the tray icon gets an orange dot and the menu offers to open
-the download page; download the new zip and replace `doink.exe`. DOINK
-never downloads anything by itself. Add `update_notify = true` to
-`config.toml` if you'd also like a Windows notification. The addon updates
-through CurseForge or Wago like any other addon.
+there is one, the tray icon gets an orange dot and the tray menu (and the
+settings window) offers **Update to vX**. Click it and DOINK downloads the
+release, checks its SHA-256, replaces `doink.exe` and restarts itself in a
+few seconds. It never installs anything unless you click. Add
+`update_notify = true` to `config.toml` if you'd also like a Windows
+notification. Your settings, `state.json` and log are never touched, and
+neither is the addon, which updates through CurseForge or Wago like any
+other addon. (Versions before 0.15 can't do this: update those once by
+hand, from the zip on the releases page.)
 
 **One channel per character?** Set a webhook in game with
 `/doink webhook here <url>` on that character. In-game webhooks take priority
@@ -399,9 +403,11 @@ newest 10 queued events.
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
   day one HTTPS request to GitHub for the latest release's version number
-  (`update_check = false` turns that off). It never downloads or installs
-  anything itself: a newer version only opens the release page in your
-  browser when you choose it. No telemetry. It doesn't listen on any port.
+  (`update_check = false` turns that off). Only when you click **Update**
+  it also downloads that release's zip and its `.sha256` from GitHub,
+  verifies them, and replaces `doink.exe` with the `doink.exe` inside
+  (the old one is kept as `doink.exe.old` until the next start, then
+  deleted). It never does that by itself. No telemetry. It doesn't listen on any port.
   The settings window is a local page built into `doink.exe`; it loads
   nothing from the internet.
 - **Start with Windows** adds one per-user registry value,
