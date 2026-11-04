@@ -502,6 +502,7 @@ func TestRunReloadsConfigAndStops(t *testing.T) {
 		reloads++
 		c := *f.cfg
 		c.WebhookURL = newHook
+		c.DryRun = true // start-up only: must be kept, with a warning
 		return &c, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -529,6 +530,9 @@ func TestRunReloadsConfigAndStops(t *testing.T) {
 	}
 	if !f.logs.has("INFO", "watching "+f.sv) {
 		t.Errorf("logs %v", f.logs.recs)
+	}
+	if f.cfg.DryRun || f.cfg.WebhookURL != newHook || !f.logs.has("WARN", "take effect after a restart") {
+		t.Errorf("dry_run %v webhook %q logs %v", f.cfg.DryRun, f.cfg.WebhookURL, f.logs.recs)
 	}
 }
 

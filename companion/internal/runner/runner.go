@@ -303,8 +303,18 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 					break
 				}
 				oldPaths := d.Config.SavedVariablesPaths
+				// These were consumed at start-up (the Sender's dry run,
+				// state persistence, the Wowhead cache, the update
+				// checker), so a live change would only half apply.
+				startupOnly := cfg.DryRun != d.Config.DryRun || cfg.Wowhead != d.Config.Wowhead ||
+					cfg.UpdateCheck != d.Config.UpdateCheck || cfg.UpdateNotify != d.Config.UpdateNotify
+				cfg.DryRun, cfg.Wowhead = d.Config.DryRun, d.Config.Wowhead
+				cfg.UpdateCheck, cfg.UpdateNotify = d.Config.UpdateCheck, d.Config.UpdateNotify
 				*d.Config = *cfg
 				d.Log.Info("settings reloaded")
+				if startupOnly {
+					d.Log.Warn("dry_run, wowhead, update_check and update_notify changes take effect after a restart")
+				}
 				if !slices.Equal(oldPaths, cfg.SavedVariablesPaths) {
 					watchers = d.watch()
 					dirty = map[string]bool{}

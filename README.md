@@ -378,7 +378,8 @@ edits the webhook and WoW folder there; the link at its bottom opens the
 file). Every key is optional: `webhook_url`, `wow_dir`, `dry_run`,
 `max_backlog`, `poll_interval`, an exact `savedvariables_path`, `wowhead`,
 `realtime`, `update_check`, `update_notify`; see `config.example.toml`.
-DOINK picks up changes while it runs.
+DOINK picks up changes while it runs, except `dry_run`, `wowhead`,
+`update_check` and `update_notify`, which need a restart.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the
