@@ -32,7 +32,7 @@ jobs:
       addon_version: ${{ steps.plan.outputs.addon_version }}
       companion_version: ${{ steps.plan.outputs.companion_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: plan
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the packager writes the changelog from git history
       - uses: BigWigsMods/packager@v2
@@ -100,7 +100,7 @@ jobs:
       # release job): WowUp Hub reads GitHub releases, and uses release.json
       # to match each zip to a game version. always(): a failed store upload
       # must not lose the files the Hub needs.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: addon-package
@@ -117,8 +117,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version-file: companion/go.mod }
 
       - name: Companion tests (on Windows)
@@ -176,7 +176,7 @@ jobs:
           "$hash  $name.zip" | Set-Content -NoNewline "package/$name.zip.sha256"
           "ZIP=package/$name.zip" >> $env:GITHUB_ENV
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: doink-package
           path: |
@@ -190,8 +190,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version-file: companion/go.mod }
 
       - name: Build doink
@@ -227,7 +227,7 @@ jobs:
           printf '%s  %s' "$(sha256sum "$name.tar.gz" | cut -d' ' -f1)" "$name.tar.gz" > "$name.tar.gz.sha256"
           echo "TARBALL=$name.tar.gz" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: doink-linux
           path: |
@@ -267,12 +267,12 @@ jobs:
       ADDON_VERSION: ${{ needs.plan.outputs.addon_version }}
       COMPANION_VERSION: ${{ needs.plan.outputs.companion_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # tags: the previous one is where the generated notes start
       # Companion files only when the companion is in this release (the
       # build/linux jobs were skipped otherwise and there is nothing to get).
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: needs.plan.outputs.companion == 'true'
         with:
           pattern: doink-*
@@ -282,7 +282,7 @@ jobs:
       # for WowUp Hub. The companion updaters match DOINK-<tag>.zip by exact
       # name, so these extra assets don't affect them. continue-on-error: a
       # failed addon job (store hiccup) leaves no artifact; release anyway.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: needs.plan.outputs.addon == 'true'
         continue-on-error: true
         with:
