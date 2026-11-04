@@ -34,7 +34,11 @@ DOINK/
 ├── CLAUDE.md
 ├── README.md                 # user-facing install + commands
 ├── .gitattributes            # * text=auto eol=lf
-├── .github/workflows/        # ci.yml: both test suites; release.yml: doink.exe + Linux doink on v* tags
+├── .editorconfig, .luacheckrc, SECURITY.md, CONTRIBUTING.md
+├── .github/
+│   ├── dependabot.yml        # weekly, grouped: gomod (companion/) + github-actions
+│   ├── ISSUE_TEMPLATE/, PULL_REQUEST_TEMPLATE.md
+│   └── workflows/            # ci.yml: tests + lint + govulncheck; release.yml: see Releases
 ├── addon/tests/test_addon.lua  # offline harness: cd addon && luajit tests/test_addon.lua
 ├── addon/DOINK/              # junctioned into <WoW>/<flavor>/Interface/AddOns/DOINK
 │   ├── DOINK.toc
@@ -53,6 +57,7 @@ DOINK/
 │       └── SkillUp.lua
 └── companion/                # Go module github.com/ryan-flan/DOINK/companion
     ├── go.mod                # go 1.26; deps: BurntSushi/toml, golang.org/x/sys, jchv/go-webview2
+    ├── .golangci.yml         # v2: standard set + errorlint, misspell, unconvert, predeclared
     ├── config.example.toml
     ├── assets/               # doink.ico, doink-update.ico (embedded), make_icon.py
     ├── winres/winres.json    # exe icon + version info (go-winres, CI only)
@@ -522,9 +527,18 @@ tests/test_addon.lua`.
 
 - Personal machine details (OS, paths, who tests what) live in
   `CLAUDE.local.md`, which is gitignored. Keep this file generic.
-- Toolchain via devbox (`devbox.json`: Go, LuaJIT, gh): `devbox shell`, or
-  `devbox run test` / `test:addon` / `test:companion` / `dry-run`. Don't
-  assume Go is on the host PATH.
+- Toolchain via devbox (`devbox.json`: Go, LuaJIT, gh, golangci-lint,
+  luacheck): `devbox shell`, or `devbox run test` / `test:addon` /
+  `test:companion` / `lint` / `lint:addon` / `lint:companion` / `dry-run`.
+  Don't assume Go is on the host PATH. CI runs the same lints plus
+  `go test -race` (Linux) and govulncheck; keep `.luacheckrc`'s
+  `read_globals` to real WoW API only.
+- GitHub repo settings turned on 2026-11-04 (via `gh api`): Dependabot
+  alerts + security updates, secret scanning + push protection, private
+  vulnerability reporting (SECURITY.md points at it), wiki off, topics
+  `world-of-warcraft wow-addon discord guild chat golang lua`. Rulesets:
+  `v*` tags can't be deleted or moved (installed updaters download assets
+  by tag), `main` can't be force-pushed or deleted; PRs stay optional.
 - Addon in game: put `addon/DOINK` at
   `<WoW>/<flavor>/Interface/AddOns/DOINK`, as a copy or a link (Windows:
   `mklink /J`; Linux/Wine: `ln -s`, untested under Wine).
