@@ -97,6 +97,9 @@ func run() int {
 	var positional []string
 	for args := os.Args[1:]; ; {
 		if err := fs.Parse(args); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return 0
+			}
 			return 2
 		}
 		if fs.NArg() == 0 {

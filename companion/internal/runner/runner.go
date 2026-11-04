@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"math"
 	"os"
@@ -227,7 +226,7 @@ type fileSig struct {
 
 func statSig(path string) fileSig {
 	st, err := os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) || err != nil {
+	if err != nil {
 		return fileSig{missing: true}
 	}
 	return fileSig{mtime: st.ModTime().UnixNano(), size: st.Size()}

@@ -267,6 +267,9 @@ func TestIsWebhookURL(t *testing.T) {
 	for url, want := range map[string]bool{
 		"https://discord.com/api/webhooks/123/abc_DEF-9":   true,
 		"https://discordapp.com/api/webhooks/1/x":          true,
+		"https://ptb.discord.com/api/webhooks/1/x":         true,
+		"https://canary.discord.com/api/webhooks/1/x":      true,
+		"https://xcanary.discord.com/api/webhooks/1/x":     false,
 		"https://discord.com/api/webhooks/123/abc\n":       false,
 		"http://discord.com/api/webhooks/1/x":              false,
 		"https://evil.example/api/webhooks/1/x":            false,

@@ -30,7 +30,7 @@ const (
 	headerLen  = 8 // bytes before the header CRC
 )
 
-var sync = [16]uint8{1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1}
+var syncPattern = [16]uint8{1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1}
 
 // Message is a decoded grid: an event's JSON, or a hello from
 // /doink realtime test.
@@ -98,7 +98,7 @@ func Rows(payload []byte, hello bool, cols int) ([][]uint8, error) {
 	header := []byte{Version<<4 | flags, byte(cols >> 8), byte(cols), byte(dataRows),
 		byte(n >> 8), byte(n), byte(pc >> 8), byte(pc)}
 
-	row0 := append([]uint8{}, sync[:]...)
+	row0 := append([]uint8{}, syncPattern[:]...)
 	for _, b := range header {
 		row0 = appendBits(row0, uint(b), 8)
 	}
@@ -216,14 +216,14 @@ func (g grid) bytes(firstRow, start, n, cols int) ([]byte, bool) {
 }
 
 func (g grid) decode() (Message, bool) {
-	for c, want := range sync {
+	for c, want := range syncPattern {
 		if v, ok := g.bit(0, c); !ok || v != want {
 			return Message{}, false
 		}
 	}
 	// The header sits in row 0 before any wrap (88 blocks < MinCols), so
 	// it reads the same whatever the width.
-	h, ok := g.bytes(0, len(sync), headerLen+1, MaxCols)
+	h, ok := g.bytes(0, len(syncPattern), headerLen+1, MaxCols)
 	if !ok || crc8(h[:headerLen]) != h[headerLen] || h[0]>>4 != Version {
 		return Message{}, false
 	}

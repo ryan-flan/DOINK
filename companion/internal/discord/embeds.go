@@ -67,7 +67,7 @@ func FormatMoney(copper int) string {
 	return strings.Join(parts, " ")
 }
 
-var webhookURL = regexp.MustCompile(`^https://(discord|discordapp)\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$`)
+var webhookURL = regexp.MustCompile(`^https://(ptb\.|canary\.)?(discord|discordapp)\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$`)
 
 // IsWebhookURL reports whether url looks like a Discord webhook URL.
 func IsWebhookURL(url string) bool { return webhookURL.MatchString(url) }

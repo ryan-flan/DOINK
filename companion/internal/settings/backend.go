@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -159,12 +158,7 @@ func gameWebhooks(paths []string) string {
 			return name
 		}
 	case len(chars) > 1:
-		names := make([]string, 0, len(chars))
-		for name := range chars {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return fmt.Sprintf("%d characters", len(names))
+		return fmt.Sprintf("%d characters", len(chars))
 	}
 	return ""
 }
