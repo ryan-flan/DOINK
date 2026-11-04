@@ -102,6 +102,45 @@ func TestFetchLatestNonGitHubURL(t *testing.T) {
 	}
 }
 
+func TestFetchLatestAssets(t *testing.T) {
+	quiet(t)
+	zip := DownloadPrefix + "v0.13.0/DOINK-v0.13.0.zip"
+	sha := zip + ".sha256"
+	tarball := DownloadPrefix + "v0.13.0/DOINK-v0.13.0-linux-amd64.tar.gz"
+	body := func(assets string) string { return `{"tag_name":"v0.13.0","assets":[` + assets + `]}` }
+	asset := func(name, url string) string {
+		return `{"name":"` + name + `","browser_download_url":"` + url + `"}`
+	}
+	fetch := func(b string) *Info {
+		srv, _ := server(t, 200, b)
+		info, err := FetchLatest(srv.Client(), srv.URL, "0.12.0", "0.12.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+
+	info := fetch(body(asset("DOINK-v0.13.0.zip", zip) + "," + asset("DOINK-v0.13.0.zip.sha256", sha) + "," + asset("DOINK-v0.13.0-linux-amd64.tar.gz", tarball)))
+	if info.ZipURL != zip || info.SHA256URL != sha || !info.Installable() {
+		t.Errorf("both assets: %+v", info)
+	}
+	info = fetch(body(asset("DOINK-v0.13.0.zip", "https://evil.example/DOINK-v0.13.0.zip") + "," + asset("DOINK-v0.13.0.zip.sha256", sha)))
+	if info.ZipURL != "" || info.Installable() {
+		t.Errorf("other host: %+v", info)
+	}
+	info = fetch(body(asset("DOINK-v0.13.0.zip", zip)))
+	if info.ZipURL != zip || info.Installable() {
+		t.Errorf("zip only: %+v", info)
+	}
+	info = fetch(`{"tag_name":"v0.13.0","assets":"nope"}`)
+	if info.Installable() {
+		t.Errorf("odd assets: %+v", info)
+	}
+	if (Info{Current: "0.13.0", Latest: "0.13.0", ZipURL: zip, SHA256URL: sha}).Installable() {
+		t.Error("installable when not newer")
+	}
+}
+
 func TestFetchLatestFailures(t *testing.T) {
 	quiet(t)
 	for name, c := range map[string]struct {

@@ -1,5 +1,5 @@
-// Package updates checks GitHub Releases for a newer companion. It only
-// checks: nothing is downloaded or installed.
+// Package updates checks GitHub Releases for a newer companion and, on
+// request, installs it (install.go). The background check never downloads.
 package updates
 
 import (
@@ -12,11 +12,20 @@ import (
 // Info is the result of one check.
 type Info struct {
 	Current, Latest, URL string
-	CheckedAt            time.Time
+	// ZipURL and SHA256URL are the release's DOINK-vX.zip and its .sha256
+	// on github.com; empty when the release doesn't have them.
+	ZipURL, SHA256URL string
+	CheckedAt         time.Time
 }
 
 // Newer reports whether Latest is newer than Current.
 func (i Info) Newer() bool { return IsNewer(i.Latest, i.Current) }
+
+// Installable reports whether Latest is newer and the release carries
+// the zip and its checksum.
+func (i Info) Installable() bool {
+	return i.Newer() && i.ZipURL != "" && i.SHA256URL != ""
+}
 
 var versionRE = regexp.MustCompile(`^v?(\d+(\.\d+)*)([-+].*)?$`)
 

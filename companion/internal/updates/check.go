@@ -27,11 +27,17 @@ const (
 	LatestURL = "https://api.github.com/repos/ryan-flan/DOINK/releases/latest"
 	// ReleasesURL is the download page used when the API's link looks odd.
 	ReleasesURL = "https://github.com/ryan-flan/DOINK/releases"
+	// DownloadPrefix is where a release's files must come from.
+	DownloadPrefix = "https://github.com/ryan-flan/DOINK/releases/download/"
 	// FirstCheck, Interval and Retry time the background checks.
 	FirstCheck = 30 * time.Second
 	Interval   = 24 * time.Hour
 	Retry      = time.Hour
 )
+
+func userAgent(version string) string {
+	return "DOINK-companion/" + version + " (+https://github.com/ryan-flan/DOINK)"
+}
 
 // FetchLatest asks GitHub for the latest release. A nil client gets one
 // with a 10 s timeout. Failures are logged at INFO and returned.
@@ -48,7 +54,7 @@ func FetchLatest(client *http.Client, apiURL, current, version string) (*Info, e
 		return fail(err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "DOINK-companion/"+version+" (+https://github.com/ryan-flan/DOINK)")
+	req.Header.Set("User-Agent", userAgent(version))
 	resp, err := client.Do(req)
 	if err != nil {
 		return fail(err)
@@ -64,6 +70,7 @@ func FetchLatest(client *http.Client, apiURL, current, version string) (*Info, e
 	var data struct {
 		TagName any `json:"tag_name"`
 		HTMLURL any `json:"html_url"`
+		Assets  any `json:"assets"`
 	}
 	if err := json.Unmarshal(body, &data); err != nil {
 		return fail(errors.New("unexpected answer from GitHub"))
@@ -76,7 +83,24 @@ func FetchLatest(client *http.Client, apiURL, current, version string) (*Info, e
 	if !strings.HasPrefix(url, "https://github.com/") {
 		url = ReleasesURL
 	}
-	return &Info{Current: current, Latest: strings.TrimPrefix(strings.TrimSpace(tag), "v"), URL: url, CheckedAt: time.Now()}, nil
+	tag = strings.TrimSpace(tag)
+	info := &Info{Current: current, Latest: strings.TrimPrefix(tag, "v"), URL: url, CheckedAt: time.Now()}
+	assets, _ := data.Assets.([]any)
+	for _, a := range assets {
+		m, _ := a.(map[string]any)
+		name, _ := m["name"].(string)
+		link, _ := m["browser_download_url"].(string)
+		if !strings.HasPrefix(link, DownloadPrefix) {
+			continue
+		}
+		switch name {
+		case "DOINK-" + tag + ".zip":
+			info.ZipURL = link
+		case "DOINK-" + tag + ".zip.sha256":
+			info.SHA256URL = link
+		}
+	}
+	return info, nil
 }
 
 // Checker runs checks in the background: the first after `first`, then
