@@ -39,6 +39,7 @@ type Status struct {
 	err        string
 	update     *updates.Info
 	updateTold string
+	installing string // progress line while an update installs, else ""
 }
 
 // New returns a Status that calls onChange (may be nil) on every change.
@@ -127,10 +128,29 @@ func (s *Status) UpdateChecked(info *updates.Info) {
 	notice := s.OnNotice
 	s.mu.Unlock()
 	if tell {
-		notice(fmt.Sprintf("DOINK v%s is available (you have v%s). Right-click the tray icon to open the download page.",
-			info.Latest, info.Current))
+		action := "open the download page"
+		if info.Installable() {
+			action = "update"
+		}
+		notice(fmt.Sprintf("DOINK v%s is available (you have v%s). Right-click the tray icon to %s.",
+			info.Latest, info.Current, action))
 	}
 	s.onChange("")
+}
+
+// Installing sets the update's progress line ("" when none is running).
+func (s *Status) Installing(msg string) {
+	s.mu.Lock()
+	s.installing = msg
+	s.mu.Unlock()
+	s.onChange("")
+}
+
+// Install is the update's progress line, or "".
+func (s *Status) Install() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.installing
 }
 
 // Update is the last check's result, or nil.

@@ -62,6 +62,7 @@ type options struct {
 	testArgs    []string // its arguments
 	decode      []string // doink decode <image>...
 	verbose     bool
+	updatedFrom string // set by the self-update: the version it replaced
 }
 
 // appDir is where config.toml, state.json and doink.log live: next to
@@ -89,6 +90,7 @@ func run() int {
 	fs.BoolVar(&o.tray, "tray", false, "run as a tray app (Windows only; the default there)")
 	fs.Var(&o.testWebhook, "test-webhook", "post a test message to `URL` (default: the configured webhook) and exit")
 	fs.BoolVar(&o.verbose, "v", false, "debug logging")
+	fs.StringVar(&o.updatedFrom, "updated-from", "", "`version` this one replaced (set by the self-update; don't pass by hand)")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	// Flags may come before or after positional arguments
 	// ("doink test loot --dry-run").

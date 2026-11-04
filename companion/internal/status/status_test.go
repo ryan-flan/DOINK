@@ -95,3 +95,34 @@ func TestUpdateNotifiesOncePerVersion(t *testing.T) {
 		t.Errorf("notices %q", notices)
 	}
 }
+
+func TestInstalling(t *testing.T) {
+	changes := 0
+	s := New(func(string) { changes++ })
+	if s.Install() != "" {
+		t.Error("starts non-empty")
+	}
+	s.Installing("Downloading v0.15.0… 3.2 MB")
+	if s.Install() != "Downloading v0.15.0… 3.2 MB" || changes != 1 {
+		t.Errorf("%q, %d changes", s.Install(), changes)
+	}
+	s.Installing("")
+	if s.Install() != "" || changes != 2 {
+		t.Errorf("%q, %d changes", s.Install(), changes)
+	}
+}
+
+func TestUpdateNoticeWording(t *testing.T) {
+	s := New(nil)
+	s.NotifyUpdates = true
+	var got string
+	s.OnNotice = func(text string) { got = text }
+	s.UpdateChecked(&updates.Info{Current: "0.14.0", Latest: "0.15.0", ZipURL: "z", SHA256URL: "s"})
+	if !strings.Contains(got, "to update.") {
+		t.Errorf("installable: %q", got)
+	}
+	s.UpdateChecked(&updates.Info{Current: "0.14.0", Latest: "0.16.0"})
+	if !strings.Contains(got, "open the download page") {
+		t.Errorf("not installable: %q", got)
+	}
+}

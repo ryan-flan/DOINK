@@ -50,10 +50,33 @@ func runTray(o options) int {
 	}
 	slog.SetDefault(log)
 
-	if !tray.AcquireSingleInstance(`Local\DOINK-companion`) {
+	const mutexName = `Local\DOINK-companion`
+	acquired := false
+	if o.updatedFrom != "" { // the old copy is still exiting
+		acquired = tray.AcquireSingleInstanceWait(mutexName, 30*time.Second)
+	} else {
+		acquired = tray.AcquireSingleInstance(mutexName)
+	}
+	if !acquired {
 		tray.MessageBox("DOINK is already running. Look for its icon in the system tray (you may need to click ^ to see it).", false)
 		return 0
 	}
+
+	// doink.exe.old (and a stale .new) from an update: the old copy may
+	// need a moment to let go of its file.
+	go func() {
+		for i := 0; i < 20; i++ {
+			err := updates.Cleanup(dir)
+			if err == nil {
+				return
+			}
+			if i == 19 {
+				log.Warn("couldn't remove the old update files: " + err.Error())
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
 
 	var icon atomic.Pointer[tray.Tray]
 	var window atomic.Pointer[settings.Window]
@@ -86,6 +109,22 @@ func runTray(o options) int {
 			return updates.FetchLatest(nil, updates.LatestURL, version, version)
 		},
 		st.UpdateChecked, updates.FirstCheck, updates.Interval, updates.Retry)
+
+	su := &selfUpdater{
+		in:  &updates.Installer{Dir: dir, Prefix: updates.DownloadPrefix, Version: version},
+		st:  st,
+		log: log,
+		tell: func(text string) {
+			if t := icon.Load(); t != nil {
+				t.Inform(text)
+			}
+		},
+		quit: func() {
+			if t := icon.Load(); t != nil {
+				t.Quit()
+			}
+		},
+	}
 
 	backend := &settings.Backend{
 		ConfigPath: o.config,
@@ -130,6 +169,7 @@ func runTray(o options) int {
 			}
 		},
 		OnCheckUpdates: checker.CheckNow,
+		InstallUpdate:  su.Install,
 		OpenConfig:     win.Show,
 		OpenLog:        func() { open(log, logPath) },
 		OpenFolder:     func() { open(log, dir) },
@@ -137,6 +177,10 @@ func runTray(o options) int {
 	icon.Store(t)
 	st.OnNotice = t.Inform
 	log.Info("DOINK companion v" + version + " started")
+	if o.updatedFrom != "" {
+		log.Info("updated from v" + o.updatedFrom)
+		t.Inform("DOINK updated to v" + version + ".")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	if cfg.UpdateCheck {

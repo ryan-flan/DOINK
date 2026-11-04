@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -110,6 +111,7 @@ const (
 	idFolder    = 3
 	idAutostart = 4
 	idUpdates   = 5
+	idDownload  = 6
 	idQuit      = 9
 )
 
@@ -178,9 +180,12 @@ func copyUTF16(dst []uint16, s string) {
 type Hooks struct {
 	OnQuit         func()
 	OnCheckUpdates func() (*updates.Info, error)
-	OpenConfig     func()
-	OpenLog        func()
-	OpenFolder     func()
+	// InstallUpdate downloads and installs the newer version; it is
+	// called on its own goroutine. Nil: the menu opens the download page.
+	InstallUpdate func()
+	OpenConfig    func()
+	OpenLog       func()
+	OpenFolder    func()
 }
 
 // Tray is the icon. Run it on one goroutine; the other methods are safe
@@ -438,9 +443,16 @@ func (t *Tray) menu() {
 		}
 		appendMenu(menu, mfString|checked, idAutostart, "Start with Windows")
 	}
-	if newer {
+	canInstall := newer && update.Installable() && t.hooks.InstallUpdate != nil
+	switch {
+	case canInstall && t.st.Install() != "":
+		appendMenu(menu, mfGrayed, idUpdates, t.st.Install())
+	case canInstall:
+		appendMenu(menu, mfString, idUpdates, "Update to v"+update.Latest)
+		appendMenu(menu, mfString, idDownload, "Open download page") // if installing keeps failing
+	case newer:
 		appendMenu(menu, mfString, idUpdates, "v"+update.Latest+" available: open download page")
-	} else {
+	default:
 		appendMenu(menu, mfString, idUpdates, "Check for updates")
 	}
 	appendMenu(menu, mfSeparator, 0, "")
@@ -472,12 +484,18 @@ func (t *Tray) menu() {
 			logger().Info("start with Windows: on")
 		}
 	case idUpdates:
-		if newer {
+		if canInstall {
+			go t.hooks.InstallUpdate()
+		} else if newer {
 			if err := OpenPath(update.URL); err != nil {
 				logger().Warn(fmt.Sprintf("couldn't open %s: %v", update.URL, err))
 			}
 		} else {
 			go t.checkUpdates()
+		}
+	case idDownload:
+		if err := OpenPath(update.URL); err != nil {
+			logger().Warn(fmt.Sprintf("couldn't open %s: %v", update.URL, err))
 		}
 	case idQuit:
 		logger().Info("quit from tray")
@@ -493,6 +511,8 @@ func (t *Tray) checkUpdates() {
 	switch {
 	case err != nil:
 		t.Inform("Couldn't reach GitHub. Try again later.")
+	case info.Newer() && info.Installable() && t.hooks.InstallUpdate != nil:
+		t.Inform("v" + info.Latest + " is available. Right-click the tray icon and choose Update to v" + info.Latest + ".")
 	case info.Newer():
 		t.Inform("v" + info.Latest + " is available. Opening the download page…")
 		if err := OpenPath(info.URL); err != nil {
@@ -516,6 +536,22 @@ func AcquireSingleInstance(name string) bool {
 	}
 	heldMutexes = append(heldMutexes, h)
 	return true
+}
+
+// AcquireSingleInstanceWait is AcquireSingleInstance, retried every
+// 250 ms for up to wait: a restarted copy waits for its predecessor to
+// exit.
+func AcquireSingleInstanceWait(name string, wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
+	for {
+		if AcquireSingleInstance(name) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 var heldMutexes []uintptr
