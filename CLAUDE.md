@@ -57,6 +57,7 @@ DOINK/
 │       └── SkillUp.lua
 └── companion/                # Go module github.com/ryan-flan/DOINK/companion
     ├── go.mod                # go 1.26; deps: BurntSushi/toml, golang.org/x/sys, jchv/go-webview2
+    ├── VERSION               # companion version; ships when it equals the tag (see Releases)
     ├── .golangci.yml         # v2: standard set + errorlint, misspell, unconvert, predeclared
     ├── config.example.toml
     ├── assets/               # doink.ico, doink-update.ico (embedded), make_icon.py
@@ -493,8 +494,11 @@ tests/test_addon.lua`.
   to `%TEMP%\doink-*.ico` for `LoadImageW`.
 - Realtime: see "Screenshot transport contract". The companion never
   captures the screen.
-- Updates (`internal/updates`): one GET to the GitHub releases API 30 s
-  after start and then daily (1 h retry after a failure; `update_check =
+- Updates (`internal/updates`): one GET of the release list
+  (`ReleaseListURL`, 20 newest, newest first) 30 s after start and then
+  daily; the first non-draft, non-prerelease release carrying
+  `DOINK-<tag>.zip` + `.sha256` is the latest companion, addon-only
+  releases are skipped, none found is an error (1 h retry after a failure; `update_check =
   false` disables; the tray's "Check for updates" always works). A newer
   version swaps the tray icon to `doink-update.ico` (orange dot) and the
   menu offers **Update to vX**; the settings banner has "Update now".
@@ -562,51 +566,100 @@ tests/test_addon.lua`.
 
 ## Releases
 
-1. Bump `## Version` in `addon/DOINK/DOINK.toc`. The companion's version
-   comes from the tag (`-ldflags -X main.version=X.Y.Z` in
-   `release.yml`; `dev` in local builds). Commit as
-   `build: release vX.Y.Z`.
-2. `git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`.
-3. `release.yml` runs four jobs:
-   - `build` (Windows): tests, `go-winres` (icon + version info), builds
-     `doink.exe`, smoke-tests it, packages `DOINK-vX.Y.Z.zip` (AddOns/,
-     Companion/, README, LICENSE) + `.sha256`.
-   - `linux` (Ubuntu): builds `doink` (linux/amd64), smoke-tests it,
-     packages `DOINK-vX.Y.Z-linux-amd64.tar.gz` (doink,
-     config.example.toml, README, LICENSE) + `.sha256`.
-   - `release` (tags only, after both): publishes those four files as a
-     GitHub release. Notes are generated from commits. Manual runs stop
-     after the artifacts (`DOINK-dev.zip`, `DOINK-dev-linux-amd64.tar.gz`).
-   - `addon` (BigWigs packager v2, needs ≥ 2.6.0 for Forever): builds the
-     **addon-only** zip `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta`
-     (`move-folders` lifts `addon/DOINK` to the zip root; ignore rules run
-     first, so never ignore `addon/` itself). Interface 16xxx → game type
-     `forever`, game version 1.60.1. On tags it uploads to each store whose
-     repo **variable** (project id) and **secret** (API key) are set, and
-     skips the rest: CurseForge (`CURSEFORGE_PROJECT_ID`, `CF_API_KEY`),
-     Wago Addons (`WAGO_PROJECT_ID`, `WAGO_API_TOKEN`; the packager sends
-     game type `forever`), WoWInterface (`WOWI_PROJECT_ID`,
-     `WOWI_API_TOKEN`; wired but unused, no Forever category seen there).
-     Manual runs pass `-d` and never upload. The store zip never contains
-     `doink.exe`; the store pages link to GitHub Releases for the
-     companion. **README.md is the store description**: Wago pulls the
-     GitHub README automatically and the CurseForge page is pasted from it,
-     so it stays features-first, store-neutral, with the "how it works" and
-     AI-use sections at the end (`docs/store-description.md` was folded into
-     it). Logo: `docs/logo-400.png`.
-     **WowUp Hub** (wowup.io/guide/wowup/hub) has no upload or key: it
-     lists addons from GitHub releases. So the `release` job also attaches
-     the packager's addon-only zip (`DOINK-vX.Y.Z-forever.zip`, addon
-     folder at the zip root) and `release.json` (which the Hub uses to
-     match zips to game versions) to the release; the companion updaters
-     match `DOINK-<tag>.zip` by exact name and ignore them. `release`
-     runs even if `addon` fails (store hiccup), without those files.
-     Hub icon = repo social preview; categories = repo topics (`guild`,
-     `chat`). Unverified: whether the Hub maps Interface 16xxx /
-     `release.json` to Forever (its guide names `Addon_Forever.toc`); if
-     DOINK doesn't appear for Forever, ask on WowUp's Discord.
-     Secrets go in through the GitHub web UI, never via chat; `gh secret
-     set` once stored an empty value.
+One tag namespace, `vX.Y.Z`, one shared version counter for both halves.
+Each half ships only when its own version equals the tag number:
+
+- **Addon**: `## Version:` in `addon/DOINK/DOINK.toc`.
+- **Companion**: `companion/VERSION`, one line `X.Y.Z` plus a newline
+  (`cmd/doink/version_test.go` fails CI on anything else). The binary's
+  version still comes from the tag (`-X main.version`), which `plan`
+  guarantees equals `VERSION`; `dev` in local builds.
+
+A release may carry either half or both. Versions only move forward: a
+tag older than either version source fails. Never reuse a number; just
+take the next one, whichever half it is for.
+
+Steps (commit as `build: release vX.Y.Z`, then
+`git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`):
+
+- **Addon only**: set `## Version: X.Y.Z` in the TOC. Leave
+  `companion/VERSION` alone. The release gets the addon zip +
+  `release.json`, is created with `--latest=false`, and its notes start
+  `Addon vX.Y.Z · Companion unchanged (latest vP.Q.R)`.
+- **Companion only**: set `companion/VERSION` to `X.Y.Z`. Leave the TOC
+  alone. The release gets `DOINK-vX.Y.Z.zip` + `.sha256` and the Linux
+  tarball + `.sha256`, becomes **Latest**, notes start
+  `Addon unchanged (latest vP.Q.R) · Companion vX.Y.Z`. Its zip still
+  contains a copy of the addon at the TOC's (older) version; that is fine.
+- **Both**: set both to `X.Y.Z`. Everything above; notes start
+  `Addon vX.Y.Z · Companion vX.Y.Z`.
+
+After the run, read the first line of the release notes: it is the check
+that the right half shipped. If a half is missing, the matching version
+file wasn't bumped; bump it and release the next number.
+
+`release.yml` jobs:
+
+- `plan` (Ubuntu): reads the tag, the TOC and `companion/VERSION`; outputs
+  `addon` / `companion` as `'true'`/`'false'`; fails a tag that matches
+  neither or is older than either. Manual runs set both true.
+- `addon` (BigWigs packager v2, needs ≥ 2.6.0 for Forever; runs when
+  `addon == 'true'`): builds the **addon-only** zip
+  `DOINK-vX.Y.Z-forever.zip` from `.pkgmeta` (`move-folders` lifts
+  `addon/DOINK` to the zip root; ignore rules run first, so never ignore
+  `addon/` itself). Interface 16xxx → game type `forever`, game version
+  1.60.1. On tags it uploads to each store whose repo **variable**
+  (project id) and **secret** (API key) are set, and skips the rest:
+  CurseForge (`CURSEFORGE_PROJECT_ID`, `CF_API_KEY`), Wago Addons
+  (`WAGO_PROJECT_ID`, `WAGO_API_TOKEN`; the packager sends game type
+  `forever`), WoWInterface (`WOWI_PROJECT_ID`, `WOWI_API_TOKEN`; wired but
+  unused, no Forever category seen there). Manual runs pass `-d` and never
+  upload. The store zip never contains `doink.exe`; the store pages link
+  to GitHub Releases for the companion. **README.md is the store
+  description**: Wago pulls the GitHub README automatically and the
+  CurseForge page is pasted from it, so it stays features-first,
+  store-neutral, with the "how it works" and AI-use sections at the end
+  (`docs/store-description.md` was folded into it). Logo:
+  `docs/logo-400.png`.
+- `build` (Windows; runs when `companion == 'true'`): tests, `go-winres`
+  (icon + version info), builds `doink.exe`, smoke-tests it, packages
+  `DOINK-vX.Y.Z.zip` (AddOns/, Companion/, README, LICENSE) + `.sha256`.
+- `linux` (Ubuntu; same gate): builds `doink` (linux/amd64), smoke-tests
+  it, packages `DOINK-vX.Y.Z-linux-amd64.tar.gz` (doink,
+  config.example.toml, README, LICENSE) + `.sha256`.
+- `release` (tags only; needs `plan` ok and, when the companion is in,
+  `build` and `linux` ok; a failed `addon` store upload never blocks it):
+  downloads whatever was produced, writes the notes (the one-line header
+  above, then GitHub's generated notes from the previous `v*` tag via
+  `gh api .../releases/generate-notes`), runs `gh release create` with
+  `--latest` when the companion is in and `--latest=false` when it isn't,
+  then checks `releases/latest` and re-marks the newest companion release
+  if GitHub disagrees. Manual runs stop after the artifacts
+  (`DOINK-dev.zip`, `DOINK-dev-linux-amd64.tar.gz`).
+
+Why the Latest badge matters: installed companions v0.11.x (Python) and
+v0.12–v0.15 (Go) GET `releases/latest` and look for `DOINK-<tag>.zip` +
+`.zip.sha256` there, so **Latest must always be the newest companion
+release**; never move the badge by hand onto an addon-only release.
+Companions from v0.16 read the release list (`updates.ReleaseListURL`, 20
+newest) and take the first non-draft, non-prerelease one carrying both
+files, so they don't depend on the badge.
+
+**WowUp Hub** (wowup.io/guide/wowup/hub) has no upload or key: it lists
+addons from GitHub releases, which is why `release` attaches the
+packager's addon-only zip (addon folder at the zip root) and
+`release.json` (the Hub uses it to match zips to game versions); the
+companion updaters match `DOINK-<tag>.zip` by exact name and ignore them.
+Hub icon = repo social preview; categories = repo topics (`guild`,
+`chat`). Unverified: whether the Hub maps Interface 16xxx /
+`release.json` to Forever (its guide names `Addon_Forever.toc`), and
+whether it reads every release or only the one marked Latest (addon-only
+releases are not Latest). If the Hub shows a stale addon after an
+addon-only release, release both halves together (bump both files) until
+that is settled, and ask on WowUp's Discord.
+
+Secrets go in through the GitHub web UI, never via chat; `gh secret set`
+once stored an empty value.
 
 Semver: breaking data-contract changes bump the minor version while < 1.0.
 

@@ -51,9 +51,10 @@ within what a WoW addon is allowed to do. If you play OSRS, go use Dink.
 ## Install
 
 Install **DOINK** from CurseForge or Wago Addons (or through WowUp,
-which lists it from GitHub Releases), or download `DOINK-<version>.zip` from
-[Releases](https://github.com/ryan-flan/DOINK/releases) and copy
-`AddOns\DOINK` into your WoW AddOns folder, e.g.
+which lists it from GitHub Releases), or download the newest
+`DOINK-<version>-forever.zip` from
+[Releases](https://github.com/ryan-flan/DOINK/releases) and copy its
+`DOINK` folder into your WoW AddOns folder, e.g.
 `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\`
 (during the beta the folder was `_classic_beta_`).
 Restart WoW completely (new addons are only picked up on start).
@@ -208,9 +209,10 @@ class colour)
 
 WoW addons cannot access the network, so Discord posting is done by a
 separate, optional program, the **DOINK companion**. Download
-`DOINK-<version>.zip` from the
+`DOINK-<version>.zip` from the release marked **Latest** on the
 [GitHub releases page](https://github.com/ryan-flan/DOINK/releases): it
 contains the companion (`Companion\doink.exe`) and a copy of the addon.
+(Releases that only update the addon don't carry it.)
 Linux players download `DOINK-<version>-linux-amd64.tar.gz` instead (see
 [On Linux](#on-linux)). The companion is not on the addon sites and is not
 required for anything above.
@@ -239,7 +241,7 @@ requests.
 
 ### Setting it up
 
-1. Download `DOINK-<version>.zip` from
+1. Download `DOINK-<version>.zip` from the release marked **Latest** on
    [Releases](https://github.com/ryan-flan/DOINK/releases), move its
    `Companion` folder somewhere permanent that you can write to, e.g.
    `Documents\DOINK`, and run `doink.exe`. A gold **D** appears in the
@@ -276,7 +278,7 @@ other setting is in `config.toml` (link at the bottom of the window). The
 window is drawn by Microsoft Edge WebView2, which comes with Windows 11 and
 current Windows 10; without it, Settings opens `config.toml` instead.
 
-**Updates.** DOINK checks GitHub once a day for a newer release. When
+**Updates.** DOINK checks GitHub once a day for a newer companion release. When
 there is one, the tray icon gets an orange dot and the tray menu (and the
 settings window) offers **Update to vX**. Click it and DOINK downloads the
 release, checks its SHA-256, replaces `doink.exe` and restarts itself in a
@@ -284,8 +286,9 @@ few seconds. It never installs anything unless you click. Add
 `update_notify = true` to `config.toml` if you'd also like a Windows
 notification. Your settings, `state.json` and log are never touched, and
 neither is the addon, which updates through CurseForge or Wago like any
-other addon. (Versions before 0.15 can't do this: update those once by
-hand, from the zip on the releases page.)
+other addon; addon-only releases don't prompt a companion update.
+(Versions before 0.15 can't do this: update those once by hand, from the
+zip on the release marked **Latest**.)
 
 **One channel per character?** Set a webhook in game with
 `/doink webhook here <url>` on that character. In-game webhooks take priority
@@ -320,7 +323,8 @@ the companion reading screenshots.
 
 ### On Linux
 
-Download `DOINK-<version>-linux-amd64.tar.gz`, unpack it somewhere
+Download `DOINK-<version>-linux-amd64.tar.gz` from the release marked
+**Latest**, unpack it somewhere
 permanent and run `./doink` (a console program; keep it running while you
 play). It finds World of Warcraft inside Lutris, Steam (Proton) and Wine
 prefixes by itself; if yours lives elsewhere, set `wow_dir` in a
@@ -403,8 +407,8 @@ newest 10 queued events.
 - **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
-  day one HTTPS request to GitHub for the latest release's version number
-  (`update_check = false` turns that off). Only when you click **Update**
+  day one HTTPS request to GitHub for its list of recent releases, to learn
+  the newest companion version (`update_check = false` turns that off). Only when you click **Update**
   it also downloads that release's zip and its `.sha256` from GitHub,
   verifies them, and replaces `doink.exe` with the `doink.exe` inside
   (the old one is kept as `doink.exe.old` until the next start, then
@@ -524,9 +528,11 @@ The tray, autostart and single-instance code (`companion/internal/tray`,
 its tests run on the Windows CI job. The icon is drawn by
 `companion/assets/make_icon.py` (a one-off; needs Python with Pillow).
 
-Push a `v*` tag to build `doink.exe`, publish a GitHub release and upload the
-addon to CurseForge and Wago Addons. Design notes and the event data
-contract are in [CLAUDE.md](CLAUDE.md).
+Push a `v*` tag to publish a GitHub release: the companion is built when
+`companion/VERSION` equals the tag, and the addon is packaged and uploaded
+to CurseForge and Wago Addons when the TOC version does, so either half
+can ship on its own. Design notes and the event data contract are in
+[CLAUDE.md](CLAUDE.md).
 
 ## License
 
