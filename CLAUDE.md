@@ -52,7 +52,7 @@ DOINK/
 │       ├── BossKill.lua
 │       └── SkillUp.lua
 └── companion/                # Go module github.com/ryan-flan/DOINK/companion
-    ├── go.mod                # go 1.23; deps: BurntSushi/toml, golang.org/x/sys, jchv/go-webview2
+    ├── go.mod                # go 1.26; deps: BurntSushi/toml, golang.org/x/sys, jchv/go-webview2
     ├── config.example.toml
     ├── assets/               # doink.ico, doink-update.ico (embedded), make_icon.py
     ├── winres/winres.json    # exe icon + version info (go-winres, CI only)
@@ -361,7 +361,7 @@ tests/test_addon.lua`.
 
 ## Companion conventions
 
-- **Go** (module `github.com/ryan-flan/DOINK/companion`, `go 1.23`), via
+- **Go** (module `github.com/ryan-flan/DOINK/companion`, `go 1.26`), via
   devbox: `devbox shell`, or `devbox run test` / `test:companion`. Go is
   not on the host PATH. Run: `cd companion && go run ./cmd/doink --dry-run
   --once --config <path>/config.toml` (pass `--config` in dev: `go run`
@@ -370,8 +370,9 @@ tests/test_addon.lua`.
   files = `t.TempDir()`).
 - **Dependencies:** `github.com/BurntSushi/toml`, `golang.org/x/sys` and
   (Windows only, for the settings window) `github.com/jchv/go-webview2`
-  (MIT, pure Go, pulls in `jchv/go-winloader`), nothing else at runtime. `x/sys` is pinned to the newest release that
-  still supports `go 1.23` (v0.35.0; later ones need Go 1.24+/1.26).
+  (MIT, pure Go, pulls in `jchv/go-winloader`), nothing else at runtime.
+  Dependabot keeps them current (`.github/dependabot.yml`); the `go`
+  directive tracks a supported Go release (1.26 as of 2026-11).
   Build-time only: `go-winres` via `go run` in `release.yml`, not in
   `go.mod`.
 - Packages: `internal/{savedvars,state,discord,wowhead,config,discover,
