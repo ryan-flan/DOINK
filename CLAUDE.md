@@ -396,7 +396,11 @@ tests/test_addon.lua`.
   signature has held still for one poll, so it never reads a half-written
   file. `config.toml` is polled the same way and reloaded live
   (`runner.Run`'s `reload`); a bad edit logs a warning and keeps the old
-  settings; a changed path list rebuilds the watchers.
+  settings; a changed path list rebuilds the watchers. `dry_run`,
+  `wowhead`, `update_check` and `update_notify` are consumed at start-up
+  (the Pool, state persistence, the Wowhead cache, the checker), so a
+  reload keeps their start-up values and warns once to restart. Unknown
+  top-level keys get a warning (typos).
 - On change: parse → per character, events still pending (`seq >
   last_seen` or in `missing`) → POST in order → persist state after each
   message. Never re-post on restart.
@@ -412,8 +416,13 @@ tests/test_addon.lua`.
   embeds per message (Discord's limit); one `Pool` entry per webhook URL,
   each with at least 2 s between messages (longer if
   `X-RateLimit-Remaining` is 0); 429 `retry_after` is respected (1 s if the
-  body isn't JSON), 5 attempts. Unknown types fall back to a JSON
-  description so nothing is lost.
+  body isn't JSON), 5 attempts. HTTP 400 is `discord.ErrRejected`: the
+  message itself is wrong, so `PostEvents` logs it, marks the batch posted
+  and moves on (retrying would block every later event of that character
+  behind it); every other failure is retried with back-off. Titles,
+  descriptions, field values and footers are clipped to Discord's limits
+  (256/4096/1024/2048). Unknown types fall back to a JSON description so
+  nothing is lost.
 - Loot embeds are enriched from Wowhead (`internal/wowhead`, since v0.10.0):
   `https://nether.wowhead.com/forever/tooltip/item/<id>?locale=0` returns
   `{name, quality, icon, tooltip (HTML), spells}` (404 for unknown ids);
