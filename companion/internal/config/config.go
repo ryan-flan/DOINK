@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -45,6 +47,10 @@ type Config struct {
 	UpdateNotify        bool // also pop a notification (the tray tooltip always shows it)
 	Realtime            bool // read the screenshots the addon takes for instant posts
 }
+
+// knownKeys are the settings Load reads; anything else gets a warning.
+var knownKeys = []string{"savedvariables_path", "wow_dir", "webhook_url", "dry_run", "poll_interval",
+	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "notifiers"}
 
 // ErrNoWoW: no SavedVariables file to watch.
 var ErrNoWoW = errors.New("couldn't find World of Warcraft with the DOINK addon installed")
@@ -96,6 +102,11 @@ func Load(path string, dryRun bool) (*Config, error) {
 	}
 	if _, ok := raw["notifiers"]; ok {
 		logger().Warn(fmt.Sprintf("[notifiers] is ignored now. Toggle notifiers in game: /doink enable|disable <type> (in %s)", filepath.Base(path)))
+	}
+	for _, key := range slices.Sorted(maps.Keys(raw)) {
+		if !slices.Contains(knownKeys, key) {
+			logger().Warn(fmt.Sprintf("%s: unknown setting %q is ignored (a typo?)", filepath.Base(path), key))
+		}
 	}
 
 	cfg := &Config{

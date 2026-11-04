@@ -38,6 +38,19 @@ func captureLogs(t *testing.T) *capture {
 
 const hook = "https://discord.com/api/webhooks/1/abc"
 
+func TestUnknownKeysAreWarnedAbout(t *testing.T) {
+	logs := captureLogs(t)
+	path := setup(t, "webhook-url = \""+hook+"\"\nmax_backlog = 3\n[notifiers]\nloot = true\n")
+	if _, err := Load(path, true); err != nil && !errors.Is(err, ErrNoWoW) {
+		t.Fatal(err)
+	}
+	joined := strings.Join(logs.recs, "\n")
+	if !strings.Contains(joined, `WARN config.toml: unknown setting "webhook-url" is ignored`) ||
+		strings.Contains(joined, `"max_backlog"`) || strings.Contains(joined, `"notifiers" is ignored`) {
+		t.Errorf("logs %q", logs.recs)
+	}
+}
+
 // setup writes config.toml (if body != "") in a temp dir and isolates
 // discovery from the real machine by pointing HOME at an empty dir.
 func setup(t *testing.T, body string) string {
