@@ -324,3 +324,34 @@ func TestScreenshotDirs(t *testing.T) {
 		t.Errorf("byDir %v", byDir)
 	}
 }
+
+func TestShotAttachedWhenConfigured(t *testing.T) {
+	sf := newShotFixture(t)
+	sf.cfg.AttachScreenshot = true
+	data := pngOf(t, eventJSON(5), false)
+	path := sf.write("WoWScrnShot_110226_230648.png", data)
+	sf.scan(sf.state())
+	if len(sf.sender.files) != 1 || sf.sender.files[0].Name != "WoWScrnShot_110226_230648.png" ||
+		!bytes.Equal(sf.sender.files[0].Data, data) {
+		t.Fatalf("files %v", sf.sender.files)
+	}
+	img, _ := sf.sender.sent[0][0]["image"].(map[string]any)
+	if img["url"] != "attachment://WoWScrnShot_110226_230648.png" {
+		t.Errorf("image %v", sf.sender.sent[0][0]["image"])
+	}
+	if exists(path) {
+		t.Error("screenshot not deleted")
+	}
+}
+
+func TestShotNotAttachedByDefault(t *testing.T) {
+	sf := newShotFixture(t)
+	sf.write("WoWScrnShot_110226_230648.png", pngOf(t, eventJSON(5), false))
+	sf.scan(sf.state())
+	if len(sf.sender.sent) != 1 || len(sf.sender.files) != 0 {
+		t.Fatalf("sent %d, files %d", len(sf.sender.sent), len(sf.sender.files))
+	}
+	if _, has := sf.sender.sent[0][0]["image"]; has {
+		t.Error("embed has an image")
+	}
+}

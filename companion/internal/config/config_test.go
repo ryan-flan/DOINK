@@ -242,3 +242,20 @@ func TestNativePath(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestAttachScreenshot(t *testing.T) {
+	sv := filepath.Join(t.TempDir(), "DOINK.lua")
+	base := "savedvariables_path = '" + sv + "'\n"
+	for body, want := range map[string]bool{base: false, base + "attach_screenshot = true\n": true, base + "attach_screenshot = false\n": false} {
+		cfg, err := Load(setup(t, body), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AttachScreenshot != want {
+			t.Errorf("%q: attach_screenshot %v", body, cfg.AttachScreenshot)
+		}
+	}
+	if _, err := Load(setup(t, base+"attach_screenshot = 'yes'\n"), false); err == nil {
+		t.Error("a string was accepted")
+	}
+}

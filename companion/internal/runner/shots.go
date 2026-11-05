@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ryan-flan/DOINK/companion/internal/discord"
 	"github.com/ryan-flan/DOINK/companion/internal/savedvars"
 	"github.com/ryan-flan/DOINK/companion/internal/shot"
 )
@@ -168,9 +169,28 @@ func (s *Shots) event(d Deps, path string, payload []byte, svPaths []string) {
 	}
 	// On failure the file stays; the event posts from SavedVariables after
 	// the next /reload, and the next run deletes the screenshot.
-	if PostEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog) {
+	if postEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog, attachment(d, path)) {
 		s.remove(d, path)
 	}
+}
+
+// attachment is the screenshot as a Discord file, when attach_screenshot is
+// on and the file is small enough; nil otherwise (the event posts without).
+func attachment(d Deps, path string) *discord.File {
+	if !d.Config.AttachScreenshot {
+		return nil
+	}
+	name := filepath.Base(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		d.Log.Warn(fmt.Sprintf("can't attach screenshot %s: %v", name, err))
+		return nil
+	}
+	if len(data) > discord.MaxFileSize {
+		d.Log.Warn(fmt.Sprintf("screenshot %s is too big to attach (%d bytes); posting without it", name, len(data)))
+		return nil
+	}
+	return &discord.File{Name: name, Data: data}
 }
 
 func (s *Shots) remove(d Deps, path string) {
