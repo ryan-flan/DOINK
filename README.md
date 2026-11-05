@@ -321,6 +321,14 @@ fights, say), DOINK turns realtime off by itself and tells you; events then
 post at the next reload as usual. `realtime = false` in `config.toml` stops
 the companion reading screenshots.
 
+Optionally the screenshot can go to Discord too: with
+`attach_screenshot = true` in `config.toml`, the event's embed shows the
+screenshot as its image (it includes the thin strip along the top edge).
+It is off by default, since a screenshot shows whatever was on your screen,
+and it only works together with instant posts: events that arrive at a
+reload have no screenshot. Screenshots over 8 MB are left off, the event
+posts without. The file is deleted afterwards as usual.
+
 ### On Linux
 
 Download `DOINK-<version>-linux-amd64.tar.gz` from the release marked
@@ -381,7 +389,8 @@ Settings live in `config.toml` next to `doink.exe` (the settings window
 edits the webhook and WoW folder there; the link at its bottom opens the
 file). Every key is optional: `webhook_url`, `wow_dir`, `dry_run`,
 `max_backlog`, `poll_interval`, an exact `savedvariables_path`, `wowhead`,
-`realtime`, `update_check`, `update_notify`; see `config.example.toml`.
+`realtime`, `attach_screenshot`, `update_check`, `update_notify`; see
+`config.example.toml`.
 DOINK picks up changes while it runs, except `dry_run`, `wowhead`,
 `update_check` and `update_notify`, which need a restart.
 
@@ -404,7 +413,9 @@ newest 10 queued events.
   the Linux build logs to the terminal instead). The one exception: the
   settings window's WebView2 keeps its browser data in
   `%LOCALAPPDATA%\DOINK\WebView2`, created the first time you open it.
-- **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
+- **Network:** HTTPS posts to your Discord webhook (with
+  `attach_screenshot = true`, a realtime event's screenshot is uploaded
+  with it; off by default); one small HTTPS request
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
   day one HTTPS request to GitHub for its list of recent releases, to learn

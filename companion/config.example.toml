@@ -33,6 +33,14 @@
 # SavedVariables file shows after /reload or logout.
 # realtime = true
 
+# Send the screenshot along in Discord: the event's embed shows the
+# screenshot the addon took (it includes a thin black-and-white strip along
+# the top edge, DOINK's code). Only works together with realtime (on in game
+# and here): events that arrive at a reload have no screenshot. The file is
+# still deleted afterwards. Screenshots over 8 MB are left off. It shows
+# whatever was on your screen, so it is off by default.
+# attach_screenshot = false
+
 # Loot embeds fetch the item's icon and tooltip from Wowhead (one small
 # request per item per session; only the item id is sent). false = plain
 # embeds with no network traffic beyond Discord.

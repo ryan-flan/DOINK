@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,9 +27,21 @@ const maxAttempts = 5
 // sending it again can't help. Other failures are worth a retry.
 var ErrRejected = errors.New("discord rejected the message")
 
+// MaxFileSize is what SendFile accepts: Discord's upload limit for webhooks
+// is 10 MB, and the rest of the request needs some room.
+const MaxFileSize = 8 << 20
+
+// File is an attachment. An embed refers to it as "attachment://<Name>".
+type File struct {
+	Name string
+	Data []byte
+}
+
 // Sender posts embeds to a webhook URL.
 type Sender interface {
 	Send(url string, embeds []Embed) error
+	// SendFile is Send with one attached file.
+	SendFile(url string, embeds []Embed, file File) error
 }
 
 type hook struct {
@@ -77,6 +90,15 @@ func (p *Pool) hook(url string) *hook {
 // Send posts one message with embeds to url, waiting out the webhook's
 // schedule and retrying rate limits.
 func (p *Pool) Send(url string, embeds []Embed) error {
+	return p.send(url, embeds, nil)
+}
+
+// SendFile is Send with file attached (multipart upload).
+func (p *Pool) SendFile(url string, embeds []Embed, file File) error {
+	return p.send(url, embeds, &file)
+}
+
+func (p *Pool) send(url string, embeds []Embed, file *File) error {
 	payload := map[string]any{"embeds": embeds}
 	if p.dryRun {
 		var buf bytes.Buffer
@@ -84,10 +106,14 @@ func (p *Pool) Send(url string, embeds []Embed) error {
 		enc.SetEscapeHTML(false)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(payload)
-		p.log.Info("dry run, would post:\n" + strings.TrimRight(buf.String(), "\n"))
+		msg := "dry run, would post:\n" + strings.TrimRight(buf.String(), "\n")
+		if file != nil {
+			msg += fmt.Sprintf("\n(with attachment %s, %d bytes)", file.Name, len(file.Data))
+		}
+		p.log.Info(msg)
 		return nil
 	}
-	body, err := json.Marshal(payload)
+	body, ctype, err := encodeBody(payload, file)
 	if err != nil {
 		return err
 	}
@@ -107,7 +133,7 @@ func (p *Pool) Send(url string, embeds []Embed) error {
 		if err != nil {
 			return fmt.Errorf("network error: %w", err)
 		}
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", ctype)
 		req.Header.Set("User-Agent", "DOINK-companion/"+p.version)
 		resp, err := p.client.Do(req)
 		if err != nil {
@@ -142,6 +168,34 @@ func (p *Pool) Send(url string, embeds []Embed) error {
 		}
 	}
 	return fmt.Errorf("still rate limited after %d attempts", maxAttempts)
+}
+
+// encodeBody is the request body and its content type: plain JSON, or
+// multipart with the JSON as payload_json when there is a file.
+func encodeBody(payload map[string]any, file *File) ([]byte, string, error) {
+	js, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	if file == nil {
+		return js, "application/json", nil
+	}
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("payload_json", string(js)); err != nil {
+		return nil, "", err
+	}
+	part, err := mw.CreateFormFile("files[0]", file.Name)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := part.Write(file.Data); err != nil {
+		return nil, "", err
+	}
+	if err := mw.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), mw.FormDataContentType(), nil
 }
 
 // head is the start of an error body, for a log line.

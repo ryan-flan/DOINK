@@ -321,6 +321,15 @@ tests/test_addon.lua`.
   success; on failure keep the file (the SavedVariables path posts it
   later). Dry run deletes nothing. Webhooks: the in-game ones from that
   flavor's SavedVariables files, then config.
+- **Attach screenshot** (`attach_screenshot`, default false): the realtime
+  event's file is read before posting and sent as a multipart upload
+  (`Sender.SendFile`; `payload_json` + `files[0]`), the embed's `image` is
+  `attachment://<file name>`. Single events only, files over
+  `discord.MaxFileSize` (8 MB; Discord's limit is 10) are skipped with a
+  warning and the event posts without, so a 413 can't block the queue.
+  The grid strip stays in the image (not cropped). Read per event from
+  `d.Config`, so a config reload applies it live. Realtime-only: events
+  from the SavedVariables file have no screenshot.
 - **Dedupe**: `state.json`'s `missing` (seqs below `last_seen` not yet
   posted) lets realtime posts run ahead of the file; the file pass posts
   `seq > last_seen or seq in missing`. Unchanged from the pixel era.
@@ -436,7 +445,8 @@ tests/test_addon.lua`.
 - Zero config is the goal: `config.toml` is optional and so is every key
   (`wow_dir`, `savedvariables_path`, `webhook_url`, `dry_run`,
   `poll_interval`, `max_backlog`, `wowhead`, `update_check`,
-  `update_notify`, `realtime`; `[notifiers]` is logged and ignored).
+  `update_notify`, `realtime`, `attach_screenshot`; `[notifiers]` is logged
+  and ignored).
   Without a path, `discover` scans the standard WoW folders on every drive
   (Windows), every `/mnt/<letter>` and every Wine/Proton prefix's
   `drive_c` (`~/Games/*`, `~/.wine`, Lutris prefixes incl. Flatpak, Steam

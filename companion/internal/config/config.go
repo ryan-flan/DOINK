@@ -46,11 +46,12 @@ type Config struct {
 	UpdateCheck         bool // daily GET to GitHub for the latest release version
 	UpdateNotify        bool // also pop a notification (the tray tooltip always shows it)
 	Realtime            bool // read the screenshots the addon takes for instant posts
+	AttachScreenshot    bool // send a realtime event's screenshot along in Discord
 }
 
 // knownKeys are the settings Load reads; anything else gets a warning.
 var knownKeys = []string{"savedvariables_path", "wow_dir", "webhook_url", "dry_run", "poll_interval",
-	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "notifiers"}
+	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "attach_screenshot", "notifiers"}
 
 // ErrNoWoW: no SavedVariables file to watch.
 var ErrNoWoW = errors.New("couldn't find World of Warcraft with the DOINK addon installed")
@@ -171,6 +172,7 @@ func Load(path string, dryRun bool) (*Config, error) {
 	cfg.UpdateCheck = boolean("update_check", true)
 	cfg.UpdateNotify = boolean("update_notify", false)
 	cfg.Realtime = boolean("realtime", true)
+	cfg.AttachScreenshot = boolean("attach_screenshot", false)
 	if err != nil {
 		return nil, err
 	}

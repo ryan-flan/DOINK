@@ -244,3 +244,30 @@ func TestDryRunMakesNoRequest(t *testing.T) {
 		t.Errorf("log %q", out)
 	}
 }
+
+func TestSendFileIsMultipart(t *testing.T) {
+	var payload, name string
+	var data []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Error(err)
+			return
+		}
+		payload = r.FormValue("payload_json")
+		f, h, err := r.FormFile("files[0]")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		name = h.Filename
+		data, _ = io.ReadAll(f)
+	}))
+	defer srv.Close()
+	p, _ := testPool(t, false, nil)
+	if err := p.SendFile(srv.URL, embeds, File{Name: "shot.jpg", Data: []byte("abc")}); err != nil {
+		t.Fatal(err)
+	}
+	if name != "shot.jpg" || string(data) != "abc" || !strings.Contains(payload, `"embeds"`) {
+		t.Errorf("name %q data %q payload %q", name, data, payload)
+	}
+}

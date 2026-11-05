@@ -20,6 +20,10 @@ func (r *recorder) Send(url string, embeds []discord.Embed) error {
 	return nil
 }
 
+func (r *recorder) SendFile(url string, embeds []discord.Embed, _ discord.File) error {
+	return r.Send(url, embeds)
+}
+
 func TestTestEventNames(t *testing.T) {
 	events, err := testEvents([]string{"levelup", "Boss_Kill", "LOOT"}, time.Unix(1790870764, 0))
 	if err != nil {

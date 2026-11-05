@@ -69,6 +69,15 @@ func item(d Deps, e savedvars.Event) *wowhead.Item {
 // one. It returns false if they couldn't be posted; state is saved after
 // each message, so a retry resumes cleanly.
 func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int) bool {
+	return postEvents(d, key, events, gameHooks, firstSightBacklog, nil)
+}
+
+// postEvents is PostEvents with an optional screenshot, shown as the image
+// of a single event's embed.
+func postEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int, file *discord.File) bool {
+	if len(events) != 1 {
+		file = nil
+	}
 	url := WebhookFor(key, gameHooks, d.Config)
 	if len(events) > 0 && !d.Config.DryRun {
 		who := events[len(events)-1].FullName()
@@ -100,7 +109,13 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 		for _, e := range batch {
 			names = append(names, fmt.Sprintf("#%d %s", e.Seq, e.Type))
 		}
-		err := d.Sender.Send(url, embeds)
+		var err error
+		if file != nil {
+			embeds[0]["image"] = map[string]any{"url": "attachment://" + file.Name}
+			err = d.Sender.SendFile(url, embeds, *file)
+		} else {
+			err = d.Sender.Send(url, embeds)
+		}
 		switch {
 		case errors.Is(err, discord.ErrRejected):
 			// The message itself is wrong; retrying would block every

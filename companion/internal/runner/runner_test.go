@@ -31,10 +31,11 @@ const (
 )
 
 type fakeSender struct {
-	mu   sync.Mutex
-	sent [][]discord.Embed
-	urls []string
-	fail bool
+	mu    sync.Mutex
+	sent  [][]discord.Embed
+	urls  []string
+	files []discord.File
+	fail  bool
 	// rejectNext: this many sends answer as Discord does to a bad embed.
 	rejectNext int
 }
@@ -51,6 +52,16 @@ func (f *fakeSender) Send(url string, embeds []discord.Embed) error {
 	}
 	f.sent = append(f.sent, embeds)
 	f.urls = append(f.urls, url)
+	return nil
+}
+
+func (f *fakeSender) SendFile(url string, embeds []discord.Embed, file discord.File) error {
+	if err := f.Send(url, embeds); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.files = append(f.files, file)
 	return nil
 }
 
