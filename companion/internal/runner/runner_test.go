@@ -154,7 +154,7 @@ func (f *fixture) run(text string, s *state.State) (bool, *state.State) {
 	if s == nil {
 		s = f.state()
 	}
-	return Process(f.deps(s), f.sv), s
+	return Process(f.deps(s), f.sv) == nil, s
 }
 
 func webhooksBlock(hooks map[string]string) string {
@@ -402,7 +402,7 @@ func TestStateWithoutFileSeenLearnsIt(t *testing.T) {
 func TestPostAheadThenFileFillsTheGapsOnly(t *testing.T) {
 	f := newFixture(t)
 	s := f.state()
-	if !PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 10) {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 10) != nil {
 		t.Fatal("post failed")
 	}
 	if got := s.Missing("Flano-R"); !reflect.DeepEqual(got, []int{1, 2}) {
@@ -502,7 +502,7 @@ func TestPostEventsSkipsRejected(t *testing.T) {
 	f := newFixture(t)
 	s := f.state()
 	f.sender.rejectNext = 1
-	if !PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(1), event(2)}, nil, 0) {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(1), event(2)}, nil, 0) != nil {
 		t.Fatal("a rejected batch must count as handled, not retried")
 	}
 	if s.IsPending("Flano-R", 1) || s.IsPending("Flano-R", 2) || len(f.sender.titles()) != 0 {
@@ -512,12 +512,12 @@ func TestPostEventsSkipsRejected(t *testing.T) {
 		t.Errorf("logs %v status %q", f.logs.recs, f.status.Error())
 	}
 	// The next one posts as usual and clears the problem.
-	if !PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 0) || len(f.sender.titles()) != 1 || f.status.Error() != "" {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 0) != nil || len(f.sender.titles()) != 1 || f.status.Error() != "" {
 		t.Errorf("sent %v status %q", f.sender.titles(), f.status.Error())
 	}
 	// Anything else is still retried.
 	f.sender.fail = true
-	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(4)}, nil, 0) || !s.IsPending("Flano-R", 4) {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(4)}, nil, 0) == nil || !s.IsPending("Flano-R", 4) {
 		t.Error("a network failure must be retried")
 	}
 }
@@ -598,5 +598,56 @@ func TestRunWithACancelledContext(t *testing.T) {
 	}
 	if !strings.HasPrefix(f.status.Summary(), "DOINK: watching 1 file, nothing posted yet") {
 		t.Errorf("summary %q", f.status.Summary())
+	}
+}
+
+func TestBackoffIsCapped(t *testing.T) {
+	for _, c := range []struct {
+		failures int
+		want     time.Duration
+	}{{0, 2 * time.Second}, {1, 4 * time.Second}, {4, 32 * time.Second}, {5, 60 * time.Second}, {33, 60 * time.Second}, {1000, 60 * time.Second}} {
+		if got := backoff(2, c.failures); got != c.want {
+			t.Errorf("backoff(2, %d) = %v, want %v", c.failures, got, c.want)
+		}
+	}
+}
+
+func TestRunWaitsForAWebhookWithoutRetrying(t *testing.T) {
+	f := newFixture(t)
+	f.cfg.PollInterval = 0.01
+	f.cfg.WebhookURL = ""
+	configPath := filepath.Join(f.dir, "config.toml")
+	os.WriteFile(configPath, []byte("# v1\n"), 0o644)
+	os.WriteFile(f.sv, []byte(eventsFile(1)), 0o644)
+	reload := func() (*config.Config, error) {
+		c := *f.cfg
+		c.WebhookURL = configHook
+		return &c, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- Run(ctx, f.deps(f.state()), configPath, reload) }()
+
+	waitFor(t, "the error", func() bool { return f.logs.has("ERROR", "Flano-R: no webhook") })
+	time.Sleep(100 * time.Millisecond) // ten polls
+	if n := f.logs.count("ERROR"); n != 1 || f.logs.has("INFO", "retrying in") {
+		t.Errorf("errors %d logs %v", n, f.logs.recs)
+	}
+	if f.status.Error() == "" {
+		t.Error("the no-webhook state was cleared")
+	}
+	os.WriteFile(configPath, []byte("webhook_url = 'set'\n"), 0o644)
+	waitFor(t, "the post", func() bool { return len(f.sender.titles()) == 1 })
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run didn't stop")
+	}
+	if f.status.Error() != "" || f.logs.count("ERROR") != 1 {
+		t.Errorf("status %q logs %v", f.status.Error(), f.logs.recs)
 	}
 }

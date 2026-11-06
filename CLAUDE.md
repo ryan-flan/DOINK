@@ -446,7 +446,12 @@ tests/test_addon.lua`.
 - `config.toml`, `state.json` and `doink.log` live next to the executable.
 - Webhook precedence: in-game per-char > in-game `*` > `webhook_url` in
   config.toml. A character with no resolvable webhook logs an error and its
-  events stay queued (state not advanced) until one is set.
+  events stay queued (state not advanced) until one is set; `Process`
+  returns `runner.ErrNoWebhook` and `Run` stops retrying that file until
+  it or `config.toml` changes (one error line, not one per retry). Only
+  transient failures (network, Discord down) back off: poll interval
+  doubled per failed pass, capped at 60 s (the uncapped doubling
+  overflowed into a negative delay after ~30 failures, 2026-11-06).
 - First time a character is seen, post at most `max_backlog` (default 10) of
   its queued events. If the newest seq in the file is below `file_seen`
   (the highest seq a previous file pass showed; SavedVariables wiped), treat

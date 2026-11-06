@@ -26,6 +26,22 @@ import (
 // maxRetryDelay caps the back-off after failed posts.
 const maxRetryDelay = 60 * time.Second
 
+// ErrNoWebhook: a character's events are waiting for a webhook. Nothing
+// will change until the SavedVariables file (an in-game webhook) or
+// config.toml does, so there is nothing to retry.
+var ErrNoWebhook = errors.New("no webhook")
+
+// backoff is the wait after n consecutive failed passes: the poll
+// interval doubled n times, capped at maxRetryDelay (doubling without a
+// cap overflows after ~30 failures and went negative, 2026-11-06).
+func backoff(pollSeconds float64, n int) time.Duration {
+	d := duration(pollSeconds)
+	for i := 0; i < n && d < maxRetryDelay; i++ {
+		d *= 2
+	}
+	return min(d, maxRetryDelay)
+}
+
 // Deps is everything the loop works with.
 type Deps struct {
 	Config  *config.Config // pointer: reloaded live
@@ -66,21 +82,22 @@ func item(d Deps, e savedvars.Event) *wowhead.Item {
 }
 
 // PostEvents posts events (one character, ascending seq) and records each
-// one. It returns false if they couldn't be posted; state is saved after
-// each message, so a retry resumes cleanly.
-func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int) bool {
+// one. It returns ErrNoWebhook when there is no usable webhook, else the
+// post error; state is saved after each message, so a retry resumes
+// cleanly.
+func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int) error {
 	url := WebhookFor(key, gameHooks, d.Config)
 	if len(events) > 0 && !d.Config.DryRun {
 		who := events[len(events)-1].FullName()
 		if url == "" {
 			d.Log.Error(fmt.Sprintf("%s: no webhook. Set one in game (/doink webhook <url>) or in config.toml", key))
 			d.Status.Failed(fmt.Sprintf("no webhook for %s. Set one in game: /doink webhook <url>, or in config.toml", who))
-			return false // state untouched: these post once a webhook exists
+			return ErrNoWebhook // state untouched: these post once a webhook exists
 		}
 		if !discord.IsWebhookURL(url) {
 			d.Log.Error(fmt.Sprintf("%s: webhook isn't a Discord webhook URL", key))
 			d.Status.Failed("bad webhook for " + who)
-			return false
+			return ErrNoWebhook
 		}
 	}
 	if url == "" {
@@ -110,7 +127,7 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 		case err != nil:
 			d.Log.Error(fmt.Sprintf("%s: post failed: %v", key, err))
 			d.Status.Failed(fmt.Sprintf("posting to Discord failed: %v", err))
-			return false
+			return err
 		default:
 			d.Log.Info(fmt.Sprintf("%s: %s %s", key, verb, strings.Join(names, ", ")))
 		}
@@ -121,16 +138,17 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 			d.State.MarkPosted(key, e.Seq, firstSightBacklog) // posted, or dropped for good
 		}
 	}
-	return true
+	return nil
 }
 
 // Process posts every event in the file that hasn't been posted. It
-// returns false if anything is left to retry.
-func Process(d Deps, path string) bool {
+// returns nil when nothing is left, ErrNoWebhook when the only events
+// left are waiting for a webhook, else an error worth retrying.
+func Process(d Deps, path string) error {
 	file, err := os.ReadFile(path)
 	if err != nil {
 		d.Log.Warn(fmt.Sprintf("can't read %s: %v", path, err))
-		return false
+		return err
 	}
 	gameHooks := savedvars.ParseWebhooks(file)
 	var keys []string
@@ -143,7 +161,7 @@ func Process(d Deps, path string) bool {
 		byChar[k] = append(byChar[k], e)
 	}
 
-	ok := true
+	var result error
 	for _, key := range keys {
 		events := byChar[key]
 		sort.SliceStable(events, func(i, j int) bool { return events[i].Seq < events[j].Seq })
@@ -181,8 +199,10 @@ func Process(d Deps, path string) bool {
 			}
 		}
 
-		if !PostEvents(d, key, fresh, gameHooks, 0) {
-			ok = false
+		if err := PostEvents(d, key, fresh, gameHooks, 0); err != nil {
+			if result == nil || errors.Is(result, ErrNoWebhook) {
+				result = err // a retryable failure outranks waiting
+			}
 			continue
 		}
 		if !haveLast {
@@ -196,7 +216,7 @@ func Process(d Deps, path string) bool {
 		}
 		d.State.MarkFile(key, newest)
 	}
-	return ok
+	return result
 }
 
 // RunOnce processes every file once, then any realtime screenshots; an
@@ -204,7 +224,7 @@ func Process(d Deps, path string) bool {
 func RunOnce(d Deps) error {
 	failed := 0
 	for _, path := range d.Config.SavedVariablesPaths {
-		if !Process(d, path) {
+		if Process(d, path) != nil {
 			failed++
 		}
 	}
@@ -264,7 +284,8 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 	if d.Started != nil {
 		d.Started()
 	}
-	dirty := map[string]bool{}
+	dirty := map[string]bool{}   // changed, or failed and due for a retry
+	waiting := map[string]bool{} // events waiting for a webhook: retried on a file or config change only
 	failures := 0
 	var retryAt time.Time
 
@@ -275,22 +296,30 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 		for _, w := range watchers {
 			if w.Poll() {
 				dirty[w.Path] = true
+				delete(waiting, w.Path)
 			}
 		}
 		if len(dirty) > 0 && !time.Now().Before(retryAt) {
 			for path := range dirty {
-				if Process(d, path) {
+				err := Process(d, path)
+				switch {
+				case err == nil:
 					delete(dirty, path)
+				case errors.Is(err, ErrNoWebhook):
+					delete(dirty, path) // nothing to retry until the file or config.toml changes
+					waiting[path] = true
 				}
 			}
 			if len(dirty) > 0 {
 				failures++
-				delay := min(maxRetryDelay, duration(d.Config.PollInterval*math.Pow(2, float64(failures))))
+				delay := backoff(d.Config.PollInterval, failures)
 				d.Log.Info(fmt.Sprintf("retrying in %.0fs", delay.Seconds()))
 				retryAt = time.Now().Add(delay)
 			} else {
 				failures = 0
-				d.Status.OK()
+				if len(waiting) == 0 {
+					d.Status.OK()
+				}
 			}
 		}
 		if d.Config.Realtime {
@@ -328,7 +357,12 @@ func Run(ctx context.Context, d Deps, configPath string, reload func() (*config.
 					watchers = d.watch()
 					dirty = map[string]bool{}
 					shotDirs, svByDir = ScreenshotDirs(cfg.SavedVariablesPaths)
+				} else {
+					for path := range waiting { // config.toml may now name a webhook
+						dirty[path] = true
+					}
 				}
+				waiting = map[string]bool{}
 			}
 		}
 

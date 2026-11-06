@@ -168,7 +168,7 @@ func (s *Shots) event(d Deps, path string, payload []byte, svPaths []string) {
 	}
 	// On failure the file stays; the event posts from SavedVariables after
 	// the next /reload, and the next run deletes the screenshot.
-	if PostEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog) {
+	if PostEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog) == nil {
 		s.remove(d, path)
 	}
 }
