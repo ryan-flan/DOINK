@@ -274,7 +274,7 @@ tests/test_addon.lua`.
   256-wide grid was tried first and was far more noticeable than the old
   9 px pixel strip; a wide strip keeps a typical event to 4 rows = 8 px.
   Row 0: sync `1010101010110011`, then MSB-first `version(4)=2, flags(4)`
-  (bit 0 = hello), `cols(16)`, `rows(8)` = R data rows (1..32),
+  (bit 0 = hello, bit 1 = attach the screenshot, v0.17+), `cols(16)`, `rows(8)` = R data rows (1..32),
   `payload_len(16)`, `payload_crc16(16)` (CRC-16/CCITT-FALSE, 0x1021,
   init 0xFFFF), `header_crc8(8)` (0x07, init 0, over the 8 bytes before
   it); 88 blocks, rest 0. Rows 1..R: payload bits row-major, `cols` per

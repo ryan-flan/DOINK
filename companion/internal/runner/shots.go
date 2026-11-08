@@ -68,7 +68,7 @@ type Shots struct {
 	seen    map[string]shotSig
 	scanned map[string]bool // folders scanned at least once
 	now     func() time.Time
-	decode  func(path string) (shot.Message, bool, error)
+	decode  func(path string) (shot.Result, bool, error)
 }
 
 func NewShots() *Shots {

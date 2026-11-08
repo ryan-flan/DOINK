@@ -83,7 +83,7 @@ func TestOptionalString(t *testing.T) {
 func TestDecodeScreenshots(t *testing.T) {
 	dir := t.TempDir()
 	payload := `{"char":"Flano","class":"MAGE","data":{"level":5},"realm":"R","seq":5,"surname":"Wren","ts":1790870764,"type":"level_up"}`
-	rows, err := shot.Rows([]byte(payload), false, 959)
+	rows, err := shot.Rows([]byte(payload), 0, 959)
 	if err != nil {
 		t.Fatal(err)
 	}

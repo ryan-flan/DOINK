@@ -25,7 +25,11 @@ func decodeScreenshots(paths []string, w io.Writer) int {
 			fmt.Fprintf(w, "%s: hello %s\n", path, m.Payload)
 		default:
 			if e, err := savedvars.DecodeEvent(m.Payload); err == nil {
-				fmt.Fprintf(w, "%s: event #%d %s %s\n  %s\n", path, e.Seq, e.Type, e.Key(), m.Payload)
+				note := ""
+				if m.Attach {
+					note = " (attach screenshot)"
+				}
+				fmt.Fprintf(w, "%s: event #%d %s %s%s\n  %s\n", path, e.Seq, e.Type, e.Key(), note, m.Payload)
 			} else {
 				fmt.Fprintf(w, "%s: code found, but not an event (%v)\n  %s\n", path, err, m.Payload)
 			}

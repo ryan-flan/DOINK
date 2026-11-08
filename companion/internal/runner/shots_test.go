@@ -45,7 +45,7 @@ func newShotFixture(t *testing.T) *shotFixture {
 	sf := &shotFixture{fixture: f, shots: shots, now: time.Now().Add(time.Minute)}
 	sf.s = NewShots()
 	sf.s.now = func() time.Time { return sf.now }
-	sf.s.decode = func(path string) (shot.Message, bool, error) {
+	sf.s.decode = func(path string) (shot.Result, bool, error) {
 		sf.decodes++
 		return shot.DecodeFile(path)
 	}
@@ -58,9 +58,9 @@ func (sf *shotFixture) scan(s *state.State) {
 	sf.s.Scan(sf.deps(s), dirs, byDir)
 }
 
-func pngOf(t *testing.T, payload string, hello bool) []byte {
+func pngOf(t *testing.T, payload string, flags uint8) []byte {
 	t.Helper()
-	rows, err := shot.Rows([]byte(payload), hello, 959)
+	rows, err := shot.Rows([]byte(payload), flags, 959)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func exists(path string) bool { _, err := os.Stat(path); return err == nil }
 
 func TestShotEventPostedOnceAndDeleted(t *testing.T) {
 	sf := newShotFixture(t)
-	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false)) // png bytes, jpg name: decoded by content
+	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0)) // png bytes, jpg name: decoded by content
 	s := sf.state()
 	sf.scan(s)
 	if len(sf.sender.sent) != 1 || sf.sender.urls[0] != configHook {
@@ -110,7 +110,7 @@ func TestShotEventPostedOnceAndDeleted(t *testing.T) {
 func TestShotUsesTheInGameWebhook(t *testing.T) {
 	sf := newShotFixture(t)
 	os.WriteFile(sf.sv, []byte("DOINKDB = {\n"+webhooksBlock(map[string]string{"*": gameHook})+"}\n"), 0o644)
-	sf.write("WoWScrnShot_110226_230648.png", pngOf(t, eventJSON(5), false))
+	sf.write("WoWScrnShot_110226_230648.png", pngOf(t, eventJSON(5), 0))
 	sf.scan(sf.state())
 	if len(sf.sender.urls) != 1 || sf.sender.urls[0] != gameHook {
 		t.Errorf("urls %v", sf.sender.urls)
@@ -122,7 +122,7 @@ func TestPlayersOwnScreenshotIsLeftAlone(t *testing.T) {
 	var buf bytes.Buffer
 	png.Encode(&buf, shot.Render(nil, 4)) // no grid: just black
 	path := sf.write("WoWScrnShot_110226_230648.png", buf.Bytes())
-	other := sf.write("holiday.png", pngOf(t, eventJSON(5), false)) // not a WoW screenshot name
+	other := sf.write("holiday.png", pngOf(t, eventJSON(5), 0)) // not a WoW screenshot name
 	s := sf.state()
 	sf.scan(s)
 	sf.scan(s)
@@ -141,7 +141,7 @@ func TestShotAlreadyPostedIsDeleted(t *testing.T) {
 	sf := newShotFixture(t)
 	s := sf.state()
 	s.MarkPosted("Flano-R", 5, 0)
-	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	sf.scan(s)
 	if len(sf.sender.sent) != 0 || exists(path) {
 		t.Errorf("sent %d, exists %v", len(sf.sender.sent), exists(path))
@@ -151,7 +151,7 @@ func TestShotAlreadyPostedIsDeleted(t *testing.T) {
 func TestShotPostFailureKeepsTheFile(t *testing.T) {
 	sf := newShotFixture(t)
 	sf.sender.fail = true
-	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	s := sf.state()
 	sf.scan(s)
 	sf.scan(s)
@@ -169,7 +169,7 @@ func TestShotPostFailureKeepsTheFile(t *testing.T) {
 func TestShotDryRunDeletesNothing(t *testing.T) {
 	sf := newShotFixture(t)
 	sf.cfg.DryRun = true
-	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	s, _ := state.Load(sf.cfg.StatePath, false)
 	sf.scan(s)
 	sf.scan(s)
@@ -184,7 +184,7 @@ func TestShotDryRunDeletesNothing(t *testing.T) {
 func TestShotHello(t *testing.T) {
 	sf := newShotFixture(t)
 	path := sf.write("WoWScrnShot_110226_230648.jpg",
-		pngOf(t, `{"addon":"0.14.0","char":"Flano","realm":"R","surname":"Wren","test":true,"type":"hello"}`, true))
+		pngOf(t, `{"addon":"0.14.0","char":"Flano","realm":"R","surname":"Wren","test":true,"type":"hello"}`, shot.FlagHello))
 	sf.scan(sf.state())
 	if !reflect.DeepEqual(sf.notices, []string{"Realtime works for Flano Wren"}) {
 		t.Errorf("notices %v", sf.notices)
@@ -199,10 +199,10 @@ func TestShotHello(t *testing.T) {
 
 func TestShotAgeRules(t *testing.T) {
 	sf := newShotFixture(t)
-	old := sf.write("WoWScrnShot_101526_120000.jpg", pngOf(t, eventJSON(3), false))
+	old := sf.write("WoWScrnShot_101526_120000.jpg", pngOf(t, eventJSON(3), 0))
 	longAgo := time.Now().Add(-15 * 24 * time.Hour)
 	os.Chtimes(old, longAgo, longAgo)
-	fresh := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	fresh := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	s := sf.state()
 
 	sf.now = time.Now() // fresh is still being written, as far as we know
@@ -232,7 +232,7 @@ func TestShotFolderAppearingLaterKeepsAgeRule(t *testing.T) {
 	if err := os.Mkdir(sf.shots, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	old := sf.write("WoWScrnShot_101526_120000.jpg", pngOf(t, eventJSON(3), false))
+	old := sf.write("WoWScrnShot_101526_120000.jpg", pngOf(t, eventJSON(3), 0))
 	longAgo := time.Now().Add(-15 * 24 * time.Hour)
 	if err := os.Chtimes(old, longAgo, longAgo); err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestShotFolderAppearingLaterKeepsAgeRule(t *testing.T) {
 
 func TestShotStillBeingWrittenIsRetried(t *testing.T) {
 	sf := newShotFixture(t)
-	full := pngOf(t, eventJSON(5), false)
+	full := pngOf(t, eventJSON(5), 0)
 	path := sf.write("WoWScrnShot_110226_230648.jpg", full[:len(full)/2])
 	info, _ := os.Stat(path)
 	s := sf.state()
@@ -275,7 +275,7 @@ func TestShotStillBeingWrittenIsRetried(t *testing.T) {
 func TestShotThenFilePassNoDoublePost(t *testing.T) {
 	sf := newShotFixture(t)
 	s := sf.state()
-	sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	sf.scan(s)
 	if len(sf.sender.sent) != 1 {
 		t.Fatalf("realtime sent %d", len(sf.sender.sent))
@@ -290,7 +290,7 @@ func TestShotThenFilePassNoDoublePost(t *testing.T) {
 
 func TestRunOnceScansScreenshots(t *testing.T) {
 	sf := newShotFixture(t)
-	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), false))
+	path := sf.write("WoWScrnShot_110226_230648.jpg", pngOf(t, eventJSON(5), 0))
 	os.Chtimes(path, time.Now().Add(-time.Minute), time.Now().Add(-time.Minute))
 	if err := RunOnce(sf.deps(sf.state())); err != nil {
 		t.Fatal(err)
@@ -299,7 +299,7 @@ func TestRunOnceScansScreenshots(t *testing.T) {
 		t.Errorf("sent %d, exists %v", len(sf.sender.sent), exists(path))
 	}
 	sf.cfg.Realtime = false
-	path = sf.write("WoWScrnShot_110226_230700.jpg", pngOf(t, eventJSON(6), false))
+	path = sf.write("WoWScrnShot_110226_230700.jpg", pngOf(t, eventJSON(6), 0))
 	os.Chtimes(path, time.Now().Add(-time.Minute), time.Now().Add(-time.Minute))
 	RunOnce(sf.deps(sf.state()))
 	if !exists(path) {

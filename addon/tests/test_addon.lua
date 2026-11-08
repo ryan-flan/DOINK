@@ -795,7 +795,7 @@ end)
 
 test("realtime: grid layout, header fields and padding", function()
   local msg = string.rep("x", 150)
-  local rows = Shot.Encode(msg, false, 256)
+  local rows = Shot.Encode(msg, 0, 256)
   eq(#rows, 1 + 5, "header row + ceil(1200/256) data rows")
   local row0 = rows[1]
   eq(bitString(row0, 16), "1010101010110011", "sync")
@@ -813,13 +813,15 @@ test("realtime: grid layout, header fields and padding", function()
   -- 1200 bits: 4 full rows, then 176 bits, then padding.
   eq(bitString(rows[6], 256):sub(177), string.rep("0", 80), "last row padding")
   for r = 1, 6 do eq(#rows[r], 256, "row " .. r .. " width") end
-  eq(field(Shot.Encode("hi", true, 256)[1], 20, 4), 1, "hello flag")
-  eq(#Shot.Encode(msg, false, 1200), 1 + 1, "a wide strip: one data row")
+  eq(field(Shot.Encode("hi", 1, 256)[1], 20, 4), 1, "hello flag")
+  eq(field(Shot.Encode("hi", 2, 256)[1], 20, 4), 2, "image flag")
+  eq(field(Shot.Encode("hi", 3, 256)[1], 20, 4), 3, "hello and image flags")
+  eq(#Shot.Encode(msg, 0, 1200), 1 + 1, "a wide strip: one data row")
 end)
 
 test("realtime: one screenshot holds up to 1024 bytes", function()
-  eq(#Shot.Encode(string.rep("a", 1024), false, 256), 33, "32 data rows at the narrowest")
-  eq(Shot.Encode(string.rep("a", 1025), false, 1200), nil, "too long")
+  eq(#Shot.Encode(string.rep("a", 1024), 0, 256), 33, "32 data rows at the narrowest")
+  eq(Shot.Encode(string.rep("a", 1025), 0, 1200), nil, "too long")
 end)
 
 test("realtime: an event shows the grid for one frame: shoot, then hide", function()
@@ -971,7 +973,7 @@ test("realtime: fixture matches (shared with the companion's decoder tests)", fu
   local payload = '{"char":"Flano","class":"WARRIOR","data":{"level":10},"level":10,'
     .. '"realm":"Classic Beta PvE 2","seq":3,"surname":"Wren","test":true,'
     .. '"ts":1790870000,"type":"level_up"}'
-  local rows = Shot.Encode(payload, false, 400)
+  local rows = Shot.Encode(payload, 0, 400)
   local lines = { "payload " .. payload }
   for r = 1, #rows do lines[#lines + 1] = bitString(rows[r], 400) end
   local text = table.concat(lines, "\n") .. "\n"

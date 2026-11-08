@@ -84,7 +84,7 @@ func TestCRCCheckValues(t *testing.T) {
 
 func TestRowsMatchTheAddon(t *testing.T) {
 	payload, want := readFixture(t)
-	got, err := Rows([]byte(payload), false, len(want[0]))
+	got, err := Rows([]byte(payload), 0, len(want[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,10 +99,10 @@ func TestRowsMatchTheAddon(t *testing.T) {
 }
 
 func TestRowsTooLong(t *testing.T) {
-	if rows, err := Rows(make([]byte, MaxPayload), false, MinCols); err != nil || len(rows) != 1+MaxRows {
+	if rows, err := Rows(make([]byte, MaxPayload), 0, MinCols); err != nil || len(rows) != 1+MaxRows {
 		t.Errorf("1024 bytes at the narrowest: %d rows, %v", len(rows), err)
 	}
-	if _, err := Rows(make([]byte, MaxPayload+1), false, MaxCols); !errors.Is(err, ErrTooLong) {
+	if _, err := Rows(make([]byte, MaxPayload+1), 0, MaxCols); !errors.Is(err, ErrTooLong) {
 		t.Errorf("1025 bytes: %v", err)
 	}
 }
@@ -139,7 +139,7 @@ func TestDecode(t *testing.T) {
 func TestWidths(t *testing.T) {
 	payload := []byte(strings.Repeat("loot! ", 60))
 	for _, cols := range []int{MinCols, 959, MaxCols} {
-		rows, err := Rows(payload, false, cols)
+		rows, err := Rows(payload, 0, cols)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +159,7 @@ func TestDecodeRender(t *testing.T) {
 }
 
 func TestHelloRoundTrips(t *testing.T) {
-	rows, _ := Rows([]byte(`{"type":"hello"}`), true, MinCols)
+	rows, _ := Rows([]byte(`{"type":"hello"}`), FlagHello, MinCols)
 	m, ok := Decode(screen(rows, 0, 0, 4))
 	if !ok || !m.Hello || string(m.Payload) != `{"type":"hello"}` {
 		t.Errorf("got %v %+v", ok, m)
@@ -206,5 +206,80 @@ func BenchmarkDecodeNoGrid(b *testing.B) {
 	img := jpegRoundTrip(b, image.NewGray(image.Rect(0, 0, 2554, 1404)), 80)
 	for range b.N {
 		Decode(img)
+	}
+}
+
+func TestAttachFlagAndStrip(t *testing.T) {
+	payload := []byte(`{"type":"level_up","seq":1}`)
+	rows, err := Rows(payload, FlagImage, 959)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The grid is drawn at y=2 and its backing ends at 2 + (len(rows)+1)*4.
+	// The offset sweep may settle 1 px early (a 2 px sample still sits
+	// inside a 4 px block), so Strip is that plus a margin of 1 or 2.
+	backing := 2 + (len(rows)+1)*4
+	img := screen(rows, 3, 2, 4)
+	for name, in := range map[string]image.Image{"exact": img, "jpeg": jpegRoundTrip(t, img, 80)} {
+		m, ok := Decode(in)
+		if !ok {
+			t.Fatalf("%s: no grid found", name)
+		}
+		if !m.Attach || m.Hello {
+			t.Errorf("%s: Attach=%v Hello=%v, want true false", name, m.Attach, m.Hello)
+		}
+		if m.Strip <= backing || m.Strip > backing+2 {
+			t.Errorf("%s: Strip = %d, want %d..%d", name, m.Strip, backing+1, backing+2)
+		}
+	}
+
+	rows, _ = Rows(payload, FlagHello, 959)
+	m, ok := Decode(screen(rows, 0, 0, 4))
+	if !ok || !m.Hello || m.Attach {
+		t.Errorf("hello grid: ok=%v Hello=%v Attach=%v", ok, m.Hello, m.Attach)
+	}
+	rows, _ = Rows(payload, 0, 959)
+	if m, ok := Decode(screen(rows, 0, 0, 4)); !ok || m.Attach {
+		t.Errorf("plain grid: ok=%v Attach=%v", ok, m.Attach)
+	}
+}
+
+// noSub hides SubImage so Crop has to copy.
+type noSub struct{ image.Image }
+
+func TestCrop(t *testing.T) {
+	img := screen([][]uint8{make([]uint8, 300)}, 0, 0, 4)
+	if got := Crop(img, 20).Bounds(); got != image.Rect(0, 20, 2554, 1404) {
+		t.Errorf("SubImage crop bounds = %v", got)
+	}
+	cp := Crop(noSub{img}, 20)
+	if _, ok := cp.(*image.RGBA); !ok || cp.Bounds() != image.Rect(0, 0, 2554, 1384) {
+		t.Errorf("copy crop = %T %v", cp, cp.Bounds())
+	}
+	if want := img.RGBAAt(7, 20); cp.(*image.RGBA).RGBAAt(7, 0) != want {
+		t.Error("copy crop moved pixels")
+	}
+	for _, top := range []int{1404, 5000} {
+		if got := Crop(img, top).Bounds(); got.Dy() != 0 {
+			t.Errorf("top %d: height %d, want 0", top, got.Dy())
+		}
+	}
+	if got := Crop(img, -5).Bounds(); got != img.Bounds() {
+		t.Errorf("negative top: %v", got)
+	}
+}
+
+func TestJPEG(t *testing.T) {
+	img := Crop(screen([][]uint8{make([]uint8, 300)}, 0, 0, 4), 21) // odd top
+	data, err := JPEG(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Bounds().Size(); got != image.Pt(2554, 1383) {
+		t.Errorf("decoded size = %v", got)
 	}
 }

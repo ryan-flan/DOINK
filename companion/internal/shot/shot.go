@@ -11,10 +11,12 @@
 package shot
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"image/color"
-	_ "image/jpeg" // screenshot formats the addon allows
+	"image/draw"
+	"image/jpeg" // also a screenshot format the addon allows
 	_ "image/png"
 	"math"
 	"os"
@@ -26,8 +28,14 @@ const (
 	MaxCols    = 1200
 	MaxRows    = 32
 	MaxPayload = 1024 // bytes: MaxRows rows at MinCols
-	flagHello  = 1
-	headerLen  = 8 // bytes before the header CRC
+	headerLen  = 8    // bytes before the header CRC
+
+	// Header flags (low nibble of byte 0).
+	FlagHello = 1 // /doink realtime test: not an event
+	FlagImage = 2 // the player allows attaching the screenshot to the post
+
+	// JPEGQuality is used when a screenshot is re-encoded for Discord.
+	JPEGQuality = 85
 )
 
 var syncPattern = [16]uint8{1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1}
@@ -36,7 +44,17 @@ var syncPattern = [16]uint8{1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1}
 // /doink realtime test.
 type Message struct {
 	Hello   bool
+	Attach  bool // FlagImage: the screenshot may go to Discord
 	Payload []byte
+	// Strip is how many pixel rows from the top of the image the grid and
+	// its backing cover, plus a 2 px margin (clamped to the image height).
+	Strip int
+}
+
+// Result is a decoded screenshot: the message and the image it was in.
+type Result struct {
+	Message
+	Image image.Image
 }
 
 // ErrTooLong: the payload doesn't fit one screenshot.
@@ -81,7 +99,7 @@ func appendBits(bits []uint8, v uint, n int) []uint8 {
 
 // Rows encodes a payload exactly as the addon does: row 0 (sync + header),
 // then the data rows, each cols blocks (MinCols..MaxCols) of 0 or 1.
-func Rows(payload []byte, hello bool, cols int) ([][]uint8, error) {
+func Rows(payload []byte, flags uint8, cols int) ([][]uint8, error) {
 	if len(payload) > MaxPayload {
 		return nil, ErrTooLong
 	}
@@ -89,13 +107,9 @@ func Rows(payload []byte, hello bool, cols int) ([][]uint8, error) {
 		return nil, errors.New("cols out of range")
 	}
 	dataRows := max(1, (len(payload)*8+cols-1)/cols)
-	flags := uint8(0)
-	if hello {
-		flags = flagHello
-	}
 	pc := crc16(payload)
 	n := len(payload)
-	header := []byte{Version<<4 | flags, byte(cols >> 8), byte(cols), byte(dataRows),
+	header := []byte{Version<<4 | flags&0x0F, byte(cols >> 8), byte(cols), byte(dataRows),
 		byte(n >> 8), byte(n), byte(pc >> 8), byte(pc)}
 
 	row0 := append([]uint8{}, syncPattern[:]...)
@@ -237,7 +251,16 @@ func (g grid) decode() (Message, bool) {
 	if !ok || crc16(payload) != uint16(h[6])<<8|uint16(h[7]) {
 		return Message{}, false
 	}
-	return Message{Hello: h[0]&flagHello != 0, Payload: payload}, true
+	// The backing is (rows+2) blocks tall: the header row, the data rows and
+	// one block of border.
+	strip := int(math.Ceil(g.y0-float64(g.l.bounds.Min.Y)+float64(rows+2)*g.b)) + 2
+	strip = min(strip, g.l.bounds.Dy())
+	return Message{
+		Hello:   h[0]&FlagHello != 0,
+		Attach:  h[0]&FlagImage != 0,
+		Payload: payload,
+		Strip:   strip,
+	}, true
 }
 
 // blockSizes is the search order: the sizes the addon draws, then a
@@ -275,16 +298,41 @@ func Decode(img image.Image) (Message, bool) {
 
 // DecodeFile opens and decodes a screenshot. err is set when the image
 // itself can't be read (for example, still being written).
-func DecodeFile(path string) (Message, bool, error) {
+func DecodeFile(path string) (Result, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return Message{}, false, err
+		return Result{}, false, err
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return Message{}, false, err
+		return Result{}, false, err
 	}
 	m, ok := Decode(img)
-	return m, ok, nil
+	return Result{Message: m, Image: img}, ok, nil
+}
+
+// Crop returns img without its top rows (the grid). top is clamped to the
+// image, so the result may be empty but never panics.
+func Crop(img image.Image, top int) image.Image {
+	b := img.Bounds()
+	top = max(0, min(top, b.Dy()))
+	r := image.Rect(b.Min.X, b.Min.Y+top, b.Max.X, b.Max.Y)
+	if s, ok := img.(interface {
+		SubImage(image.Rectangle) image.Image
+	}); ok {
+		return s.SubImage(r)
+	}
+	out := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
+	draw.Draw(out, out.Bounds(), img, r.Min, draw.Src)
+	return out
+}
+
+// JPEG encodes img at JPEGQuality.
+func JPEG(img image.Image) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: JPEGQuality}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

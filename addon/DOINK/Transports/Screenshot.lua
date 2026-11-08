@@ -18,7 +18,7 @@ local SYNC = "1010101010110011" -- row 0 starts with this; the reader finds it
 local MIN_COLS, MAX_COLS = 256, 1200
 local MAX_ROWS = 32             -- data rows
 local MAX_PAYLOAD = 1024        -- bytes; fits MAX_ROWS rows at MIN_COLS
-local FLAG_HELLO = 1
+local FLAG_HELLO, FLAG_IMAGE = 1, 2
 local QUEUE_MAX = 8
 local SPACING = 1.1   -- seconds between shots: file names have 1 s resolution
 local TIMEOUT = 3     -- seconds to wait for SCREENSHOT_SUCCEEDED/FAILED
@@ -70,13 +70,14 @@ end
 -- The grid as rows of 0/1, cols wide: row 0 is the sync and header, rows
 -- 1..R the payload. nil if the payload is too long for one screenshot.
 -- Header, MSB first: version(4) flags(4) cols(16) rows(8) payload_len(16)
--- payload_crc16(16) header_crc8(8).
-function Shot.Encode(payload, hello, cols)
+-- payload_crc16(16) header_crc8(8). flags: FLAG_HELLO (1), FLAG_IMAGE (2:
+-- the companion may attach the screenshot to the Discord post).
+function Shot.Encode(payload, flags, cols)
   if #payload > MAX_PAYLOAD then return nil end
   local dataRows = math.max(1, math.ceil(#payload * 8 / cols))
   local pc = crc16(payload)
   local header = string.char(
-    lshift(VERSION, 4) + (hello and FLAG_HELLO or 0),
+    lshift(VERSION, 4) + band(flags or 0, 0x0F),
     band(rshift(cols, 8), 0xFF), band(cols, 0xFF),
     dataRows,
     band(rshift(#payload, 8), 0xFF), band(#payload, 0xFF),
@@ -311,7 +312,7 @@ end
 
 ------------------------------------------------------------------ API
 
-local function Queue(payload, hello)
+local function Queue(payload, flags)
   if not Settings().enabled then return false end
   if #payload > MAX_PAYLOAD then
     ns:Debug("screenshot: message too long (%d bytes, max %d); it posts at /reload instead",
@@ -319,7 +320,7 @@ local function Queue(payload, hello)
     return false
   end
   Start() -- sets COLS from the screen width
-  local rows = Shot.Encode(payload, hello, COLS)
+  local rows = Shot.Encode(payload, flags, COLS)
   if #queue >= QUEUE_MAX then
     -- Never drop the one being shot.
     table.remove(queue, state == "idle" and 1 or 2)
@@ -330,7 +331,7 @@ end
 
 -- Transport entry point: Core passes (json, envelope); the JSON is sent.
 function Shot.Send(json, envelope)
-  Queue(json, false)
+  Queue(json, Settings().image and FLAG_IMAGE or 0)
 end
 
 -- /doink realtime test: one screenshot the companion answers with a
@@ -344,7 +345,7 @@ function Shot.Test()
     surname = ns.player.surname,
     realm = ns.player.realm,
     test = true,
-  }), true)
+  }), FLAG_HELLO)
 end
 
 function Shot.SetEnabled(on)
