@@ -234,6 +234,7 @@ local OLD_KEY, NEW_KEY = "Flano-Classic Beta PvE 2", "Flano Wren-Classic Beta Pv
 local OLD_HOOK = "https://discord.com/api/webhooks/9/old"
 DOINKDB = {
   version = 1,
+  realtime = { enabled = false }, -- a v0.16 table: no `image` key yet
   webhooks = { [OLD_KEY] = OLD_HOOK },
   chars = {
     [OLD_KEY] = {
@@ -781,6 +782,7 @@ end
 
 test("realtime: off by default and creates nothing until enabled", function()
   eq(DOINKDB.realtime.enabled, false, "default")
+  eq(DOINKDB.realtime.image, false, "image default, added to an older realtime table")
   slash("test levelup")
   eq(T.grid(), nil, "no grid while off")
   eq(T.driver(), nil, "no driver while off")
@@ -933,6 +935,29 @@ test("realtime: unreadable screenshot settings are swapped for the shot and put 
   eq(cvars.screenshotFormat, "tga", "restored at login")
   eq(DOINKDB.realtime.restore, nil, "cleared")
   cvars.screenshotFormat, cvars.screenshotQuality = "jpeg", "3"
+end)
+
+test("realtime: image on sets flag bit 1 on events, never on hellos", function()
+  now = now + 10
+  slash("realtime image on")
+  eq(DOINKDB.realtime.image, true, "on")
+  assert(slash("realtime"):find("image on", 1, true), "status")
+  slash("test levelup")
+  eq(field(T.queue()[1].rows[1], 20, 4), 2, "event carries the image flag")
+  drainShots()
+  now = now + 10
+  slash("realtime test")
+  eq(field(T.queue()[1].rows[1], 20, 4), 1, "hello has only the hello flag")
+  drainShots()
+  now = now + 10
+  slash("realtime image off")
+  eq(DOINKDB.realtime.image, false, "off")
+  assert(slash("realtime"):find("image off", 1, true), "status")
+  slash("test levelup")
+  eq(field(T.queue()[1].rows[1], 20, 4), 0, "no flag when off")
+  drainShots()
+  assert(slash("realtime image"):find("realtime image: off", 1, true), "prints the state")
+  eq(DOINKDB.realtime.image, false, "asking changes nothing")
 end)
 
 test("realtime: a hello for /doink realtime test", function()
@@ -1181,10 +1206,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 10 + 7 + 1, "announce 7+3, discord 10+7, realtime 1")
+  eq(#settings.controls, 7 + 3 + 10 + 7 + 2, "announce 7+3, discord 10+7, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 22, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 23, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")
@@ -1224,6 +1249,18 @@ test("options: the realtime checkbox turns the screenshot transport on and off",
   assert(T.driver(), "transport started")
   rt.set(false)
   eq(DOINKDB.realtime.enabled, false, "disabled")
+end)
+
+test("options: the image checkbox follows /doink realtime image", function()
+  local img = control("realtime_image")
+  eq(img.get(), false, "off by default")
+  img.set(true)
+  eq(DOINKDB.realtime.image, true, "on")
+  img.set(false)
+  eq(DOINKDB.realtime.image, false, "off")
+  slash("realtime image on")
+  eq(img.get(), true, "slash command shows in the checkbox")
+  slash("realtime image off")
 end)
 
 test("options: /doink config opens the page", function()

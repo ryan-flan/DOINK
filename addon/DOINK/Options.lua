@@ -150,6 +150,13 @@ local function Realtime(layout)
       .. "companion (v0.14 or later) reads it, posts the event within a few seconds and deletes "
       .. "the screenshot. You'll see \"Screen captured\" each time. Without the companion, those "
       .. "screenshots stay in your Screenshots folder. Same as /doink realtime on." }
+
+  Checkbox { variable = "realtime_image", name = "Attach the screenshot to instant posts", default = false,
+    get = function() return DOINKDB.realtime.image end,
+    set = function(on) shot.SetImage(on) end,
+    tooltip = "The companion (v0.17 or later) posts the screenshot with the event, with the code strip cropped "
+      .. "off. It shows your whole screen, chat frames included, to everyone who can read the Discord "
+      .. "channel. Needs instant posting. Same as /doink realtime image on." }
 end
 
 ------------------------------------------------------------------ API

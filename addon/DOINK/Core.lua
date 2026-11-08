@@ -129,6 +129,8 @@ local function InitDB()
   db.webhooks = db.webhooks or {} -- ["*"] = account-wide, ["Name-Realm"] = per char
   -- Realtime (screenshot transport) is opt-in; see Transports/Screenshot.lua.
   db.realtime = db.realtime or { enabled = false }
+  -- v0.17.0: let the companion attach each screenshot to the Discord post.
+  if db.realtime.image == nil then db.realtime.image = false end
   -- v0.14.0: the pixel strip's corner and block size are gone.
   db.realtime.position, db.realtime.block = nil, nil
   -- Future migrations go here:
@@ -349,7 +351,7 @@ local HELP = {
   "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on (types: level_up, loot, death, quest, boss_kill, skill_up, mount, duel, battleground)",
   "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
-  "/doink realtime on|off|test - post to Discord instantly via screenshots (needs the companion)",
+  "/doink realtime on|off|test|image on|off - post to Discord instantly via screenshots (needs the companion)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
   "/doink debug - toggle verbose logging",
@@ -644,11 +646,26 @@ commands.realtime = function(args)
     shot.Test()
     ns:Print("taking a test screenshot; the companion should say \"Realtime works\" "
       .. "within a few seconds")
+  elseif sub == "image" then
+    local word = args:match("^%S+%s+(%S+)")
+    local value = word and ParseValue(false, word)
+    if value == nil then
+      ns:Print("realtime image: %s", FormatValue("image", DOINKDB.realtime.image))
+      if word then ns:Print("usage: /doink realtime image on|off") end
+      return
+    end
+    shot.SetImage(value)
+    if value then
+      ns:Print("realtime image on: the companion (v0.17+) attaches each screenshot to the "
+        .. "Discord post. It shows everything on your screen, chat included.")
+    else
+      ns:Print("realtime image off")
+    end
   elseif sub == "position" or sub == "block" then
     ns:Print("no longer needed: realtime uses screenshots now")
   else
     ns:Print("realtime: %s", shot.Status())
-    ns:Print("usage: /doink realtime on|off|test")
+    ns:Print("usage: /doink realtime on|off|test|image on|off")
   end
 end
 

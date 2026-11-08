@@ -348,6 +348,13 @@ function Shot.Test()
   }), FLAG_HELLO)
 end
 
+-- Whether the companion may attach the screenshot to the Discord post
+-- (flag bit 1 on each event's grid). Off by default: the shot shows the
+-- whole screen, chat frames included.
+function Shot.SetImage(on)
+  Settings().image = on and true or false
+end
+
 function Shot.SetEnabled(on)
   Settings().enabled = on
   if on then Start() else Stop() end
@@ -364,7 +371,7 @@ function Shot.Status()
   if not Settings().enabled then
     return lastResult == "blocked" and "off (blocked by the client)" or "off"
   end
-  local text = ("on, %d queued"):format(#queue)
+  local text = ("on, %d queued, image %s"):format(#queue, Settings().image and "on" or "off")
   if lastResult then text = text .. ", last shot " .. lastResult end
   return text
 end
