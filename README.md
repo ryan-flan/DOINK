@@ -142,6 +142,7 @@ realtime state, and which event types are enabled.
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
 | `/doink realtime on` / `off` / `test` | Only for the Discord companion: post each event within seconds instead of at the next reload (see [Instant posts](#instant-posts-realtime)) |
+| `/doink realtime image on` / `off` | With instant posts: also attach the screenshot to the Discord post (off by default; see [Instant posts](#instant-posts-realtime)) |
 
 Settings are per character and take effect immediately, whether changed on
 the settings page or by command; the two are the same settings.
@@ -321,6 +322,19 @@ fights, say), DOINK turns realtime off by itself and tells you; events then
 post at the next reload as usual. `realtime = false` in `config.toml` stops
 the companion reading screenshots.
 
+**Attaching the screenshot (optional, off by default).** With
+`/doink realtime image on` (or **Attach the screenshot to instant posts**
+on the settings page), the companion also posts the screenshot itself with
+the event, as the embed's picture, so Discord shows the moment of the
+death, the drop or the level-up. The code strip is cropped off first and
+the picture is re-encoded as a JPEG; if it still comes out over 8 MB, or
+Discord refuses it, the event is posted without it. Needs companion v0.17
+or later (an older companion ignores this setting and posts text only).
+
+Think before turning it on: the picture is your whole screen, **chat
+frames included** (whispers, guild chat), and everyone who can read the
+Discord channel sees it. Nothing is uploaded unless you turn this on.
+
 ### On Linux
 
 Download `DOINK-<version>-linux-amd64.tar.gz` from the release marked
@@ -404,7 +418,8 @@ newest 10 queued events.
   the Linux build logs to the terminal instead). The one exception: the
   settings window's WebView2 keeps its browser data in
   `%LOCALAPPDATA%\DOINK\WebView2`, created the first time you open it.
-- **Network:** HTTPS posts to your Discord webhook; one small HTTPS request
+- **Network:** HTTPS posts to your Discord webhook (with a screenshot
+  attached only if you turned on `/doink realtime image on`); one small HTTPS request
   to Wowhead per looted item (its id only) for the loot embed's icon and
   tooltip (`wowhead = false` in `config.toml` turns that off); and once a
   day one HTTPS request to GitHub for its list of recent releases, to learn
@@ -418,8 +433,10 @@ newest 10 queued events.
 - **Start with Windows** adds one per-user registry value,
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DOINK`. No admin
   rights. Untick it in the tray menu, or in Task Manager → Startup apps.
-- **Screen:** it never looks at or captures your screen; realtime works
-  through the screenshots the addon itself takes.
+- **Screen:** it never captures your screen; realtime works through the
+  screenshots the addon itself takes. It uploads one of them to Discord
+  only if you turned on `/doink realtime image on`; otherwise it only
+  reads the code in the corner and deletes the file.
 - **Uninstall:** untick Start with Windows, quit, delete the folder (and
   `%LOCALAPPDATA%\DOINK` if you opened the settings window).
 
@@ -476,7 +493,8 @@ Everything is kept in one saved variable, `DOINKDB`, written by the game to
   last 500 events as JSON text (type, time, character, realm, class, level,
   and event details such as item id and name). This buffer exists for the
   optional companion; the addon itself never reads it back.
-- Account-wide: the debug flag, whether realtime is on (off by default;
+- Account-wide: the debug flag, whether realtime is on and whether its
+  screenshots may be attached to the Discord post (both off by default;
   while a screenshot is being taken, also your screenshot format if DOINK
   had to switch it, so it can be put back), and any Discord webhook URL you set with `/doink webhook`. If you never set
   one, nothing is stored there.

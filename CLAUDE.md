@@ -292,7 +292,8 @@ tests/test_addon.lua`.
 - **Message** = the event's JSON exactly as queued, or a hello
   `{"type":"hello","addon":..,"char":..,"surname":..,"realm":..,"test":true}`
   (flag bit 0) from `/doink realtime test` only; no hello at login (each
-  costs a screenshot and a "Screen captured").
+  costs a screenshot and a "Screen captured"). An event carries flag
+  bit 1 when `DOINKDB.realtime.image` is on; a hello never does.
 - **State machine**: queue max 8 (drop the oldest not being shot). idle →
   (queue non-empty, ≥ 1.1 s since the last shot because file names have 1 s
   resolution, `UIParent:IsVisible()`) paint + show + `Screenshot()` in
@@ -319,14 +320,25 @@ tests/test_addon.lua`.
   notice "Realtime works for <name>", file deleted. Event → if not
   `IsPending` delete; else `PostEvents(..., MaxBacklog)` and delete on
   success; on failure keep the file (the SavedVariables path posts it
-  later). Dry run deletes nothing. Webhooks: the in-game ones from that
+  later). Dry run deletes nothing. With flag bit 1 (`Message.Attach`) the
+  image is cropped (`Message.Strip` rows from the top: the grid's backing
+  plus 2 px, clamped), re-encoded as JPEG q85 and sent as `doink.jpg`
+  with `"image": {"url": "attachment://doink.jpg"}` on the first embed
+  (`Sender.SendWithImage`, multipart `payload_json` + `files[0]`, 90 s
+  upload timeout). Over `shotImageMax` (8 MB) or nothing left after the
+  crop → text only. Discord answering 400/413 to an upload → one retry
+  without it (`Pool`, so there is no dangling `attachment://`). Hello
+  never carries an image. Webhooks: the in-game ones from that
   flavor's SavedVariables files, then config.
 - **Dedupe**: `state.json`'s `missing` (seqs below `last_seen` not yet
   posted) lets realtime posts run ahead of the file; the file pass posts
   `seq > last_seen or seq in missing`. Unchanged from the pixel era.
-- **Opt-in in game only**: `DOINKDB.realtime.enabled` (default false); the
-  companion's `realtime` defaults to true (it only acts on DOINK's own
-  screenshots), `realtime = false` turns reading off.
+- **Opt-in in game only**: `DOINKDB.realtime.enabled` (default false) and
+  `DOINKDB.realtime.image` (default false; `/doink realtime image on|off`,
+  Settings checkbox; the screenshot shows chat frames, so it's separate).
+  The companion has no key for the image: it follows flag bit 1. Its
+  `realtime` defaults to true (it only acts on DOINK's own screenshots),
+  `realtime = false` turns reading off.
 - `doink decode <image>...` prints what a screenshot's grid says; changes
   nothing.
 
@@ -417,7 +429,7 @@ tests/test_addon.lua`.
   embeds per message (Discord's limit); one `Pool` entry per webhook URL,
   each with at least 2 s between messages (longer if
   `X-RateLimit-Remaining` is 0); 429 `retry_after` is respected (1 s if the
-  body isn't JSON), 5 attempts. HTTP 400 is `discord.ErrRejected`: the
+  body isn't JSON), 5 attempts. HTTP 400 and 413 are `discord.ErrRejected`: the
   message itself is wrong, so `PostEvents` logs it, marks the batch posted
   and moves on (retrying would block every later event of that character
   behind it); every other failure is retried with back-off. Titles,
@@ -991,6 +1003,8 @@ fixture included; that's a stand-in for the real name, by decision.)
 - **v0.13.0:** companion settings window (WebView2). **v0.14.0:** realtime
   via screenshots replaces the pixel strip (see "Screenshot transport
   contract"); `doink decode`.
+- **v0.17.0:** optional screenshot attachments on instant posts
+  (`/doink realtime image on`, flag bit 1, `Sender.SendWithImage`).
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements;
   new PvP ranks and legacy points (user request, 2026-11-02; the events and
