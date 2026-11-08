@@ -2,6 +2,10 @@ package runner
 
 import (
 	"bytes"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -322,5 +326,115 @@ func TestScreenshotDirs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(byDir[want[0]], []string{a, b}) {
 		t.Errorf("byDir %v", byDir)
+	}
+}
+
+// screenOf is a 1920x1080 grey screenshot with the grid drawn at the top
+// left, so there is picture left once the grid is cropped off.
+func screenOf(t *testing.T, payload string, flags uint8) []byte {
+	t.Helper()
+	rows, err := shot.Rows([]byte(payload), flags, 959)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.Gray{Y: 90}), image.Point{}, draw.Src)
+	grid := shot.Render(rows, 2) // as the addon draws it: 959 columns fit 1920 px
+	draw.Draw(img, grid.Bounds(), grid, image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestShotAttachesTheScreenshotWhenAsked(t *testing.T) {
+	sf := newShotFixture(t)
+	path := sf.write("WoWScrnShot_110226_230648.png", screenOf(t, eventJSON(5), shot.FlagImage))
+	sf.scan(sf.state())
+	if len(sf.sender.images) != 1 || sf.sender.images[0] == nil {
+		t.Fatalf("images %v", sf.sender.images)
+	}
+	img := sf.sender.images[0]
+	if img.Name != "doink.jpg" || img.Mime != "image/jpeg" {
+		t.Errorf("attachment %q %q", img.Name, img.Mime)
+	}
+	got, err := jpeg.Decode(bytes.NewReader(img.Data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The grid and its backing are a few rows; the rest of the 1080 is picture.
+	if sz := got.Bounds().Size(); sz.X != 1920 || sz.Y >= 1080 || sz.Y < 1080-60 {
+		t.Errorf("posted picture is %v, want 1920 wide and a few rows shorter than 1080", sz)
+	}
+	if !sf.logs.has("INFO", "posted #5 level_up with screenshot") {
+		t.Errorf("logs %v", sf.logs.recs)
+	}
+	if exists(path) {
+		t.Error("screenshot not deleted")
+	}
+}
+
+func TestShotWithoutTheFlagSendsNoImage(t *testing.T) {
+	sf := newShotFixture(t)
+	sf.write("WoWScrnShot_110226_230648.png", screenOf(t, eventJSON(5), 0))
+	sf.scan(sf.state())
+	if len(sf.sender.images) != 1 || sf.sender.images[0] != nil {
+		t.Errorf("images %v, want one nil", sf.sender.images)
+	}
+	if sf.logs.has("INFO", "with screenshot") {
+		t.Error("logged a screenshot")
+	}
+}
+
+func TestShotOversizeImageIsDropped(t *testing.T) {
+	old := shotImageMax
+	shotImageMax = 1
+	t.Cleanup(func() { shotImageMax = old })
+	sf := newShotFixture(t)
+	path := sf.write("WoWScrnShot_110226_230648.png", screenOf(t, eventJSON(5), shot.FlagImage))
+	sf.scan(sf.state())
+	if len(sf.sender.images) != 1 || sf.sender.images[0] != nil {
+		t.Errorf("images %v, want one nil", sf.sender.images)
+	}
+	if !sf.logs.has("INFO", "too big for Discord") {
+		t.Errorf("logs %v", sf.logs.recs)
+	}
+	if exists(path) {
+		t.Error("the event posted, so the file should be deleted")
+	}
+}
+
+func TestShotNothingLeftAfterCroppingPostsTextOnly(t *testing.T) {
+	sf := newShotFixture(t)
+	// pngOf is the grid alone: cropping it leaves nothing.
+	sf.write("WoWScrnShot_110226_230648.png", pngOf(t, eventJSON(5), shot.FlagImage))
+	sf.scan(sf.state())
+	if len(sf.sender.images) != 1 || sf.sender.images[0] != nil {
+		t.Errorf("images %v, want one nil", sf.sender.images)
+	}
+}
+
+func TestShotDryRunWithImage(t *testing.T) {
+	sf := newShotFixture(t)
+	sf.cfg.DryRun = true
+	path := sf.write("WoWScrnShot_110226_230648.png", screenOf(t, eventJSON(5), shot.FlagImage))
+	s, _ := state.Load(sf.cfg.StatePath, false)
+	sf.scan(s)
+	if len(sf.sender.images) != 1 || sf.sender.images[0] == nil {
+		t.Errorf("images %v", sf.sender.images)
+	}
+	if !exists(path) || !sf.logs.has("INFO", "printed #5 level_up with screenshot") {
+		t.Errorf("exists %v, logs %v", exists(path), sf.logs.recs)
+	}
+}
+
+func TestShotHelloNeverCarriesAnImage(t *testing.T) {
+	sf := newShotFixture(t)
+	path := sf.write("WoWScrnShot_110226_230648.png",
+		screenOf(t, `{"addon":"0.17.0","char":"Flano","realm":"R","test":true,"type":"hello"}`, shot.FlagHello|shot.FlagImage))
+	sf.scan(sf.state())
+	if len(sf.sender.sent) != 0 || len(sf.sender.images) != 0 || exists(path) {
+		t.Errorf("sent %d, images %d, exists %v", len(sf.sender.sent), len(sf.sender.images), exists(path))
 	}
 }

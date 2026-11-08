@@ -14,6 +14,10 @@ type recorder struct {
 	embeds [][]discord.Embed
 }
 
+func (r *recorder) SendWithImage(url string, embeds []discord.Embed, _ *discord.Attachment) error {
+	return r.Send(url, embeds)
+}
+
 func (r *recorder) Send(url string, embeds []discord.Embed) error {
 	r.urls = append(r.urls, url)
 	r.embeds = append(r.embeds, embeds)

@@ -84,8 +84,9 @@ func item(d Deps, e savedvars.Event) *wowhead.Item {
 // PostEvents posts events (one character, ascending seq) and records each
 // one. It returns ErrNoWebhook when there is no usable webhook, else the
 // post error; state is saved after each message, so a retry resumes
-// cleanly.
-func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int) error {
+// cleanly. img, when set, is attached to the message and shown on its first
+// embed: realtime posts one event at a time, so it belongs to that event.
+func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int, img *discord.Attachment) error {
 	url := WebhookFor(key, gameHooks, d.Config)
 	if len(events) > 0 && !d.Config.DryRun {
 		who := events[len(events)-1].FullName()
@@ -117,7 +118,7 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 		for _, e := range batch {
 			names = append(names, fmt.Sprintf("#%d %s", e.Seq, e.Type))
 		}
-		err := d.Sender.Send(url, embeds)
+		err := d.Sender.SendWithImage(url, embeds, img)
 		switch {
 		case errors.Is(err, discord.ErrRejected):
 			// The message itself is wrong; retrying would block every
@@ -129,7 +130,11 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 			d.Status.Failed(fmt.Sprintf("posting to Discord failed: %v", err))
 			return err
 		default:
-			d.Log.Info(fmt.Sprintf("%s: %s %s", key, verb, strings.Join(names, ", ")))
+			with := ""
+			if img != nil {
+				with = " with screenshot"
+			}
+			d.Log.Info(fmt.Sprintf("%s: %s %s%s", key, verb, strings.Join(names, ", "), with))
 		}
 		for _, e := range batch {
 			if err == nil {
@@ -199,7 +204,7 @@ func Process(d Deps, path string) error {
 			}
 		}
 
-		if err := PostEvents(d, key, fresh, gameHooks, 0); err != nil {
+		if err := PostEvents(d, key, fresh, gameHooks, 0, nil); err != nil {
 			if result == nil || errors.Is(result, ErrNoWebhook) {
 				result = err // a retryable failure outranks waiting
 			}

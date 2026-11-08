@@ -33,8 +33,10 @@ const (
 type fakeSender struct {
 	mu   sync.Mutex
 	sent [][]discord.Embed
-	urls []string
-	fail bool
+	// images[i] is the attachment of sent[i] (nil for a plain Send).
+	images []*discord.Attachment
+	urls   []string
+	fail   bool
 	// rejectNext: this many sends answer as Discord does to a bad embed.
 	rejectNext int
 }
@@ -54,6 +56,16 @@ func (f *fakeSender) Send(url string, embeds []discord.Embed) error {
 	return nil
 }
 
+func (f *fakeSender) SendWithImage(url string, embeds []discord.Embed, img *discord.Attachment) error {
+	if err := f.Send(url, embeds); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.images = append(f.images, img)
+	return nil
+}
+
 func (f *fakeSender) titles() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -69,7 +81,7 @@ func (f *fakeSender) titles() []string {
 func (f *fakeSender) reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.sent, f.urls = nil, nil
+	f.sent, f.urls, f.images = nil, nil, nil
 }
 
 type capture struct {
@@ -372,7 +384,7 @@ func TestPostedAheadOfTheFileIsNotAReset(t *testing.T) {
 	f := newFixture(t)
 	s := f.state()
 	f.run(eventsFile(span(12, 21)...), s)
-	PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(22)}, nil, 10)
+	PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(22)}, nil, 10, nil)
 	f.sender.reset()
 	ok, _ := f.run(eventsFile(span(12, 21)...), s) // same file
 	if !ok || len(f.sender.sent) != 0 {
@@ -402,7 +414,7 @@ func TestStateWithoutFileSeenLearnsIt(t *testing.T) {
 func TestPostAheadThenFileFillsTheGapsOnly(t *testing.T) {
 	f := newFixture(t)
 	s := f.state()
-	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 10) != nil {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 10, nil) != nil {
 		t.Fatal("post failed")
 	}
 	if got := s.Missing("Flano-R"); !reflect.DeepEqual(got, []int{1, 2}) {
@@ -439,7 +451,7 @@ func TestLootLooksUpWowhead(t *testing.T) {
 	})
 	loot := savedvars.Event{Char: "Flano", Realm: "R", Seq: 1, Type: "loot", Data: map[string]any{"item_id": 6314.0}}
 	odd := savedvars.Event{Char: "Flano", Realm: "R", Seq: 2, Type: "loot", Data: map[string]any{"item_id": "6314"}}
-	PostEvents(d, "Flano-R", []savedvars.Event{loot, odd, event(3)}, nil, 0)
+	PostEvents(d, "Flano-R", []savedvars.Event{loot, odd, event(3)}, nil, 0, nil)
 	if !reflect.DeepEqual(asked, []int{6314}) {
 		t.Errorf("asked %v", asked)
 	}
@@ -461,7 +473,7 @@ func TestMountLooksUpWowhead(t *testing.T) {
 		Data: map[string]any{"name": "Gray Wolf", "item_id": 5656.0}}
 	bySpell := savedvars.Event{Char: "Flano", Realm: "R", Seq: 2, Type: "mount",
 		Data: map[string]any{"name": "Raptor", "item_id": nil, "spell_id": 24242.0}}
-	PostEvents(d, "Flano-R", []savedvars.Event{byItem, bySpell}, nil, 0)
+	PostEvents(d, "Flano-R", []savedvars.Event{byItem, bySpell}, nil, 0, nil)
 	if !reflect.DeepEqual(asked, []int{5656}) {
 		t.Errorf("asked %v", asked)
 	}
@@ -502,7 +514,7 @@ func TestPostEventsSkipsRejected(t *testing.T) {
 	f := newFixture(t)
 	s := f.state()
 	f.sender.rejectNext = 1
-	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(1), event(2)}, nil, 0) != nil {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(1), event(2)}, nil, 0, nil) != nil {
 		t.Fatal("a rejected batch must count as handled, not retried")
 	}
 	if s.IsPending("Flano-R", 1) || s.IsPending("Flano-R", 2) || len(f.sender.titles()) != 0 {
@@ -512,12 +524,12 @@ func TestPostEventsSkipsRejected(t *testing.T) {
 		t.Errorf("logs %v status %q", f.logs.recs, f.status.Error())
 	}
 	// The next one posts as usual and clears the problem.
-	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 0) != nil || len(f.sender.titles()) != 1 || f.status.Error() != "" {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(3)}, nil, 0, nil) != nil || len(f.sender.titles()) != 1 || f.status.Error() != "" {
 		t.Errorf("sent %v status %q", f.sender.titles(), f.status.Error())
 	}
 	// Anything else is still retried.
 	f.sender.fail = true
-	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(4)}, nil, 0) == nil || !s.IsPending("Flano-R", 4) {
+	if PostEvents(f.deps(s), "Flano-R", []savedvars.Event{event(4)}, nil, 0, nil) == nil || !s.IsPending("Flano-R", 4) {
 		t.Error("a network failure must be retried")
 	}
 }

@@ -244,3 +244,191 @@ func TestDryRunMakesNoRequest(t *testing.T) {
 		t.Errorf("log %q", out)
 	}
 }
+
+var photo = &Attachment{Name: "doink.jpg", Data: []byte("\xff\xd8not really a jpeg"), Mime: "image/jpeg"}
+
+// recorded is what a test webhook saw of one request.
+type recorded struct {
+	ctype    string
+	payload  map[string]any
+	filename string
+	fileType string
+	file     []byte
+}
+
+// recordingServer answers each request from responses (the last repeats)
+// and records what it was sent, JSON or multipart.
+func recordingServer(t *testing.T, responses ...func(w http.ResponseWriter)) (*httptest.Server, *[]recorded) {
+	t.Helper()
+	var got []recorded
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := recorded{ctype: r.Header.Get("Content-Type")}
+		if strings.HasPrefix(rec.ctype, "multipart/form-data") {
+			if err := r.ParseMultipartForm(32 << 20); err != nil {
+				t.Errorf("parse multipart: %v", err)
+			}
+			if err := json.Unmarshal([]byte(r.MultipartForm.Value["payload_json"][0]), &rec.payload); err != nil {
+				t.Errorf("payload_json: %v", err)
+			}
+			if fh := r.MultipartForm.File["files[0]"]; len(fh) == 1 {
+				rec.filename, rec.fileType = fh[0].Filename, fh[0].Header.Get("Content-Type")
+				f, _ := fh[0].Open()
+				rec.file, _ = io.ReadAll(f)
+				f.Close()
+			}
+		} else {
+			_ = json.NewDecoder(r.Body).Decode(&rec.payload)
+		}
+		i := min(len(got), len(responses)-1)
+		got = append(got, rec)
+		responses[i](w)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &got
+}
+
+func status(code int) func(w http.ResponseWriter) {
+	return func(w http.ResponseWriter) { w.WriteHeader(code) }
+}
+
+func firstEmbed(t *testing.T, payload map[string]any) map[string]any {
+	t.Helper()
+	list, _ := payload["embeds"].([]any)
+	if len(list) == 0 {
+		t.Fatalf("no embeds in %v", payload)
+	}
+	return list[0].(map[string]any)
+}
+
+func TestSendWithImageMultipart(t *testing.T) {
+	srv, got := recordingServer(t, ok)
+	p, clock := testPool(t, false, nil)
+	in := []Embed{{"title": "x"}, {"title": "y"}}
+	if err := p.SendWithImage(srv.URL, in, photo); err != nil {
+		t.Fatal(err)
+	}
+	if len(*got) != 1 {
+		t.Fatalf("%d requests", len(*got))
+	}
+	r := (*got)[0]
+	if !strings.HasPrefix(r.ctype, "multipart/form-data; boundary=") {
+		t.Errorf("content type %q", r.ctype)
+	}
+	img, _ := firstEmbed(t, r.payload)["image"].(map[string]any)
+	if img["url"] != "attachment://doink.jpg" {
+		t.Errorf("embed image %v", img)
+	}
+	atts, _ := r.payload["attachments"].([]any)
+	if len(atts) != 1 || atts[0].(map[string]any)["filename"] != "doink.jpg" {
+		t.Errorf("attachments %v", r.payload["attachments"])
+	}
+	if r.filename != "doink.jpg" || r.fileType != "image/jpeg" || !bytes.Equal(r.file, photo.Data) {
+		t.Errorf("file %q %q %q", r.filename, r.fileType, r.file)
+	}
+	if second := r.payload["embeds"].([]any)[1].(map[string]any); second["image"] != nil {
+		t.Errorf("second embed got an image: %v", second)
+	}
+	if _, set := in[0]["image"]; set {
+		t.Error("the caller's embed was modified")
+	}
+	if next := p.hook(srv.URL).next.Sub(clock.now()); next != 2*time.Second {
+		t.Errorf("next post in %v, want 2s", next)
+	}
+}
+
+func TestSendWithImageNilIsPlainJSON(t *testing.T) {
+	srv, got := recordingServer(t, ok)
+	p, _ := testPool(t, false, nil)
+	if err := p.SendWithImage(srv.URL, embeds, nil); err != nil {
+		t.Fatal(err)
+	}
+	r := (*got)[0]
+	if r.ctype != "application/json" || r.payload["attachments"] != nil || firstEmbed(t, r.payload)["image"] != nil {
+		t.Errorf("%q %v", r.ctype, r.payload)
+	}
+}
+
+func TestSendWithImageFallsBackWhenRejected(t *testing.T) {
+	for _, code := range []int{400, 413} {
+		srv, got := recordingServer(t, status(code), ok)
+		var buf bytes.Buffer
+		p, _ := testPool(t, false, slog.New(slog.NewTextHandler(&buf, nil)))
+		if err := p.SendWithImage(srv.URL, embeds, photo); err != nil {
+			t.Fatalf("%d: %v", code, err)
+		}
+		if len(*got) != 2 {
+			t.Fatalf("%d: %d requests, want 2", code, len(*got))
+		}
+		second := (*got)[1]
+		if second.ctype != "application/json" || second.payload["attachments"] != nil || firstEmbed(t, second.payload)["image"] != nil {
+			t.Errorf("%d: the retry still has the picture: %q %v", code, second.ctype, second.payload)
+		}
+		if !strings.Contains(buf.String(), "posting without it") {
+			t.Errorf("%d: log %q", code, buf.String())
+		}
+	}
+}
+
+func TestSendWithImageRejectedTwice(t *testing.T) {
+	srv, got := recordingServer(t, status(400))
+	p, _ := testPool(t, false, nil)
+	if err := p.SendWithImage(srv.URL, embeds, photo); !errors.Is(err, ErrRejected) || len(*got) != 2 {
+		t.Errorf("err %v, %d requests", err, len(*got))
+	}
+}
+
+func TestSendWithImage429ThenOK(t *testing.T) {
+	srv, got := recordingServer(t, rateLimited(`{"retry_after": 0.5}`), ok)
+	p, clock := testPool(t, false, nil)
+	if err := p.SendWithImage(srv.URL, embeds, photo); err != nil {
+		t.Fatal(err)
+	}
+	if len(*got) != 2 || !strings.HasPrefix((*got)[0].ctype, "multipart/") || !strings.HasPrefix((*got)[1].ctype, "multipart/") {
+		t.Errorf("requests %+v", *got)
+	}
+	if !bytes.Equal((*got)[1].file, photo.Data) {
+		t.Error("the retry lost the file")
+	}
+	if len(clock.sleeps) != 1 || clock.sleeps[0] != 500*time.Millisecond {
+		t.Errorf("sleeps %v", clock.sleeps)
+	}
+}
+
+func TestSendWithImageServerErrorIsNotRejected(t *testing.T) {
+	srv, got := recordingServer(t, status(502))
+	p, _ := testPool(t, false, nil)
+	if err := p.SendWithImage(srv.URL, embeds, photo); err == nil || errors.Is(err, ErrRejected) || len(*got) != 1 {
+		t.Errorf("err %v, %d requests", err, len(*got))
+	}
+}
+
+func TestSendRejectedByPayloadTooLarge(t *testing.T) {
+	srv, _ := recordingServer(t, status(413))
+	p, _ := testPool(t, false, nil)
+	if err := p.Send(srv.URL, embeds); !errors.Is(err, ErrRejected) || !strings.Contains(err.Error(), "413") {
+		t.Errorf("err %v", err)
+	}
+}
+
+func TestSendWithImageDryRun(t *testing.T) {
+	srv, got := recordingServer(t, ok)
+	var buf bytes.Buffer
+	p, _ := testPool(t, true, slog.New(slog.NewTextHandler(&buf, nil)))
+	if err := p.SendWithImage(srv.URL, embeds, photo); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if len(*got) != 0 || !strings.Contains(out, "attachment://doink.jpg") || !strings.Contains(out, "with doink.jpg (0.0 MB)") {
+		t.Errorf("requests %d, log %q", len(*got), out)
+	}
+	if strings.Contains(out, "not really a jpeg") {
+		t.Error("the log has the file's bytes")
+	}
+}
+
+func TestUploadClientKeepsALongTimeout(t *testing.T) {
+	p := NewPool(nil, false, "1", nil)
+	if p.client.Timeout != 15*time.Second || p.upload.Timeout != uploadTimeout {
+		t.Errorf("timeouts %v / %v", p.client.Timeout, p.upload.Timeout)
+	}
+}

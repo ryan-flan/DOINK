@@ -109,6 +109,23 @@ func TestDecodeScreenshots(t *testing.T) {
 	if _, err := os.Stat(withCode); err != nil {
 		t.Error("decode deleted the file")
 	}
+	if strings.Contains(text, "attach screenshot") {
+		t.Errorf("a grid without the flag says it attaches:\n%s", text)
+	}
+	// With the image flag set, decode says so.
+	rows, err = shot.Rows([]byte(payload), shot.FlagImage, 959)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	png.Encode(&buf, shot.Render(rows, 4))
+	flagged := filepath.Join(dir, "WoWScrnShot_110226_230700.png")
+	os.WriteFile(flagged, buf.Bytes(), 0o644)
+	out.Reset()
+	decodeScreenshots([]string{flagged}, &out)
+	if !strings.Contains(out.String(), "event #5 level_up Flano Wren-R (attach screenshot)") {
+		t.Errorf("flagged output:\n%s", out.String())
+	}
 	if code := decodeScreenshots([]string{filepath.Join(dir, "missing.png")}, &out); code != 1 {
 		t.Errorf("missing file: exit %d", code)
 	}

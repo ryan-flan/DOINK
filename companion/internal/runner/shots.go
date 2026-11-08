@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ryan-flan/DOINK/companion/internal/discord"
 	"github.com/ryan-flan/DOINK/companion/internal/savedvars"
 	"github.com/ryan-flan/DOINK/companion/internal/shot"
 )
@@ -28,6 +29,11 @@ const (
 	// shotRetry: an unreadable image this young is tried again next poll.
 	shotRetry = 10 * time.Second
 )
+
+// shotImageMax: a screenshot still bigger than this after cropping and
+// re-encoding is not uploaded (Discord's webhook limit is 10 MB). A var so
+// a test can lower it.
+var shotImageMax = 8 << 20
 
 var shotName = regexp.MustCompile(`(?i)^WoWScrnShot_\d{6}_\d{6}(_\d+)?\.(jpe?g|png)$`)
 
@@ -129,7 +135,7 @@ func (s *Shots) scanDir(d Deps, dir string, svPaths []string) {
 			s.hello(d, path, msg.Payload)
 			continue
 		}
-		s.event(d, path, msg.Payload, svPaths)
+		s.event(d, path, msg, svPaths)
 	}
 }
 
@@ -147,8 +153,8 @@ func (s *Shots) hello(d Deps, path string, payload []byte) {
 	s.remove(d, path)
 }
 
-func (s *Shots) event(d Deps, path string, payload []byte, svPaths []string) {
-	e, err := savedvars.DecodeEvent(payload)
+func (s *Shots) event(d Deps, path string, r shot.Result, svPaths []string) {
+	e, err := savedvars.DecodeEvent(r.Payload)
 	if err != nil {
 		d.Log.Warn(fmt.Sprintf("screenshot %s: bad event: %v", filepath.Base(path), err))
 		return
@@ -168,9 +174,35 @@ func (s *Shots) event(d Deps, path string, payload []byte, svPaths []string) {
 	}
 	// On failure the file stays; the event posts from SavedVariables after
 	// the next /reload, and the next run deletes the screenshot.
-	if PostEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog) == nil {
+	img := s.photo(d, path, r)
+	if PostEvents(d, key, []savedvars.Event{e}, hooks, d.Config.MaxBacklog, img) == nil {
 		s.remove(d, path)
 	}
+}
+
+// photo is the screenshot to post with the event, or nil: the addon didn't
+// ask for it, nothing is left after the grid is cropped off, it can't be
+// encoded, or it is too big. The event posts either way.
+func (s *Shots) photo(d Deps, path string, r shot.Result) *discord.Attachment {
+	if !r.Attach || r.Image == nil {
+		return nil
+	}
+	name := filepath.Base(path)
+	if r.Strip >= r.Image.Bounds().Dy() {
+		d.Log.Debug("screenshot " + name + ": nothing left after cropping the code; posting without it")
+		return nil
+	}
+	data, err := shot.JPEG(shot.Crop(r.Image, r.Strip))
+	if err != nil {
+		d.Log.Warn(fmt.Sprintf("screenshot %s: can't encode it for Discord: %v; posting without it", name, err))
+		return nil
+	}
+	if len(data) > shotImageMax {
+		d.Log.Info(fmt.Sprintf("screenshot %s is %.1f MB after re-encoding, too big for Discord; posting without it",
+			name, float64(len(data))/(1<<20)))
+		return nil
+	}
+	return &discord.Attachment{Name: "doink.jpg", Data: data, Mime: "image/jpeg"}
 }
 
 func (s *Shots) remove(d Deps, path string) {
