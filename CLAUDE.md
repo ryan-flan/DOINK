@@ -206,8 +206,11 @@ overrides via `ns:GetOption("announce", key)`; allowed string values in
 milestones|all|off, `loot` minimum quality any|uncommon|rare|epic|legendary|off,
 `skill_up` max|milestones|all|off, `death`/`quest`/`boss_kill`/`mount`/`duel`/`battleground`
 booleans (the last three default on).
-Defaults are deliberately stricter than the Discord queue's (milestones,
-epic+, deaths, boss kills; quests and skill-ups off): guild chat is shared.
+Since v0.18 **everything is off by default** (every notifier `enabled = false`,
+announce channel/level_up/loot `off`, booleans false), like Dink: the player
+enables each thing deliberately. Characters that existed before v0.18 keep
+their behaviour: `PinLegacyDefaults` (Core.lua) writes the old defaults into
+their `config` once (`char.optIn` marks it; new characters skip it). The filters in this file apply once enabled.
 
 - Wording is first person after the chat prefix ("Ding! Level 20.", "Looted
   <link>!", "Ragnaros down! (Molten Core, 40 players)", "Died in Westfall.").
@@ -306,7 +309,7 @@ tests/test_addon.lua`.
   `screenshotQuality` < 3 → 3, for the shot only; the old values wait in
   `DOINKDB.realtime.restore` and are put back after the shot or at the
   next login (a `/reload` mid-shot).
-- **Blocked**: `ADDON_ACTION_BLOCKED`/`ADDON_ACTION_FORBIDDEN` naming DOINK
+- **Blocked**: `ADDON_ACTION_BLOCKED`/`ADDON_ACTION_FORBIDDEN` naming DOINK and `Screenshot` (a blocked guild announcement etc. is only logged)
   turns realtime off with one chat line. The popup can't be caught with
   `pcall`, so this is the only guard if Forever or a boss encounter
   blocks `Screenshot()`.

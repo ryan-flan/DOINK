@@ -66,9 +66,9 @@ the companion: see
 
 ## Announcements
 
-Every event type, what triggers it, the exact wording, and the default rule:
+Every event type, what triggers it, the exact wording, and the rule it uses once you turn it on. **Everything is off until you enable it** (like Dink): pick a channel and the events you want in the settings page (`/doink config`) or with `/doink announce`.
 
-| Event | Triggered by | Chat line | Announced by default |
+| Event | Triggered by | Chat line | Suggested rule |
 |---|---|---|---|
 | Level-up | `PLAYER_LEVEL_UP` | `Ding! Level 20.` / `Ding! Level 60 - max level!` | Levels 10, 20, 30, 40, 50 and 60 only |
 | Loot | Your own `You receive loot:` message | `Looted [item link]!` (`x3` appended for stacks) | Epic quality or better (see below) |
@@ -80,11 +80,11 @@ Every event type, what triggers it, the exact wording, and the default rule:
 | Duel | The game's duel result message | `Won a duel against Grakkor Highmountain.` (`(they ran)` if they fled) / `Won a Mak'gora against Grakkor Highmountain.` | Yes (wins only) |
 | Battleground | The end of a battleground match | `Won Warsong Gulch!` | Yes (wins only) |
 
-The defaults are deliberately conservative because guild chat is shared.
-Each rule can be changed per character:
+Nothing is announced or recorded until you switch it on (characters that already used DOINK keep their current settings), because guild chat is
+shared. The rules below are what each setting means; change them per character:
 
-- Level-up: `milestones` (default), `all`, `off`
-- Loot: minimum quality `any`, `uncommon`, `rare`, `epic` (default), `legendary`, or `off`
+- Level-up: `milestones`, `all`, `off` (default)
+- Loot: minimum quality `any`, `uncommon`, `rare`, `epic`, `legendary`, or `off` (default)
 - Skill-up: `max` (only when a skill reaches its cap), `milestones` (75/150/225/300), `all`, `off` (default)
 - Death, boss kill, quest, mount, duel, battleground: `on` or `off`
 
@@ -94,13 +94,13 @@ settings apply to chat too. Loot: a rare is only recorded when it is Bind
 on Equip or sells for 1g or more (a soulbound blue only matters to you),
 legendaries always
 when they are a weapon or armour and never when they are a material; with
-the default `epic` rule, chat shows epics and legendaries. Duel and
+the `epic` rule, chat shows epics and legendaries. Duel and
 battleground losses are not recorded unless you turn off `wins_only`
 (`/doink set duel wins_only off`); then chat says `Lost a duel to ...` /
 `Lost Warsong Gulch.`. Boss kills can be limited to first kills with
 `/doink set boss_kill first_kill_only on`.
 
-Channels: `guild` (default), `officer`, `party`, `raid`, or `off`. If you are
+Channels: `guild`, `officer`, `party`, `raid`, or `off` (default). If you are
 not in a guild (or group) nothing is sent and `/doink` says so. Say, yell and
 public channels such as General are not offered: Blizzard only allows addons
 to send those in response to a key press.
@@ -371,7 +371,7 @@ retry.
 
 ### Notifiers (what gets recorded for Discord)
 
-These decide which events are recorded for Discord; the chat announcement
+These decide which events are recorded for Discord (all off until you enable them, e.g. `/doink enable loot`); the chat announcement
 rules above are applied on top.
 
 | Type | Posts when | Options (defaults) |
@@ -386,7 +386,7 @@ rules above are applied on top.
 | `duel` | A duel or Mak'gora ends | `wins_only` on |
 | `battleground` | A battleground match ends | `wins_only` on |
 
-Money options accept `1g50s`, `75s`, `30c` or plain copper. Quality: 0 poor,
+Money options accept `1g50s` (e.g. `/doink set loot min_vendor_value 25g`, also a slider in `/doink config` up to 100g), `75s`, `30c` or plain copper. Quality: 0 poor,
 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
 
 ### Companion settings

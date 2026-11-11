@@ -250,6 +250,19 @@ DOINKDB = {
 fire("ADDON_LOADED", "DOINK")
 fire("PLAYER_LOGIN")
 
+-- Shipped defaults: everything off. Remember them for one test, then give the
+-- suite the "everything on" rules the older tests were written against.
+local SHIPPED = {}
+for t, d in pairs(ns.Defaults) do
+  if d.enabled ~= nil then SHIPPED[t] = d.enabled end
+  if t ~= "announce" then d.enabled = true end
+end
+local SHIPPED_ANNOUNCE = {}
+for k, v in pairs(ns.Defaults.announce) do SHIPPED_ANNOUNCE[k] = v end
+local TEST_ANNOUNCE = { channel = "guild", level_up = "milestones", loot = "epic", death = true,
+  boss_kill = true, mount = true, duel = true, battleground = true }
+for k, v in pairs(TEST_ANNOUNCE) do ns.Defaults.announce[k] = v end
+
 ------------------------------------------------------------------ helpers
 
 local passed, failed = 0, 0
@@ -968,10 +981,22 @@ test("realtime: a hello for /doink realtime test", function()
   drainShots()
 end)
 
+test("defaults: everything is off until the player enables it", function()
+  for t, v in pairs(SHIPPED) do eq(v, false, t .. " enabled by default") end
+  eq(SHIPPED_ANNOUNCE.channel, "off", "announce channel")
+  for _, k in ipairs({ "death", "quest", "boss_kill", "mount", "duel", "battleground" }) do
+    eq(SHIPPED_ANNOUNCE[k], false, "announce " .. k)
+  end
+  eq(SHIPPED_ANNOUNCE.level_up, "off", "announce level_up")
+  eq(SHIPPED_ANNOUNCE.loot, "off", "announce loot")
+end)
+
 test("realtime: blocked by the client turns it off", function()
   slash("test levelup")
   fire("ADDON_ACTION_BLOCKED", "SomeOtherAddon", "Foo()")
   eq(DOINKDB.realtime.enabled, true, "another addon's block is ignored")
+  fire("ADDON_ACTION_BLOCKED", "DOINK", "SendChatMessage()")
+  eq(DOINKDB.realtime.enabled, true, "another DOINK call being blocked is ignored")
   printed = {}
   fire("ADDON_ACTION_BLOCKED", "DOINK", "Screenshot()")
   eq(DOINKDB.realtime.enabled, false, "off")
@@ -1266,6 +1291,38 @@ end)
 test("options: /doink config opens the page", function()
   slash("config")
   eq(settings.opened, 42, "opened by category id")
+end)
+
+test("upgrade: v0.17 characters keep their effective settings, new ones start off", function()
+  local key = ns.player.key
+  -- The migrated character from the top of the file.
+  local c = ns.db.chars[key].config
+  eq(c.level_up.enabled, true, "old default pinned")
+  eq(c.quest.enabled, true, "explicit value kept")
+  eq(c.announce.channel, "guild", "announce channel pinned")
+  eq(ns.db.chars[key].optIn, true, "marked")
+
+  -- A character saved by v0.17: one override, the rest implicit defaults.
+  ns.db.chars[key] = { seq = 5, events = {}, kills = {},
+    config = { death = { enabled = false }, announce = { channel = "party" } } }
+  fire("PLAYER_LOGIN")
+  c = ns.db.chars[key].config
+  eq(c.death.enabled, false, "a notifier the player turned off stays off")
+  eq(c.announce.channel, "party", "a chosen channel is not overwritten")
+  eq(c.loot.enabled, true, "implicit default pinned")
+  eq(c.announce.loot, "epic", "implicit announce rule pinned")
+  eq(ns.db.chars[key].seq, 5, "queue untouched")
+
+  -- Logging in again changes nothing, even if the player turns things off.
+  ns.db.chars[key].config.loot.enabled = false
+  fire("PLAYER_LOGIN")
+  eq(ns.db.chars[key].config.loot.enabled, false, "pinned once only")
+
+  -- A brand-new character: nothing stored, shipped defaults (all off).
+  ns.db.chars[key] = nil
+  fire("PLAYER_LOGIN")
+  eq(next(ns.db.chars[key].config), nil, "no overrides for a new character")
+  eq(ns.db.chars[key].optIn, true, "marked")
 end)
 
 print = io.write

@@ -266,7 +266,15 @@ end
 
 local function OnEvent(_, event, ...)
   if event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
-    if ... ~= ADDON then return end
+    local who, func = ...
+    if who ~= ADDON then return end
+    -- Only a blocked Screenshot() means realtime can't work. Other DOINK
+    -- calls (a guild announcement, the settings page) can be blocked too and
+    -- must not switch it off.
+    if not tostring(func or ""):find("Screenshot", 1, true) then
+      ns:Debug("blocked action ignored by realtime: %s", tostring(func))
+      return
+    end
     Settings().enabled = false
     Clear()
     lastResult = "blocked"

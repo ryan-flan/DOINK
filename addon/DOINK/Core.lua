@@ -158,6 +158,31 @@ local function MigrateToSurname(name, surname, realm, key)
   ns:Print("moved saved data from %s to %s", oldKey, key)
 end
 
+-- v0.18.0 made everything off by default. A character that already existed
+-- was running on the old defaults without ever storing them, so pin those
+-- values as explicit overrides once; nothing the player sees changes. Only
+-- keys the player hasn't set are filled. New characters skip this.
+local LEGACY_DEFAULTS = {
+  level_up = { enabled = true }, loot = { enabled = true }, death = { enabled = true },
+  quest = { enabled = true }, boss_kill = { enabled = true }, skill_up = { enabled = true },
+  mount = { enabled = true }, duel = { enabled = true }, battleground = { enabled = true },
+  announce = { channel = "guild", level_up = "milestones", loot = "epic", death = true,
+    boss_kill = true, mount = true, duel = true, battleground = true },
+}
+
+local function PinLegacyDefaults(char)
+  for eventType, options in pairs(LEGACY_DEFAULTS) do
+    local overrides = char.config[eventType]
+    if overrides == nil then
+      overrides = {}
+      char.config[eventType] = overrides
+    end
+    for key, value in pairs(options) do
+      if overrides[key] == nil then overrides[key] = value end
+    end
+  end
+end
+
 -- PLAYER_LOGIN: name, realm and class are reliable from here on.
 local function InitChar()
   -- Forever: UnitName("player") returns the surname second (verified in
@@ -170,9 +195,14 @@ local function InitChar()
 
   if surname then MigrateToSurname(name, surname, realm, key) end
 
+  local isNew = ns.db.chars[key] == nil
   local char = ns.db.chars[key] or {}
   char.seq = char.seq or 0
   char.config = char.config or {}
+  if not char.optIn then
+    if not isNew then PinLegacyDefaults(char) end
+    char.optIn = true -- v0.18.0 defaults handled for this character
+  end
   char.events = char.events or {}
   char.kills = char.kills or {} -- encounter id (string) -> ts of the first kill
   ns.db.chars[key] = char

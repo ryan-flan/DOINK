@@ -127,7 +127,7 @@ local function Discord(layout)
     format = function(v) return v .. "g" end,
     get = function() return math.floor(ns:GetOption("loot", "min_vendor_value") / 10000 + 0.5) end,
     set = function(v) ns:SetOption("loot", "min_vendor_value", v * 10000) end,
-    tooltip = "A stack worth this much to a vendor is recorded even below the minimum quality." }
+    tooltip = "A stack worth this much to a vendor is recorded even below the minimum quality. For more than 100g use /doink set loot min_vendor_value 250g." }
   OptionCheckbox { variable = "skill_up_milestones", name = "Skill-ups: milestones only",
     type = "skill_up", key = "milestones_only", tooltip = "Only 75, 150, 225 and 300." }
   OptionCheckbox { variable = "loot_rares_boe_only", name = "Loot: rares only if Bind on Equip",
