@@ -671,7 +671,14 @@ file wasn't bumped; bump it and release the next number.
   `gh api .../releases/generate-notes`), runs `gh release create` with
   `--latest` when the companion is in and `--latest=false` when it isn't,
   then checks `releases/latest` and re-marks the newest companion release
-  if GitHub disagrees. Manual runs stop after the artifacts
+  if GitHub disagrees. So nobody has to guess which file is which, the
+  notes carry a "Which file do I need?" list under the header line, and
+  every asset is uploaded as `file#label` ("Addon only: …", "Companion
+  app for Windows (with the addon): …", "Companion app for Linux: …",
+  checksums, `release.json` "For addon managers"). A label only changes
+  what the release page shows: asset names and download URLs, which the
+  updaters and WowUp Hub read, stay as they are. Never rename the files
+  to make them clearer. Manual runs stop after the artifacts
   (`DOINK-dev.zip`, `DOINK-dev-linux-amd64.tar.gz`).
 
 Why the Latest badge matters: installed companions v0.11.x (Python) and

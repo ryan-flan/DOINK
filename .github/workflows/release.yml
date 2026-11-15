@@ -312,6 +312,22 @@ jobs:
           if [ -n "$prev" ]; then args+=(-f "previous_tag_name=$prev"); fi
           {
             printf '**%s · %s**\n\n' "$a" "$c"
+            # Which file is which, in words (the asset list below the notes
+            # carries the same labels).
+            printf '### Which file do I need?\n\n'
+            if [ -f "dist/DOINK-$TAG-forever.zip" ]; then
+              printf -- '- **Addon only** (the in-game part): `DOINK-%s-forever.zip`. Unzip into `Interface/AddOns`. Also on CurseForge and Wago.\n' "$TAG"
+            fi
+            if [ "$COMPANION" = true ]; then
+              printf -- '- **Companion app for Windows** (posts to Discord; optional): `DOINK-%s.zip`. It also contains a copy of the addon.\n' "$TAG"
+              printf -- '- **Companion app for Linux** (optional): `DOINK-%s-linux-amd64.tar.gz`. No addon inside.\n' "$TAG"
+            else
+              printf -- '- **Companion app**: not part of this release. Get it from [v%s](https://github.com/%s/releases/tag/v%s).\n' "$COMPANION_VERSION" "$GITHUB_REPOSITORY" "$COMPANION_VERSION"
+            fi
+            if [ "$ADDON" != true ]; then
+              printf -- '- **Addon**: unchanged in this release (latest v%s).\n' "$ADDON_VERSION"
+            fi
+            printf '\n'
             gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body
           } > notes.md
           cat notes.md
@@ -322,7 +338,25 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$COMPANION" = true ]; then latest=--latest; else latest=--latest=false; fi
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+          # "file#label": the label is what the release page shows in place
+          # of the file name. The name and the download URL don't change,
+          # and those are what the updaters and WowUp Hub read.
+          files=()
+          for f in dist/*; do
+            n="$(basename "$f")"
+            case "$n" in
+              "DOINK-$TAG-forever.zip")             l="Addon only: $n" ;;
+              "DOINK-$TAG.zip")                     l="Companion app for Windows (with the addon): $n" ;;
+              "DOINK-$TAG.zip.sha256")              l="Companion app for Windows, checksum: $n" ;;
+              "DOINK-$TAG-linux-amd64.tar.gz")      l="Companion app for Linux: $n" ;;
+              "DOINK-$TAG-linux-amd64.tar.gz.sha256") l="Companion app for Linux, checksum: $n" ;;
+              release.json)                         l="For addon managers (not a download): $n" ;;
+              *)                                    l="$n" ;;
+            esac
+            files+=("$f#$l")
+          done
+          printf '%s\n' "${files[@]}"
+          gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" \
             --title "DOINK $TAG" --notes-file notes.md "$latest"
       # Belt and braces: the old updaters only work if releases/latest is
       # the newest companion release. Repair if GitHub disagrees, fail if
