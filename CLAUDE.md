@@ -890,10 +890,11 @@ fixture included; that's a stand-in for the real name, by decision.)
   level), matching the chat lines "Total time played: 4 days, 17 hours,
   27 minutes, 55 seconds" / "Time played this level: 0 days, 0 hours, 41
   minutes, 2 seconds". No blocked-action popup reported.
-  - [ ] Whether unregistering `TIME_PLAYED_MSG` from `ChatFrame1..N`
-    really hides those two lines on Forever (the standard trick on other
-    clients): `/doink played on`, `/reload`, and no "Total time played"
-    line should appear at login.
+  - [x] Unregistering `TIME_PLAYED_MSG` from `ChatFrame1..N` while the
+    request is out hides those two lines on Forever (2026-11-15, in
+    game): `/doink played on` and a login with it on printed nothing, a
+    test level-up carried `played`, and the player's own `/played` still
+    printed afterwards.
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [x] **`COMBAT_LOG_EVENT_UNFILTERED` is protected for addons** (as in the
@@ -1076,6 +1077,9 @@ fixture included; that's a stand-in for the real name, by decision.)
   contract"); `doink decode`.
 - **v0.17.0:** optional screenshot attachments on instant posts
   (`/doink realtime image on`, flag bit 1, `Sender.SendWithImage`).
+- **v0.19.0:** `forward_url` (the companion also POSTs each event's JSON
+  to the player's own endpoint, issue #6) and the optional `played` field
+  on every event (`/doink played on`, issue #4).
 - **Later:** community channels via `C_Club` once one exists to test with
   (parked: Battle.net is limited in the beta); rare kills, achievements;
   new PvP ranks and legacy points (user request, 2026-11-02; the events and
