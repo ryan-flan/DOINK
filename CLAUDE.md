@@ -620,8 +620,7 @@ Steps (commit as `build: release vX.Y.Z`, then
 `git tag -a vX.Y.Z -m "DOINK vX.Y.Z"` and `git push origin vX.Y.Z`):
 
 - **Addon only**: set `## Version: X.Y.Z` in the TOC. Leave
-  `companion/VERSION` alone. The release gets the addon zip +
-  `release.json`, is created with `--latest=false`, and its notes start
+  `companion/VERSION` alone. The release gets the addon zip, is created with `--latest=false`, and its notes start
   `Addon vX.Y.Z · Companion unchanged (latest vP.Q.R)`.
 - **Companion only**: set `companion/VERSION` to `X.Y.Z`. Leave the TOC
   alone. The release gets `DOINK-vX.Y.Z.zip` + `.sha256` and the Linux
@@ -675,7 +674,7 @@ file wasn't bumped; bump it and release the next number.
   notes carry a "Which file do I need?" list under the header line, and
   every asset is uploaded as `file#label` ("Addon only: …", "Companion
   app for Windows (with the addon): …", "Companion app for Linux: …",
-  checksums, `release.json` "For addon managers"). A label only changes
+  checksums). A label only changes
   what the release page shows: asset names and download URLs, which the
   updaters and WowUp Hub read, stay as they are. Never rename the files
   to make them clearer. Manual runs stop after the artifacts
@@ -691,14 +690,20 @@ files, so they don't depend on the badge.
 
 **WowUp Hub** (wowup.io/guide/wowup/hub) has no upload or key: it lists
 addons from GitHub releases, which is why `release` attaches the
-packager's addon-only zip (addon folder at the zip root) and
-`release.json` (the Hub uses it to match zips to game versions); the
-companion updaters match `DOINK-<tag>.zip` by exact name and ignore them.
+packager's addon-only zip (addon folder at the zip root); the companion
+updaters match `DOINK-<tag>.zip` by exact name and ignore it. There is
+no `release.json` and none is needed (checked 2026-11-15): the packager
+only writes it when it publishes the GitHub release itself with a token,
+which it must not here, and the WowUp app's GitHub provider
+(`github-addon-provider.ts`, master) treats it as optional, falling back
+to the zip name (`[-_](forever|camelot)\.zip$` for Forever). The same
+code looks at the 5 newest non-draft, non-prerelease releases by date and
+doesn't use the Latest flag.
 Hub icon = repo social preview; categories = repo topics (`guild`,
-`chat`). Unverified: whether the Hub maps Interface 16xxx /
-`release.json` to Forever (its guide names `Addon_Forever.toc`), and
-whether it reads every release or only the one marked Latest (addon-only
-releases are not Latest). If the Hub shows a stale addon after an
+`chat`). Unverified: whether the Hub service itself behaves like the app's
+provider (its guide says it reads each TOC and names `Addon_Forever.toc`),
+and what either does with a companion-only release, which has no
+`-forever.zip`. If the Hub shows a stale addon after an
 addon-only release, release both halves together (bump both files) until
 that is settled, and ask on WowUp's Discord.
 

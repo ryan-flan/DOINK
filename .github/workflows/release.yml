@@ -96,17 +96,17 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
           WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
-      # The zip and release.json also go onto the GitHub release (see the
-      # release job): WowUp Hub reads GitHub releases, and uses release.json
-      # to match each zip to a game version. always(): a failed store upload
-      # must not lose the files the Hub needs.
+      # The zip also goes onto the GitHub release (see the release job):
+      # WowUp reads GitHub releases and picks the "-forever.zip" by its
+      # name. There is no release.json: the packager only writes one when
+      # it publishes the GitHub release itself, and WowUp doesn't need it.
+      # always(): a failed store upload must not lose the zip.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: addon-package
           path: |
             .release/*.zip
-            .release/release.json
           include-hidden-files: true # .release is a dot-directory
           if-no-files-found: warn
 
@@ -278,8 +278,7 @@ jobs:
           pattern: doink-*
           path: dist
           merge-multiple: true
-      # The addon-only zip (addon folder at the zip root) and release.json,
-      # for WowUp Hub. The companion updaters match DOINK-<tag>.zip by exact
+      # The addon-only zip (addon folder at the zip root), for WowUp. The companion updaters match DOINK-<tag>.zip by exact
       # name, so these extra assets don't affect them. continue-on-error: a
       # failed addon job (store hiccup) leaves no artifact; release anyway.
       - uses: actions/download-artifact@v4
@@ -350,7 +349,6 @@ jobs:
               "DOINK-$TAG.zip.sha256")              l="Companion app for Windows, checksum: $n" ;;
               "DOINK-$TAG-linux-amd64.tar.gz")      l="Companion app for Linux: $n" ;;
               "DOINK-$TAG-linux-amd64.tar.gz.sha256") l="Companion app for Linux, checksum: $n" ;;
-              release.json)                         l="For addon managers (not a download): $n" ;;
               *)                                    l="$n" ;;
             esac
             files+=("$f#$l")
