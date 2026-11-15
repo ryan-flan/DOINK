@@ -22,6 +22,7 @@ local MAX_LEVEL = 60
 local QUALITY = { any = 0, uncommon = 2, rare = 3, epic = 4, legendary = 5 }
 
 local queue, sending, sent = {}, false, {} -- sent: GetTime() of recent lines
+local blocked, toldBlocked = 0, false      -- sends the game refused this session
 
 local function Option(key)
   return ns:GetOption("announce", key)
@@ -212,6 +213,23 @@ end
 
 function Announce.OnLogin() end
 
+-- The game can refuse a chat message sent by addon code (retail does for
+-- guild chat without a key press). That raises no Lua error: the client
+-- fires one of these events naming the addon and the blocked function.
+-- Count them, and tell the player once per session.
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_ACTION_BLOCKED")
+watcher:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+watcher:SetScript("OnEvent", function(_, _, who, func)
+  if who ~= ADDON or type(func) ~= "string" then return end
+  if not func:find("SendChatMessage", 1, true) then return end
+  blocked = blocked + 1
+  if toldBlocked then return end
+  toldBlocked = true
+  ns:Print("the game blocked a chat announcement, so it wasn't sent. "
+    .. "/doink shows how many were blocked this session")
+end)
+
 function Announce.Status()
   local channel = Option("channel")
   local chatType, why = Target(channel)
@@ -223,11 +241,16 @@ function Announce.Status()
     if type(rule) == "boolean" then rule = rule and "on" or "off" end
     rules[#rules + 1] = t .. " " .. tostring(rule)
   end
-  return where .. "; " .. table.concat(rules, ", ")
+  local status = where .. "; " .. table.concat(rules, ", ")
+  if blocked > 0 then status = status .. ("; %d blocked by the game"):format(blocked) end
+  return status
 end
 
 -- For the offline harness only.
 Announce._test = {
   queue = function() return queue end,
-  reset = function() queue, sending, sent = {}, false, {} end,
+  reset = function()
+    queue, sending, sent = {}, false, {}
+    blocked, toldBlocked = 0, false
+  end,
 }

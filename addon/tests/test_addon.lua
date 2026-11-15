@@ -1374,6 +1374,23 @@ test("announce: a send that errors doesn't stall the lines after it", function()
   eq(lastChat()[1], "Ding! Level 30.", "which line")
 end)
 
+test("announce: a chat send blocked by the game is reported once and counted", function()
+  announceReset()
+  printed = {}
+  fire("ADDON_ACTION_BLOCKED", "DOINK", "SendChatMessage()")
+  fire("ADDON_ACTION_FORBIDDEN", "DOINK", "SendChatMessage()")
+  fire("ADDON_ACTION_BLOCKED", "SomeOtherAddon", "SendChatMessage()")
+  fire("ADDON_ACTION_BLOCKED", "DOINK", "Foo()")
+  local notices = 0
+  for _, line in ipairs(printed) do
+    if line:find("blocked a chat announcement", 1, true) then notices = notices + 1 end
+  end
+  eq(notices, 1, "one notice for two blocked sends")
+  assert(slash(""):find("2 blocked by the game", 1, true), "status shows the count")
+  announceReset()
+  assert(not slash(""):find("blocked by the game", 1, true), "no count when nothing was blocked")
+end)
+
 ------------------------------------------------------------------ options page
 
 local function control(variable)
