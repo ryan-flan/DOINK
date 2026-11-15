@@ -242,3 +242,25 @@ func TestNativePath(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestForwardURL(t *testing.T) {
+	sv := filepath.Join(t.TempDir(), "DOINK.lua")
+	base := "savedvariables_path = '" + sv + "'\n"
+	cfg, err := Load(setup(t, base), false)
+	if err != nil || cfg.ForwardURL != "" {
+		t.Fatalf("default: %q, %v", cfg.ForwardURL, err)
+	}
+	for _, ok := range []string{"https://bot.example/doink?token=x", "http://localhost:8080/events", "http://192.168.1.20/in"} {
+		cfg, err := Load(setup(t, base+"forward_url = \""+ok+"\"\n"), false)
+		if err != nil || cfg.ForwardURL != ok {
+			t.Errorf("%s: %q, %v", ok, cfg.ForwardURL, err)
+		}
+	}
+	for _, bad := range []string{"bot.example/doink", "ftp://bot.example/x", "https://", "file:///etc/passwd"} {
+		path := setup(t, base+"forward_url = \""+bad+"\"\n")
+		_, err := Load(path, false)
+		if err == nil || err.Error() != path+": forward_url must be an http:// or https:// address" {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+}

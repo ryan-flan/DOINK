@@ -42,6 +42,9 @@ type Event struct {
 	Type    string
 	Test    bool
 	Data    map[string]any // never nil; numbers are float64
+	// Raw is the event's JSON as the addon queued it (invalid UTF-8
+	// replaced), for forward_url. Empty for events built in code.
+	Raw []byte
 }
 
 // FullName is "Flano Wren" on Forever (surnames), "Flano" elsewhere.
@@ -197,7 +200,7 @@ func DecodeEvent(raw []byte) (Event, error) {
 			return Event{}, fmt.Errorf("missing %q", k)
 		}
 	}
-	var e Event
+	e := Event{Raw: []byte(text)}
 	seq, ok := intOf(obj["seq"])
 	if !ok {
 		return Event{}, errors.New("seq isn't an integer")

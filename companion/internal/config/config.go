@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,6 +40,7 @@ type Config struct {
 	StatePath           string
 	WowDir              string
 	WebhookURL          string // fallback when the game hasn't set one
+	ForwardURL          string // also POST each event's JSON here; "" = off
 	DryRun              bool
 	PollInterval        float64 // seconds
 	MaxBacklog          int
@@ -49,7 +51,7 @@ type Config struct {
 }
 
 // knownKeys are the settings Load reads; anything else gets a warning.
-var knownKeys = []string{"savedvariables_path", "wow_dir", "webhook_url", "dry_run", "poll_interval",
+var knownKeys = []string{"savedvariables_path", "wow_dir", "webhook_url", "forward_url", "dry_run", "poll_interval",
 	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "notifiers"}
 
 // ErrNoWoW: no SavedVariables file to watch.
@@ -83,6 +85,13 @@ func NativePath(raw string) string {
 		}
 	}
 	return mnt
+}
+
+// IsForwardURL reports whether raw can be POSTed to: http or https with a
+// host.
+func IsForwardURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 func exists(path string) bool {
@@ -164,6 +173,7 @@ func Load(path string, dryRun bool) (*Config, error) {
 	svPath := str("savedvariables_path")
 	wowDir := str("wow_dir")
 	cfg.WebhookURL = str("webhook_url")
+	cfg.ForwardURL = str("forward_url")
 	cfg.DryRun = boolean("dry_run", false) || dryRun
 	cfg.PollInterval = number("poll_interval", 2.0)
 	backlog := number("max_backlog", 10)
@@ -183,6 +193,10 @@ func Load(path string, dryRun bool) (*Config, error) {
 	}
 	if cfg.WebhookURL != "" && !discord.IsWebhookURL(cfg.WebhookURL) {
 		return nil, fmt.Errorf("%s: webhook_url doesn't look like a Discord webhook URL", path)
+	}
+
+	if cfg.ForwardURL != "" && !IsForwardURL(cfg.ForwardURL) {
+		return nil, fmt.Errorf("%s: forward_url must be an http:// or https:// address", path)
 	}
 
 	switch {

@@ -196,7 +196,7 @@ func runTray(o options) int {
 		d.Started = func() {
 			if noWoW {
 				st.Failed(settings.ProblemNoWoW)
-			} else if cfg.WebhookURL == "" && !anyGameWebhooks(cfg) && !cfg.DryRun {
+			} else if cfg.WebhookURL == "" && cfg.ForwardURL == "" && !anyGameWebhooks(cfg) && !cfg.DryRun {
 				st.Failed(settings.ProblemNoWebhook)
 			}
 		}

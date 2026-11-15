@@ -242,3 +242,16 @@ func TestParseWebhooks(t *testing.T) {
 		}
 	})
 }
+
+func TestDecodeEventKeepsTheRawJSON(t *testing.T) {
+	raw := `{"seq":7,"char":"Flano","realm":"R","type":"level_up","data":{"level":20},"extra":[1,2]}`
+	e, err := DecodeEvent([]byte(raw))
+	if err != nil || string(e.Raw) != raw {
+		t.Fatalf("raw %q, %v", e.Raw, err)
+	}
+	// Invalid UTF-8 is replaced, so Raw is always valid JSON text.
+	e, err = DecodeEvent([]byte("{\"seq\":7,\"char\":\"Fl\xffno\",\"realm\":\"R\",\"type\":\"x\"}"))
+	if err != nil || string(e.Raw) != `{"seq":7,"char":"Fl�no","realm":"R","type":"x"}` {
+		t.Fatalf("raw %q, %v", e.Raw, err)
+	}
+}

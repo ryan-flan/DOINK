@@ -128,8 +128,10 @@ type fixture struct {
 	sv     string
 	cfg    *config.Config
 	sender *fakeSender
-	logs   *capture
-	status *status.Status
+	// forward, when set, is Deps.Forward.
+	forward Forwarder
+	logs    *capture
+	status  *status.Status
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -153,7 +155,7 @@ func (f *fixture) state() *state.State {
 }
 
 func (f *fixture) deps(s *state.State) Deps {
-	return Deps{Config: f.cfg, State: s, Sender: f.sender, Status: f.status,
+	return Deps{Config: f.cfg, State: s, Sender: f.sender, Forward: f.forward, Status: f.status,
 		Log: slog.New(f.logs), Version: "test"}
 }
 

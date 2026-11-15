@@ -17,6 +17,13 @@
 # Webhook for characters without one set in game. Keep it secret.
 # webhook_url = "https://discord.com/api/webhooks/..."
 
+# Also send every event to your own tool (a bot, a script): one HTTP POST
+# per event, the body is the event's JSON as the addon recorded it. Extra
+# to Discord and best effort: if your endpoint is down, those events are
+# not sent again. With no Discord webhook at all, this is the only
+# destination and failed events are retried. Unset = nothing is sent.
+# forward_url = "https://example.com/doink"
+
 # Print embeds to the console or log instead of posting (same as --dry-run).
 # dry_run = false
 

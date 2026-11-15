@@ -47,6 +47,7 @@ type Deps struct {
 	Config  *config.Config // pointer: reloaded live
 	State   *state.State
 	Sender  discord.Sender
+	Forward Forwarder // needed when forward_url is set (a dry run never calls it)
 	Status  *status.Status
 	Items   *wowhead.Cache // nil when wowhead is off
 	Log     *slog.Logger
@@ -81,15 +82,42 @@ func item(d Deps, e savedvars.Event) *wowhead.Item {
 	return d.Items.Lookup(int(id))
 }
 
+// forwardOnly handles a character that has forward_url but no webhook: the
+// endpoint is the only destination, so nothing is given up on. Each event
+// is recorded once delivered; a failure is returned for a retry.
+func forwardOnly(d Deps, key string, events []savedvars.Event, firstSightBacklog int) error {
+	sent, err := forwardEvents(d, key, events)
+	for _, e := range events[:sent] {
+		d.Status.Posted(e.FullName(), e.Type)
+		d.State.MarkPosted(key, e.Seq, firstSightBacklog)
+	}
+	if err != nil {
+		host := forwardHost(d.Config.ForwardURL)
+		d.Log.Error(fmt.Sprintf("%s: forwarding to %s failed: %v", key, host, err))
+		d.Status.Failed(fmt.Sprintf("forwarding to %s failed: %v", host, err))
+	}
+	return err
+}
+
 // PostEvents posts events (one character, ascending seq) and records each
 // one. It returns ErrNoWebhook when there is no usable webhook, else the
 // post error; state is saved after each message, so a retry resumes
 // cleanly. img, when set, is attached to the message and shown on its first
 // embed: realtime posts one event at a time, so it belongs to that event.
+//
+// With forward_url set, each event is also forwarded at the moment it is
+// recorded (so never twice). Next to Discord that is best effort: the
+// first failure is logged and the rest of this call isn't forwarded, so an
+// endpoint that is down can't hold Discord up. Without any webhook the
+// endpoint is the destination (forwardOnly).
 func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int, img *discord.Attachment) error {
 	url := WebhookFor(key, gameHooks, d.Config)
+	forwarding := d.Config.ForwardURL != ""
 	if len(events) > 0 && !d.Config.DryRun {
 		who := events[len(events)-1].FullName()
+		if url == "" && forwarding {
+			return forwardOnly(d, key, events, firstSightBacklog)
+		}
 		if url == "" {
 			d.Log.Error(fmt.Sprintf("%s: no webhook. Set one in game (/doink webhook <url>) or in config.toml", key))
 			d.Status.Failed(fmt.Sprintf("no webhook for %s. Set one in game: /doink webhook <url>, or in config.toml", who))
@@ -141,6 +169,13 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 				d.Status.Posted(e.FullName(), e.Type)
 			}
 			d.State.MarkPosted(key, e.Seq, firstSightBacklog) // posted, or dropped for good
+		}
+		if forwarding {
+			if sent, ferr := forwardEvents(d, key, batch); ferr != nil {
+				forwarding = false
+				d.Log.Warn(fmt.Sprintf("%s: forwarding to %s failed: %v; %d events not forwarded",
+					key, forwardHost(d.Config.ForwardURL), ferr, len(events)-start-sent))
+			}
 		}
 	}
 	return nil

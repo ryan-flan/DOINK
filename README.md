@@ -400,13 +400,47 @@ Settings live in `config.toml` next to `doink.exe` (the settings window
 edits the webhook and WoW folder there; the link at its bottom opens the
 file). Every key is optional: `webhook_url`, `wow_dir`, `dry_run`,
 `max_backlog`, `poll_interval`, an exact `savedvariables_path`, `wowhead`,
-`realtime`, `update_check`, `update_notify`; see `config.example.toml`.
+`forward_url`, `realtime`, `update_check`, `update_notify`; see `config.example.toml`.
 DOINK picks up changes while it runs, except `dry_run`, `wowhead`,
 `update_check` and `update_notify`, which need a restart.
 
 The companion remembers what it has posted (`state.json`), so restarting it
 never double-posts. The first time it sees a character it posts only the
 newest 10 queued events.
+
+### Sending events to your own tool
+
+Building a bot or a spreadsheet? Add one line to `config.toml`:
+
+```toml
+forward_url = "https://example.com/doink"
+```
+
+The companion then also sends every event there: one HTTP `POST` per
+event, `Content-Type: application/json`, and the body is the event exactly
+as the addon recorded it:
+
+```json
+{"seq":42,"ts":1759300000,"char":"Flano","surname":"Wren","realm":"Whatever",
+ "class":"WARRIOR","level":20,"type":"level_up","data":{"level":20}}
+```
+
+The `data` fields of each type are listed under "Data contract" in
+[CLAUDE.md](https://github.com/ryan-flan/DOINK/blob/main/CLAUDE.md#data-contract-both-halves-depend-on-this--do-not-change-casually). Events from `/doink test` carry `"test":true`.
+Answer with any 2xx status.
+
+- **Next to Discord it is best effort.** Discord posts as usual, then the
+  event is forwarded. If your endpoint doesn't answer (two tries, 5
+  seconds each) the event is not sent again and DOINK leaves your endpoint
+  alone for a minute, so Discord is never held up.
+- **Without any Discord webhook** your endpoint is the only destination:
+  an event that fails is tried again until it is delivered. Identify an
+  event by character, realm and `seq` in case one arrives twice.
+- It follows the same timing as Discord posts: at `/reload` or logout, or
+  within seconds with [instant posts](#instant-posts-realtime).
+  Screenshots are not forwarded.
+- The address can be `http://` on your own machine or network. It is
+  never set from the game, and DOINK's log shows only its host name.
 
 ### What doink.exe does (and doesn't)
 
@@ -432,7 +466,9 @@ newest 10 queued events.
   it also downloads that release's zip and its `.sha256` from GitHub,
   verifies them, and replaces `doink.exe` with the `doink.exe` inside
   (the old one is kept as `doink.exe.old` until the next start, then
-  deleted). It never does that by itself. No telemetry. It doesn't listen on any port.
+  deleted). It never does that by itself. Only if you set `forward_url`
+  in `config.toml` it also sends each event's JSON to that address (see
+  [Sending events to your own tool](#sending-events-to-your-own-tool)). No telemetry. It doesn't listen on any port.
   The settings window is a local page built into `doink.exe`; it loads
   nothing from the internet.
 - **Start with Windows** adds one per-user registry value,

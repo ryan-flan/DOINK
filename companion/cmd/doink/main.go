@@ -204,6 +204,7 @@ func deps(cfg *config.Config, st *state.State, s *status.Status, log *slog.Logge
 		Config:  cfg,
 		State:   st,
 		Sender:  discord.NewPool(nil, cfg.DryRun, version, log),
+		Forward: runner.HTTPForwarder(nil, version),
 		Status:  s,
 		Log:     log,
 		Version: version,

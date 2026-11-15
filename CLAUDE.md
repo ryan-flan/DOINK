@@ -466,8 +466,8 @@ tests/test_addon.lua`.
   disables it. The README's network statement names Wowhead; keep it
   accurate.
 - Zero config is the goal: `config.toml` is optional and so is every key
-  (`wow_dir`, `savedvariables_path`, `webhook_url`, `dry_run`,
-  `poll_interval`, `max_backlog`, `wowhead`, `update_check`,
+  (`wow_dir`, `savedvariables_path`, `webhook_url`, `forward_url`,
+  `dry_run`, `poll_interval`, `max_backlog`, `wowhead`, `update_check`,
   `update_notify`, `realtime`; `[notifiers]` is logged and ignored).
   Without a path, `discover` scans the standard WoW folders on every drive
   (Windows), every `/mnt/<letter>` and every Wine/Proton prefix's
@@ -484,6 +484,21 @@ tests/test_addon.lua`.
   transient failures (network, Discord down) back off: poll interval
   doubled per failed pass, capped at 60 s (the uncapped doubling
   overflowed into a negative delay after ~30 failures, 2026-11-06).
+- `forward_url` (config.toml only, http/https, reloaded live; issue #6):
+  `PostEvents` also POSTs each event's JSON as queued (`Event.Raw`,
+  `application/json`, one event per request, `runner/forward.go`) at the
+  moment the event is marked posted, so a Discord retry never forwards
+  twice. Next to Discord it is best effort: two attempts, 5 s timeout,
+  and after the first failure the rest of that `PostEvents` call isn't
+  forwarded, and `HTTPForwarder` fails calls to that address at once
+  for the next minute; redirects aren't followed (one warning; an endpoint that is down can't hold Discord
+  up, and the tray shows no error). With no webhook for the character
+  the endpoint is the destination: events are marked as delivered, a
+  failure is returned and retried with the usual back-off, and a webhook
+  set later doesn't post the old events. Dry run only logs "would
+  forward". Events built in code (`doink test`) have no `Raw` and are
+  never forwarded; screenshots aren't either. Logs name the host only
+  (the URL may hold a token). The README's network statement names it.
 - First time a character is seen, post at most `max_backlog` (default 10) of
   its queued events. If the newest seq in the file is below `file_seen`
   (the highest seq a previous file pass showed; SavedVariables wiped), treat
