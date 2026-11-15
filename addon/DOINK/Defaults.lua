@@ -19,12 +19,13 @@ ns.Defaults = {
   -- milestones_only: post only at multiples of 75 (75/150/225/300).
   skill_up  = { enabled = false, milestones_only = true },
   mount     = { enabled = false },
-  -- wins_only: losses aren't recorded.
+  -- wins_only: losses are ignored, for Discord and for chat alike.
   duel      = { enabled = false, wins_only = true },
   battleground = { enabled = false, wins_only = true },
 
-  -- In-game chat announcements (Announce.lua). Stricter than the queue's
-  -- rules above, because guild chat is shared.
+  -- In-game chat announcements (Announce.lua). These rules alone decide
+  -- what goes to chat: `enabled` and the filters above (except wins_only)
+  -- only decide what is recorded for Discord.
   announce = {
     channel   = "off",        -- off | guild | officer | party | raid
     level_up  = "off",        -- milestones (10/20/.../60) | all | off

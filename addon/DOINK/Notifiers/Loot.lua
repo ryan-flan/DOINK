@@ -54,10 +54,13 @@ local function Handle(itemID, link, qty)
   local classID = ClassID(itemID)
   if classID ~= nil then gear = classID == WEAPON or classID == ARMOR end
 
+  -- These rules decide what is recorded for Discord. A filtered item is
+  -- still handed to Emit, because chat announcements have their own rule.
+  local filtered
   if quality >= 5 then
     -- Legendary gear always posts (unknown counts as gear); legendary
     -- materials never do.
-    if gear == false then return end
+    filtered = gear == false
   else
     -- rares_boe_only: a soulbound rare is only interesting to you. An
     -- unknown bind type (boe == nil) counts as BoE: a few extra posts beat
@@ -65,7 +68,7 @@ local function Handle(itemID, link, qty)
     local passesQuality = quality >= ns:GetOption("loot", "min_quality")
       and not (quality == 3 and ns:GetOption("loot", "rares_boe_only") and boe == false)
     local passesValue = vendorValue >= ns:GetOption("loot", "min_vendor_value")
-    if not (passesQuality or passesValue) then return end
+    filtered = not (passesQuality or passesValue)
   end
 
   local null = ns.Json.null
@@ -79,7 +82,7 @@ local function Handle(itemID, link, qty)
     vendor_value = vendorValue, -- whole stack, in copper
     boe = boe == nil and null or boe,
     gear = gear == nil and null or gear,
-  })
+  }, false, filtered)
 end
 
 ns.Notifiers.Loot = {

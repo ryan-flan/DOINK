@@ -8,10 +8,10 @@ ns.Notifiers.LevelUp = {
   -- UnitLevel("player") still returns the old level at this point; Core
   -- handles that for the envelope via ns.knownLevel.
   OnEvent = function(event, level)
-    if ns:GetOption("level_up", "milestones_only") and level % 10 ~= 0 then
-      return
-    end
-    ns:Emit("level_up", { level = level })
+    -- The filter only decides what is recorded for Discord; Emit still
+    -- offers a filtered event to chat, which has its own rules.
+    local filtered = ns:GetOption("level_up", "milestones_only") and level % 10 ~= 0
+    ns:Emit("level_up", { level = level }, false, filtered)
   end,
 
   Test = function()

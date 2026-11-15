@@ -57,6 +57,8 @@ ns.Notifiers.Duel = {
         else
           return -- someone else's duel
         end
+        -- wins_only means "losses are ignored": neither recorded for
+        -- Discord nor announced in chat. It is not a Discord-only filter.
         if not won and ns:GetOption("duel", "wins_only") then return end
         ns:Emit("duel", {
           opponent = opponent,

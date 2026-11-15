@@ -2,15 +2,17 @@ local ADDON, ns = ...
 
 -- In-game announcements: tells your guild (or officers, party, raid) about
 -- events as they happen, in chat, with real item links. Nothing leaves the
--- game and no companion is involved. The rules are stricter than the
--- queue's (see ns.Defaults.announce) because guild chat is shared: by
--- default only level milestones, epic+ loot, boss kills and deaths.
+-- game and no companion is involved. What gets announced is decided by
+-- the announce rules alone (ns.Defaults.announce): the per-type "enabled"
+-- toggles and their filters only decide what is recorded for Discord.
 --
 -- /doink test events are whispered to you instead, so wording can be
 -- checked without anyone else seeing it.
 
 local Announce = {}
 ns.Transports.Announce = Announce
+-- Tells Core to also hand over events that aren't recorded for Discord.
+Announce.unqueued = true
 
 local SEND_GAP = 2       -- seconds between lines
 local PER_MINUTE = 8     -- beyond this, lines are dropped (and you're told)
@@ -166,13 +168,19 @@ end
 function Announce.Send(json, envelope)
   if not envelope or Option("channel") == "off" then return end
   local line = Describe(envelope)
-  if not line then return end
+  if not line then
+    ns:Debug("announce skipped (no wording for %s)", tostring(envelope.type))
+    return
+  end
   if envelope.test then
     -- Shown to you only, whatever the rules say, so you can see the wording.
     Enqueue("[test] " .. line, "WHISPER", FullName())
     return
   end
-  if not Wanted(envelope) then return end
+  if not Wanted(envelope) then
+    ns:Debug("announce skipped (rule %s is %s): %s", envelope.type, tostring(Option(envelope.type)), line)
+    return
+  end
   local chatType, why = Target(Option("channel"))
   if not chatType then
     ns:Debug("announce skipped (%s): %s", why, line)

@@ -50,7 +50,9 @@ ns.Notifiers.BossKill = {
     local kills = ns.char.kills
     local id = tostring(encounterID)
     local first = kills[id] == nil
-    if ns:GetOption("boss_kill", "first_kill_only") and not first then return end
+    -- A repeat kill isn't recorded for Discord with first_kill_only; chat
+    -- still hears about it if its own rule says so.
+    local filtered = ns:GetOption("boss_kill", "first_kill_only") and not first
     kills[id] = kills[id] or time()
 
     ns:Emit("boss_kill", {
@@ -62,7 +64,7 @@ ns.Notifiers.BossKill = {
       group_size = groupSize,
       first_kill = first,
       group = Group() or ns.Json.null,
-    })
+    }, false, filtered)
   end,
 
   Test = function()

@@ -24,6 +24,8 @@ ns.Notifiers.Battleground = {
     local mine = UnitFactionGroup("player") == "Horde" and 0 or 1
     recorded = true
     local won = winner == mine
+    -- wins_only means "losses are ignored": neither recorded for Discord
+    -- nor announced in chat. It is not a Discord-only filter.
     if not won and ns:GetOption("battleground", "wins_only") then return end
     ns:Emit("battleground", {
       name = (GetInstanceInfo()) or GetZoneText(),

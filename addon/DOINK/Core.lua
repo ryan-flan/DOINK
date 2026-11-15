@@ -9,7 +9,9 @@ ns.Notifiers = {}
 -- Transports do something with each event the moment it happens: announce
 -- it in chat, show it to the companion. Core never knows what; it hands
 -- them the JSON and the envelope. Each exposes Send(json, envelope),
--- OnLogin() and Status().
+-- OnLogin() and Status(). A transport with `unqueued = true` also gets
+-- events that aren't recorded for the companion (see ns:Emit); for those
+-- json is nil and the envelope has no seq.
 ns.Transports = {}
 
 local frame = CreateFrame("Frame")
@@ -219,27 +221,35 @@ end
 
 ------------------------------------------------------------------ emit
 
--- Builds the envelope, assigns seq, JSON-encodes and queues the event.
--- Returns the envelope, or nil if the event was dropped.
-function ns:Emit(eventType, data, isTest)
+-- Builds the envelope and hands the event to the transports.
+--
+-- An event is queued (seq assigned, JSON stored for the companion) when its
+-- type is enabled and the notifier's own filter let it through. `filtered`
+-- is the notifier saying "my filter rejects this one". An event that isn't
+-- queued gets no seq, is stored nowhere, and is only offered to transports
+-- that ask for unqueued events: chat announcements follow their own rules
+-- and need neither the Discord toggle nor its filters.
+--
+-- Returns the envelope and whether it was queued; nil before login.
+function ns:Emit(eventType, data, isTest, filtered)
   if not self.char then
     self:Print("dropped %s: emitted before PLAYER_LOGIN", eventType)
     return
   end
-  if not self:GetOption(eventType, "enabled") then
-    self:Debug("dropped %s: disabled", eventType)
-    return
-  end
+  local enabled = self:GetOption(eventType, "enabled")
+  local queued = enabled and not filtered
 
   local char = self.char
-  char.seq = char.seq + 1 -- never reused, even if encoding below fails
+  if queued then
+    char.seq = char.seq + 1 -- never reused, even if encoding below fails
+  end
 
   -- UnitLevel lags behind during PLAYER_LEVEL_UP (verified in beta), so
   -- also trust the level that event delivered.
   local level = math.max(UnitLevel("player"), self.knownLevel or 0)
 
   local envelope = {
-    seq = char.seq,
+    seq = queued and char.seq or nil, -- nil leaves the field out
     ts = time(),
     char = self.player.name,
     surname = self.player.surname, -- nil leaves the field out
@@ -251,19 +261,26 @@ function ns:Emit(eventType, data, isTest)
   }
   if isTest then envelope.test = true end
 
-  local json = ns.Json.Encode(envelope)
-  local events = char.events
-  events[#events + 1] = json
-  while #events > MAX_EVENTS do
-    table.remove(events, 1)
+  local json
+  if queued then
+    json = ns.Json.Encode(envelope)
+    local events = char.events
+    events[#events + 1] = json
+    while #events > MAX_EVENTS do
+      table.remove(events, 1)
+    end
+    self:Debug("emit %s", json)
+  else
+    self:Debug("%s not recorded (%s)", eventType, enabled and "filtered" or "disabled")
   end
 
-  self:Debug("emit %s", json)
   for _, transport in pairs(ns.Transports) do
-    -- A transport bug must never cost the queued event above.
-    xpcall(function() transport.Send(json, envelope) end, geterrorhandler())
+    if queued or transport.unqueued then
+      -- A transport bug must never cost the queued event above.
+      xpcall(function() transport.Send(json, envelope) end, geterrorhandler())
+    end
   end
-  return envelope
+  return envelope, queued
 end
 
 ------------------------------------------------------------------ dispatch
@@ -373,7 +390,7 @@ end
 local HELP = {
   "/doink - status",
   "/doink config - open the settings page (also under Options > AddOns)",
-  "/doink enable|disable <type>",
+  "/doink enable|disable <type> - record <type> for Discord (chat announcements don't need it)",
   "/doink options [type] - show settings",
   "/doink set <type> <option> <value> - e.g. set loot min_quality 4",
   "/doink reset <type> - back to defaults",
@@ -474,6 +491,7 @@ commands[""] = function()
   ns:Print("announce: %s", ns.Transports.Announce.Status())
   ns:Print("webhook: %s", WebhookStatus())
   ns:Print("realtime: %s", ns.Transports.Screenshot.Status())
+  ns:Print("recorded for Discord (/doink enable <type>):")
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
       and "|cff60ff60on|r" or "|cffff6060off|r"
@@ -495,15 +513,20 @@ commands.test = function(args)
     return
   end
 
-  -- Goes through the real Emit, so a disabled type is still dropped.
-  local emitted = 0
+  -- Goes through the real Emit: a disabled type isn't recorded, but its
+  -- chat line is still whispered to you.
+  local emitted, dropped = 0, false
   for _ = 1, tonumber(count) or 1 do
-    if ns:Emit(notifier.type, notifier.Test(), true) then
-      emitted = emitted + 1
-    end
+    local envelope, queued = ns:Emit(notifier.type, notifier.Test(), true)
+    if queued then emitted = emitted + 1 end
+    if not envelope then dropped = true end -- before login; Emit said why
   end
-  if emitted == 0 then
-    ns:Print("%s test dropped (disabled?)", notifier.type)
+  if dropped then
+    ns:Print("%s test dropped", notifier.type)
+  elseif emitted == 0 then
+    ns:Print("%s is disabled, so the test was not recorded for Discord (/doink enable %s). "
+      .. "Chat announcements don't need it: with a channel set, the line was whispered to you",
+      notifier.type, notifier.type)
   else
     ns:Print("emitted %d test %s event(s). /doink flush to write to disk",
       emitted, notifier.type)

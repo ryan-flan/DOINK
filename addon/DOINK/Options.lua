@@ -90,11 +90,13 @@ end
 ------------------------------------------------------------------ sections
 
 local function Announcements(layout)
-  Header(layout, "Announcements in chat (this character)")
+  -- These rules are all chat needs; the Discord section below is separate.
+  Header(layout, "Announcements in chat (this character; no companion needed)")
   local c = ns.Choices.announce
   OptionDropdown { variable = "announce_channel", varType = VarType.String, name = "Announce in",
     type = "announce", key = "channel", choices = c.channel, labels = ANNOUNCE_LABELS.channel,
-    tooltip = "Where announcements go. Nothing is sent if you're not in that guild or group." }
+    tooltip = "Where announcements go. Nothing is sent if you're not in that guild or group. "
+      .. "The rules in this section work on their own: the Discord checkboxes further down don't affect chat." }
   OptionDropdown { variable = "announce_level_up", varType = VarType.String, name = "Level-ups",
     type = "announce", key = "level_up", choices = c.level_up, labels = ANNOUNCE_LABELS.level_up }
   OptionDropdown { variable = "announce_loot", varType = VarType.String, name = "Loot",
@@ -110,33 +112,41 @@ local function Announcements(layout)
   OptionCheckbox { variable = "announce_battleground", name = "Battlegrounds", type = "announce", key = "battleground" }
 end
 
+-- Says on every Discord control that chat doesn't depend on it.
+local DISCORD_ONLY = " Only affects what is recorded for the companion app; chat announcements follow their own rules above."
+
 local function Discord(layout)
-  Header(layout, "Discord, via the companion app (this character)")
+  Header(layout, "Recorded for Discord, via the companion app (this character)")
   for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
       "mount", "duel", "battleground" }) do
     OptionCheckbox { variable = "enabled_" .. t, name = TYPE_NAMES[t], type = t, key = "enabled",
-      tooltip = "Record " .. TYPE_NAMES[t]:lower() .. " for the companion to post to Discord." }
+      tooltip = "Record " .. TYPE_NAMES[t]:lower() .. " for the companion to post to Discord."
+        .. " Chat announcements don't need this." }
   end
   OptionCheckbox { variable = "level_up_milestones", name = "Level-ups: milestones only",
-    type = "level_up", key = "milestones_only", tooltip = "Only levels 10, 20 ... 60." }
+    type = "level_up", key = "milestones_only", tooltip = "Only levels 10, 20 ... 60." .. DISCORD_ONLY }
   OptionDropdown { variable = "loot_min_quality", varType = VarType.Number, name = "Loot: minimum quality",
     type = "loot", key = "min_quality", choices = { 0, 1, 2, 3, 4, 5 }, labels = QUALITY_NAMES,
-    tooltip = "Loot at or above this quality is recorded, whatever it sells for." }
+    tooltip = "Loot at or above this quality is recorded, whatever it sells for." .. DISCORD_ONLY }
   Slider { variable = "loot_min_vendor_value", name = "Loot: or worth at least (gold)",
     default = ns.Defaults.loot.min_vendor_value / 10000, min = 0, max = 100, step = 1,
     format = function(v) return v .. "g" end,
     get = function() return math.floor(ns:GetOption("loot", "min_vendor_value") / 10000 + 0.5) end,
     set = function(v) ns:SetOption("loot", "min_vendor_value", v * 10000) end,
-    tooltip = "A stack worth this much to a vendor is recorded even below the minimum quality. For more than 100g use /doink set loot min_vendor_value 250g." }
+    tooltip = "A stack worth this much to a vendor is recorded even below the minimum quality. For more than 100g use /doink set loot min_vendor_value 250g." .. DISCORD_ONLY }
   OptionCheckbox { variable = "skill_up_milestones", name = "Skill-ups: milestones only",
-    type = "skill_up", key = "milestones_only", tooltip = "Only 75, 150, 225 and 300." }
+    type = "skill_up", key = "milestones_only", tooltip = "Only 75, 150, 225 and 300." .. DISCORD_ONLY }
   OptionCheckbox { variable = "loot_rares_boe_only", name = "Loot: rares only if Bind on Equip",
-    type = "loot", key = "rares_boe_only" }
+    type = "loot", key = "rares_boe_only",
+    tooltip = "A soulbound rare isn't recorded." .. DISCORD_ONLY }
   OptionCheckbox { variable = "boss_kill_first_kill_only", name = "Boss kills: first kill only",
-    type = "boss_kill", key = "first_kill_only" }
-  OptionCheckbox { variable = "duel_wins_only", name = "Duels: wins only", type = "duel", key = "wins_only" }
+    type = "boss_kill", key = "first_kill_only",
+    tooltip = "Repeat kills aren't recorded." .. DISCORD_ONLY }
+  OptionCheckbox { variable = "duel_wins_only", name = "Duels: wins only", type = "duel", key = "wins_only",
+    tooltip = "Losses are neither recorded for Discord nor announced in chat." }
   OptionCheckbox { variable = "battleground_wins_only", name = "Battlegrounds: wins only",
-    type = "battleground", key = "wins_only" }
+    type = "battleground", key = "wins_only",
+    tooltip = "Losses are neither recorded for Discord nor announced in chat." }
 end
 
 local function Realtime(layout)

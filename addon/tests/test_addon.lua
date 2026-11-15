@@ -144,6 +144,7 @@ SlashCmdList = {}
 -- texture, sellPrice, classID, subclassID, bindType
 local itemCache = {
   [769] = { "Chunk of Boar Meat", nil, 1, 0, 0, nil, nil, 20, "", 0, 4, nil, nil, 0 },
+  [2079] = { "Sergeant's Blade", nil, 2, 0, 0, nil, nil, 1, "", 0, 100, nil, nil, 2 },
   [2140] = { "Carving Knife", nil, 3, 0, 0, nil, nil, 1, "", 0, 260, nil, nil, 2 },
   [4875] = { "Broken Boar Tusk", nil, 0, 0, 0, nil, nil, 1, "", 0, 20000, nil, nil, 0 },
   [6314] = { "Wolfmaster Cape", nil, 3, 0, 0, nil, nil, 1, "", 0, 1215, nil, nil, 1 },
@@ -1218,6 +1219,143 @@ test("announce: mounts, duels, battlegrounds and First kill!", function()
   fire("ENCOUNTER_END", 1147, "Captain Greenskin", 1, 5, 1)
   eq(lastChat()[1], "Captain Greenskin down! (Deadmines, 5 players)", "repeat kill")
   runTimers()
+end)
+
+------------------------------------------------------------------ chat on its own
+
+-- The suite runs with every type enabled (see SHIPPED above), which is not
+-- what a new player has: these tests switch the Discord toggles off again.
+local ALL_TYPES = { "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
+  "mount", "duel", "battleground" }
+
+-- Sets `enabled` for the given types; returns a function that puts back
+-- whatever overrides were there.
+local function setEnabled(types, value)
+  local old = {}
+  for _, t in ipairs(types) do
+    old[t] = ns.char.config[t] and ns.char.config[t].enabled
+    ns:SetOption(t, "enabled", value)
+  end
+  return function()
+    for _, t in ipairs(types) do ns.char.config[t].enabled = old[t] end
+  end
+end
+
+test("announce: works with every Discord toggle off; nothing is queued or shot", function()
+  announceReset()
+  slash("announce level_up all")
+  slash("realtime on")
+  -- A transport that didn't ask for unqueued events must never see one.
+  local stubCalls = 0
+  ns.Transports.Stub = { Send = function() stubCalls = stubCalls + 1 end }
+  fire("PLAYER_LEVEL_UP", 18)
+  eq(stubCalls, 1, "a queued event reaches every transport")
+  runTimers(); drainShots(); chat = {}
+  local restore = setEnabled(ALL_TYPES, false)
+  local n, seq = count(), ns.char.seq
+  fire("PLAYER_LEVEL_UP", 19)
+  ns.Transports.Stub = nil
+  eq(stubCalls, 1, "an unqueued event only goes to transports that ask for it")
+  eq(#chat, 1, "announced")
+  eq(lastChat()[1], "Ding! Level 19.", "wording"); eq(lastChat()[2], "GUILD", "channel")
+  eq(count(), n, "nothing queued for the companion")
+  eq(ns.char.seq, seq, "no seq used")
+  eq(#T.queue(), 0, "no screenshot for an event that isn't recorded")
+  restore()
+  slash("realtime off")
+  slash("announce level_up milestones")
+end)
+
+test("announce: the Discord filters don't limit chat", function()
+  announceReset()
+  local n = count()
+
+  slash("set levelup milestones_only on")
+  slash("announce level_up all")
+  fire("PLAYER_LEVEL_UP", 21); runTimers()
+  eq(lastChat()[1], "Ding! Level 21.", "level_up milestones_only vs announce all")
+  eq(count(), n, "level 21 not queued")
+  slash("set levelup milestones_only off") -- not reset: a later test reads this type's overrides
+  slash("announce level_up milestones")
+
+  slash("announce skill_up all") -- skill_up milestones_only is on by default
+  fire("CHAT_MSG_SKILL", "Your skill in Blacksmithing has increased to 149."); runTimers()
+  eq(lastChat()[1], "Blacksmithing 149/225.", "skill_up milestones_only vs announce all")
+  eq(count(), n, "rank 149 not queued")
+  slash("announce skill_up off")
+
+  slash("reset loot") -- min_quality 3
+  slash("announce loot uncommon")
+  fire("CHAT_MSG_LOOT", lootMsg(2079, "Sergeant's Blade", 2)); runTimers()
+  eq(lastChat()[1], "Looted " .. link(2079, "Sergeant's Blade", 2) .. "!", "a green is announced")
+  eq(count(), n, "the green is not queued")
+  slash("announce loot epic")
+
+  slash("set bosskill first_kill_only on")
+  fire("ENCOUNTER_END", 1150, "Gilnid", 1, 5, 1); runTimers()
+  eq(count(), n + 1, "first kill queued")
+  eq(lastChat()[1], "Gilnid down! (Deadmines, 5 players) First kill!", "first kill announced")
+  fire("ENCOUNTER_END", 1150, "Gilnid", 1, 5, 1); runTimers()
+  eq(lastChat()[1], "Gilnid down! (Deadmines, 5 players)", "second kill announced")
+  eq(count(), n + 1, "second kill not queued")
+  slash("reset bosskill")
+
+  eq(#chat, 5, "one line each")
+end)
+
+test("announce: wins_only ignores a loss for chat too; off, chat decides on its own", function()
+  announceReset()
+  local n = count()
+  local function bgLoss()
+    instanceKind, bgWinner = "pvp", 0 -- Horde wins; we're Alliance
+    fire("PVP_MATCH_COMPLETE"); runTimers()
+    instanceKind, bgWinner = "none", nil
+    fire("PLAYER_ENTERING_WORLD")
+  end
+
+  -- wins_only on (the default): nothing announced, nothing queued.
+  fire("CHAT_MSG_SYSTEM", "Grakkor has defeated Flano in a duel"); runTimers()
+  bgLoss()
+  eq(#chat, 0, "losses not announced"); eq(count(), n, "losses not queued")
+
+  -- wins_only off, Discord toggle off: announced, not queued.
+  local restore = setEnabled({ "duel", "battleground" }, false)
+  ns:SetOption("duel", "wins_only", false)
+  ns:SetOption("battleground", "wins_only", false)
+  fire("CHAT_MSG_SYSTEM", "Grakkor has defeated Flano in a duel"); runTimers()
+  eq(lastChat()[1], "Lost a duel to Grakkor.", "duel loss announced")
+  bgLoss()
+  eq(lastChat()[1], "Lost Deadmines.", "battleground loss announced")
+  eq(#chat, 2, "one line each"); eq(count(), n, "not queued while disabled")
+  ns.char.config.duel.wins_only, ns.char.config.battleground.wins_only = nil, nil
+  restore()
+end)
+
+test("announce: an enabled event that passes its filter is queued as before and announced once", function()
+  announceReset()
+  local n = count()
+  fire("PLAYER_LEVEL_UP", 30)
+  runTimers()
+  eq(count(), n + 1, "queued once")
+  eq(last(), '{"char":"Flano","class":"WARRIOR","data":{"level":30},"level":30,'
+    .. '"realm":"Classic Beta PvE 2","seq":' .. ns.char.seq .. ',"surname":"Wren",'
+    .. '"ts":1790870000,"type":"level_up"}', "JSON unchanged")
+  eq(#chat, 1, "announced once")
+  eq(lastChat()[1], "Ding! Level 30.", "wording")
+end)
+
+test("test: a disabled type still whispers its line and says it wasn't recorded", function()
+  announceReset()
+  local restore = setEnabled({ "level_up" }, false)
+  local n, seq = count(), ns.char.seq
+  local out = slash("test levelup")
+  eq(#chat, 1, "whispered")
+  eq(lastChat()[2], "WHISPER", "to you only")
+  assert(lastChat()[1]:find("^%[test%] Ding! Level"), lastChat()[1])
+  eq(count(), n, "not queued"); eq(ns.char.seq, seq, "no seq used")
+  assert(out:find("not recorded for Discord", 1, true) and out:find("disabled", 1, true), out)
+  restore()
+  assert(slash("test levelup"):find("emitted 1 test level_up", 1, true), "enabled again: recorded")
 end)
 
 ------------------------------------------------------------------ options page

@@ -57,14 +57,13 @@ ns.Notifiers.SkillUp = {
     rank = tonumber(rank)
     if not rank then return end
 
-    if ns:GetOption("skill_up", "milestones_only") and rank % 75 ~= 0 then
-      return
-    end
+    -- Not recorded for Discord; chat announcements have their own rule.
+    local filtered = ns:GetOption("skill_up", "milestones_only") and rank % 75 ~= 0
     ns:Emit("skill_up", {
       skill = skill,
       rank = rank,
       max_rank = MaxRank(skill) or ns.Json.null,
-    })
+    }, false, filtered)
   end,
 
   Test = function()
