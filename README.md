@@ -433,8 +433,10 @@ as the addon recorded it:
 
 `played` (total seconds played) is there only with `/doink played on`.
 
-The `data` fields of each type are listed under "Data contract" in
-[CLAUDE.md](https://github.com/ryan-flan/DOINK/blob/main/CLAUDE.md#data-contract-both-halves-depend-on-this--do-not-change-casually). Events from `/doink test` carry `"test":true`.
+Every field of every event type is described, with an example each, in
+the [event reference](https://github.com/ryan-flan/DOINK/blob/main/docs/events.md);
+there is a [JSON Schema](https://github.com/ryan-flan/DOINK/blob/main/docs/event.schema.json)
+too. Events from `/doink test` carry `"test":true`.
 Answer with any 2xx status.
 
 - **Next to Discord it is best effort.** Discord posts as usual, then the

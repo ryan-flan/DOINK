@@ -39,6 +39,7 @@ DOINK/
 │   ├── dependabot.yml        # weekly, grouped: gomod (companion/) + github-actions
 │   ├── ISSUE_TEMPLATE/, PULL_REQUEST_TEMPLATE.md
 │   └── workflows/            # ci.yml: tests + lint + govulncheck; release.yml: see Releases
+├── docs/                     # events.md + event.schema.json (public event reference), logo
 ├── addon/tests/test_addon.lua  # offline harness: cd addon && luajit tests/test_addon.lua
 ├── addon/DOINK/              # junctioned into <WoW>/<flavor>/Interface/AddOns/DOINK
 │   ├── DOINK.toc
@@ -131,6 +132,16 @@ Event JSON schema:
 }
 ```
 
+The public reference for this schema is `docs/events.md` (every field,
+one example per type) with `docs/event.schema.json` (JSON Schema) next to
+it; the README's `forward_url` section links to both. **Any change to an
+event's fields goes into those two files in the same commit.**
+`companion/cmd/doink/schema_test.go` holds them to the `/doink test`
+fixtures in `testevents.go` (same types, same `data` keys, examples
+decode), so a new type or field fails CI until it is documented. After
+editing only the docs, run it with `go test -count=1 ./cmd/doink`: the
+files are outside the Go module, so the test cache doesn't see the edit.
+
 Rules:
 - Forever characters have surnames, and only the **full name** is unique.
   `char` stays the first name; `surname` is present when the client has one.
@@ -172,11 +183,11 @@ Rules:
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
   - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234, "boe": true|false|null, "gear": true|false|null}`
-  - `death`:     `{"zone": "Westfall", "subzone": "...", "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
+  - `death`:     `{"zone": "Westfall", "subzone": "..."|null, "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
-  - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "...", "difficulty": 1, "success": true, "group_size": 5, "first_kill": true|false, "group": ["Flano Wren (Warrior 23)", ...]|null}`
-  - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150}`
-  - `mount`:     `{"name": "Gray Wolf", "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
+  - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "..."|null, "difficulty": 1, "success": true, "group_size": 5, "first_kill": true|false, "group": ["Flano Wren (Warrior 23)", ...]|null}`
+  - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150|null}`
+  - `mount`:     `{"name": "Gray Wolf"|null, "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
   - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
   - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
 - `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is

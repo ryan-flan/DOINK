@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ryan-flan/DOINK/main/docs/event.schema.json",
+  "title": "DOINK event",
+  "description": "One event as the DOINK addon records it and as the companion POSTs it to forward_url. Explained in docs/events.md. Extra fields and new event types may appear in later versions: ignore what you don't know.",
+  "type": "object",
+  "required": ["seq", "ts", "char", "realm", "class", "level", "type", "data"],
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Counter per character, rising by one per recorded event, never reused. Starts again at 1 only if the addon's saved data is deleted."
+    },
+    "ts": {
+      "type": "integer",
+      "description": "When the event happened: Unix time in seconds, from the game client's clock."
+    },
+    "char": {
+      "type": "string",
+      "description": "The character's first name."
+    },
+    "surname": {
+      "type": "string",
+      "description": "The character's surname. Left out when the client has none."
+    },
+    "realm": {
+      "type": "string",
+      "description": "The realm's name as the client shows it; may contain spaces."
+    },
+    "class": {
+      "type": "string",
+      "description": "The class's language-independent name in capitals, e.g. WARRIOR.",
+      "examples": ["WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID"]
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The character's level when the event happened. On a level_up it is the new level."
+    },
+    "played": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total time played on this character, in seconds. Present only when the player turned it on (/doink played on) and the client has answered."
+    },
+    "type": {
+      "type": "string",
+      "description": "What happened; decides the shape of data.",
+      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground"]
+    },
+    "data": {
+      "type": "object",
+      "description": "Details of the event; the fields depend on type."
+    },
+    "test": {
+      "const": true,
+      "description": "Present only on events made with /doink test. Never false."
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "level_up" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/level_up" } } } },
+    { "if": { "properties": { "type": { "const": "loot" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/loot" } } } },
+    { "if": { "properties": { "type": { "const": "death" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/death" } } } },
+    { "if": { "properties": { "type": { "const": "quest" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/quest" } } } },
+    { "if": { "properties": { "type": { "const": "boss_kill" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/boss_kill" } } } },
+    { "if": { "properties": { "type": { "const": "skill_up" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/skill_up" } } } },
+    { "if": { "properties": { "type": { "const": "mount" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/mount" } } } },
+    { "if": { "properties": { "type": { "const": "duel" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/duel" } } } },
+    { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } }
+  ],
+  "$defs": {
+    "level_up": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": { "type": "integer", "minimum": 2, "description": "The level just reached." }
+      }
+    },
+    "loot": {
+      "type": "object",
+      "required": ["item_id", "link", "name", "quality", "qty", "vendor_value", "boe", "gear"],
+      "properties": {
+        "item_id": { "type": "integer", "description": "The game's item id." },
+        "link": { "type": "string", "description": "The item link exactly as the game wrote it in chat, with its | codes." },
+        "name": { "type": "string", "description": "The item's name in the player's game language." },
+        "quality": { "type": "integer", "minimum": 0, "description": "0 poor, 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary." },
+        "qty": { "type": "integer", "minimum": 1, "description": "How many were looted at once." },
+        "vendor_value": { "type": "integer", "minimum": 0, "description": "What a vendor pays for the whole stack, in copper. 0 when the item can't be sold." },
+        "boe": { "type": ["boolean", "null"], "description": "Whether the item binds when equipped. null when the client didn't say." },
+        "gear": { "type": ["boolean", "null"], "description": "Whether the item is a weapon or armour. null when the client didn't say." }
+      }
+    },
+    "death": {
+      "type": "object",
+      "required": ["zone", "subzone", "killer", "environment"],
+      "properties": {
+        "zone": { "type": "string", "description": "The zone's name in the player's game language." },
+        "subzone": { "type": ["string", "null"], "description": "The area within the zone. null where the game names none." },
+        "killer": { "type": ["string", "null"], "description": "Who landed the last hit, from the game's death recap. null for an environmental death or when the recap was empty." },
+        "environment": {
+          "type": ["string", "null"],
+          "description": "The kind of environmental death, in capitals. null when something killed the character or the cause is unknown.",
+          "examples": ["FALLING", "DROWNING", "FATIGUE", "FIRE", "LAVA", "SLIME"]
+        }
+      }
+    },
+    "quest": {
+      "type": "object",
+      "required": ["quest_id", "title", "xp"],
+      "properties": {
+        "quest_id": { "type": "integer", "description": "The game's quest id." },
+        "title": { "type": "string", "description": "The quest's title in the player's game language; \"Quest #<id>\" when the client couldn't give one." },
+        "xp": { "type": "integer", "minimum": 0, "description": "Experience rewarded. 0 when there was none." }
+      }
+    },
+    "boss_kill": {
+      "type": "object",
+      "required": ["encounter_id", "name", "instance", "difficulty", "success", "group_size", "first_kill", "group"],
+      "properties": {
+        "encounter_id": { "type": "integer", "description": "The game's encounter id." },
+        "name": { "type": "string", "description": "The encounter's name in the player's game language." },
+        "instance": { "type": ["string", "null"], "description": "The dungeon or raid. null when the client didn't say." },
+        "difficulty": { "type": "integer", "description": "The game's difficulty id for the instance." },
+        "success": { "const": true, "description": "Always true: wipes are not recorded." },
+        "group_size": { "type": "integer", "description": "The group size the game reports for the encounter, e.g. 5 or 40." },
+        "first_kill": { "type": "boolean", "description": "True the first time this character kills this encounter, as far as the addon's saved data remembers." },
+        "group": {
+          "type": ["array", "null"],
+          "maxItems": 4,
+          "items": { "type": "string" },
+          "description": "The other party members as \"Name Surname (Class Level)\". null in a raid, when alone, or when the game hides the names."
+        }
+      }
+    },
+    "skill_up": {
+      "type": "object",
+      "required": ["skill", "rank", "max_rank"],
+      "properties": {
+        "skill": { "type": "string", "description": "The skill's name in the player's game language." },
+        "rank": { "type": "integer", "description": "The rank just reached." },
+        "max_rank": { "type": ["integer", "null"], "description": "The current cap for this skill. null when the client offers none, which is always the case for weapon skills." }
+      }
+    },
+    "mount": {
+      "type": "object",
+      "required": ["name", "item_id", "spell_id", "link", "bought"],
+      "properties": {
+        "name": { "type": ["string", "null"], "description": "The mount's name in the player's game language." },
+        "item_id": { "type": ["integer", "null"], "description": "The mount item's id, when the mount was seen as an item arriving in the bags." },
+        "spell_id": { "type": ["integer", "null"], "description": "The mount's spell id, when the mount was seen through the mount journal." },
+        "link": { "type": ["string", "null"], "description": "The item link as the game wrote it, when there is an item." },
+        "bought": { "type": "boolean", "description": "True when a vendor window was open at the time." }
+      }
+    },
+    "duel": {
+      "type": "object",
+      "required": ["opponent", "won", "fled", "makgora"],
+      "properties": {
+        "opponent": { "type": "string", "description": "The other player's name as the game's message gave it." },
+        "won": { "type": "boolean", "description": "Whether this character won." },
+        "fled": { "type": "boolean", "description": "True when the duel ended because the loser left the duel area." },
+        "makgora": { "type": "boolean", "description": "True for a Mak'gora, the duel to the death." }
+      }
+    },
+    "battleground": {
+      "type": "object",
+      "required": ["name", "won"],
+      "properties": {
+        "name": { "type": "string", "description": "The battleground's name in the player's game language." },
+        "won": { "type": "boolean", "description": "Whether this character's faction won." }
+      }
+    }
+  }
+}
