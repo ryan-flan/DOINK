@@ -81,24 +81,29 @@ Every event type, what triggers it, the exact wording, and the rule it uses once
 | Battleground | The end of a battleground match | `Won Warsong Gulch!` | Yes (wins only) |
 
 Nothing is announced or recorded until you switch it on (characters that already used DOINK keep their current settings), because guild chat is
-shared. The rules below are what each setting means; change them per character:
+shared. Announcements need only a channel and these rules: you do **not**
+have to enable an event type for Discord to have it announced in chat. The
+rules below are what each setting means; change them per character:
 
 - Level-up: `milestones`, `all`, `off` (default)
 - Loot: minimum quality `any`, `uncommon`, `rare`, `epic`, `legendary`, or `off` (default)
 - Skill-up: `max` (only when a skill reaches its cap), `milestones` (75/150/225/300), `all`, `off` (default)
 - Death, boss kill, quest, mount, duel, battleground: `on` or `off`
 
-The announcement rules work on what the addon records (see
-[Notifiers](#notifiers-what-gets-recorded-for-discord)), so a few event
-settings apply to chat too. Loot: a rare is only recorded when it is Bind
-on Equip or sells for 1g or more (a soulbound blue only matters to you),
-legendaries always
-when they are a weapon or armour and never when they are a material; with
-the `epic` rule, chat shows epics and legendaries. Duel and
-battleground losses are not recorded unless you turn off `wins_only`
-(`/doink set duel wins_only off`); then chat says `Lost a duel to ...` /
-`Lost Warsong Gulch.`. Boss kills can be limited to first kills with
-`/doink set boss_kill first_kill_only on`.
+These rules are the only thing that decides what goes to chat. The
+[Discord settings](#notifiers-what-gets-recorded-for-discord) (the
+per-type enable switches, loot's minimum quality and vendor value,
+`first_kill_only` and so on) only decide what is recorded for the
+companion. So with boss kills on, every kill is announced, not just the
+first.
+
+One setting covers both: `wins_only` (on by default) ignores duel and
+battleground losses everywhere. Turn it off
+(`/doink set duel wins_only off`) and chat says `Lost a duel to ...` /
+`Lost Warsong Gulch.` too.
+
+If the game refuses to send an announcement from an addon, DOINK tells you
+once per session and `/doink` shows how many were blocked.
 
 Channels: `guild`, `officer`, `party`, `raid`, or `off` (default). If you are
 not in a guild (or group) nothing is sent and `/doink` says so. Say, yell and
@@ -132,7 +137,7 @@ realtime state, and which event types are enabled.
 | `/doink announce guild` / `officer` / `party` / `raid` / `off` | Choose where announcements go |
 | `/doink announce loot rare` | Change a rule (any event type, values as listed above) |
 | `/doink announce test` | Whisper yourself a sample of every announcement, with whether the current rules would send it |
-| `/doink enable <type>` / `disable <type>` | Turn an event type off entirely (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`) |
+| `/doink enable <type>` / `disable <type>` | Only for the Discord companion: record an event type or not (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`). Chat announcements don't need it |
 | `/doink options [type]` | Show the event settings (for example the loot quality and vendor-value thresholds used for Discord) |
 | `/doink set <type> <option> <value>` | Change one, e.g. `/doink set loot min_quality 4` |
 | `/doink reset <type>` | Back to defaults |
@@ -371,8 +376,8 @@ retry.
 
 ### Notifiers (what gets recorded for Discord)
 
-These decide which events are recorded for Discord (all off until you enable them, e.g. `/doink enable loot`); the chat announcement
-rules above are applied on top.
+These decide which events are recorded for Discord (all off until you enable them, e.g. `/doink enable loot`). They don't affect chat: the
+announcement rules above work on their own. The one exception is `wins_only`, which ignores losses for chat as well.
 
 | Type | Posts when | Options (defaults) |
 |---|---|---|
@@ -462,7 +467,7 @@ One folder, `DOINK`, 16 files, about 2,200 lines of Lua, no third-party code:
 | `DOINK.toc` | Addon manifest. `## Interface: 16001`, `## SavedVariables: DOINKDB`. |
 | `Core.lua` | Startup, saved-variables handling, the `/doink` slash command, event dispatch. |
 | `Defaults.lua` | Default settings and the allowed values for each setting. |
-| `Announce.lua` | Chat announcements: wording, rules, rate limiting. |
+| `Announce.lua` | Chat announcements: wording, rules, rate limiting. Listens to `ADDON_ACTION_BLOCKED` and `ADDON_ACTION_FORBIDDEN` to tell you when the game blocks a line. |
 | `Options.lua` | The settings page, built on the game's own Settings API. |
 | `Json.lua` | A minimal JSON encoder used to store events for the optional companion. |
 | `Notifiers/LevelUp.lua` | Listens to `PLAYER_LEVEL_UP`. |

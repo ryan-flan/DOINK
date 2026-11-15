@@ -200,7 +200,16 @@ may add them), rare mob kills (combat log `UNIT_DIED` + classification).
 
 `Announce.lua` is registered in `ns.Transports` like the screenshot transport: Core
 calls `Send(json, envelope)` for every emitted event and never knows what the
-transport does with it. Rules live in `ns.Defaults.announce` (per-character
+transport does with it. **Chat follows the announce rules alone**: the
+per-type `enabled` (the Discord toggle) and the notifier filters only decide
+what is queued. Notifiers pass their filter's verdict to
+`ns:Emit(type, data, isTest, filtered)` instead of returning early (detection
+guards such as the death dedupe, mount throttle and secret checks still
+return; so does `wins_only`, which means "losses are ignored" for chat
+and Discord alike). Queued = `enabled and not filtered`; an unqueued event gets no seq,
+is not stored, and goes only to transports with `unqueued = true`
+(`Announce`; `json` is nil), never to Screenshot. `Emit` returns `envelope,
+queued`. Rules live in `ns.Defaults.announce` (per-character
 overrides via `ns:GetOption("announce", key)`; allowed string values in
 `ns.Choices.announce`): `channel` guild|officer|party|raid|off, `level_up`
 milestones|all|off, `loot` minimum quality any|uncommon|rare|epic|legendary|off,
@@ -223,10 +232,15 @@ their `config` once (`char.optIn` marks it; new characters skip it). The filters
   with "No player named 'Flano'").
 - Rate limit: one line per 2 s via a `C_Timer.After` chain, max 8 per minute,
   dropped lines are printed to the player. 255-byte chat limit enforced.
+  The next timer is set before `SendChatMessage`, so a send that errors
+  can't stall the queue.
+- Blocked sends: `Announce.lua`'s own frame counts `ADDON_ACTION_BLOCKED` /
+  `ADDON_ACTION_FORBIDDEN` naming DOINK and `SendChatMessage`, prints one
+  chat line per session, and `Status()` shows the count.
 - Verified in beta (2026-10-02): `SendChatMessage` **works from a timer**, i.e.
   without a hardware event: WHISPER (server answered) and a real PARTY
-  announcement from a live event both delivered. GUILD is the same
-  restriction class in retail; not yet seen live (no guild on the test char). SAY/YELL/CHANNEL are hardware-gated
+  announcement from a live event both delivered. GUILD from a timer works
+  on Forever too (verified 2026-11-15; retail blocks it). SAY/YELL/CHANNEL are hardware-gated
   for addons and are not offered. `C_Club` and `C_Club.SendMessage` exist in
   Forever but are untested (no community to test with); communities are a
   later option.
@@ -351,9 +365,12 @@ tests/test_addon.lua`.
   pollute globals except `DOINKDB` (SavedVariables) and the `/doink` slash cmd.
 - One notifier per file. Each exposes `ns.Notifiers.<Name> = { type = "<type>",
   events = {...}, OnEvent = function(event, ...) end, Test = function() return
-  data end }` and calls `ns:Emit(type, data)`. `Test` returns a fixture `data`
-  table for `/doink test`, which bypasses the notifier's filter but not the
-  enable flag.
+  data end }` and calls `ns:Emit(type, data, false, filtered)`, where
+  `filtered` is true when the notifier's own (Discord) filter rejects the
+  event: never return early on a preference filter, chat may still want
+  it (`wins_only` is the exception: a loss is dropped for both). `Test` returns a fixture `data` table for `/doink test`, which
+  bypasses the notifier's filter but not the enable flag (a disabled type
+  is whispered, not recorded).
 - Options: read with `ns:GetOption(type, key)`. Per-char `config` stores only
   overrides; defaults live in `Defaults.lua` and are never copied into the DB.
 - JSON `null`: use the `ns.Json.null` sentinel (Lua tables can't hold `nil`).
@@ -722,7 +739,7 @@ fixture included; that's a stand-in for the real name, by decision.)
   addon"; the same call straight from `/run` (the Enter key press) posts,
   and a WHISPER from a timer posts. So on retail, DOINK's guild
   announcements (sent from game events and a timer queue) can't go out
-  by themselves. Forever: untested, see the launch checklist.
+  by themselves. Forever allows it (2026-11-15, see the launch checklist).
 - [x] **Blizzard's Discord guild-chat link** (Forever beta; from
   Blizzard/Discord posts, the kami-labs guide and Blizzard forums, not
   tried by us). Server-side relay of guild chat ↔ one Discord channel.
@@ -764,13 +781,12 @@ fixture included; that's a stand-in for the real name, by decision.)
     `lastOnlineGUID` tie the Discord user to their character. Unchecked:
     a guild that routes Discord into a separate `/discord` chat (may be
     another event), and Forever.
-- [ ] **Launch-day checklist** (2026-11-04; nothing here is verified yet):
-  - [ ] **First: can an addon post to GUILD without a key press?**
-    `/run C_Timer.After(1,function() SendChatMessage("test","GUILD") end)`.
-    Retail 12.1.5 blocks it (see below); if Forever does too, every
-    automatic guild announcement fails with "Interface action failed
-    because of an addon", and `Announce.lua` must change before anyone
-    levels (announce on a click or key press instead).
+- [ ] **Launch-day checklist** (2026-11-04; unticked items are unverified):
+  - [x] **First: can an addon post to GUILD without a key press?** Yes
+    (verified on Forever 2026-11-15):
+    `/run C_Timer.After(1,function() SendChatMessage("test","GUILD") end)`
+    posted to guild chat, so timer-driven guild announcements work.
+    Retail 12.1.5 blocks the same call (see above).
   - [ ] DOINK guild lines appear in the linked Discord channel; how
     `[Item]` links render there.
   - [ ] `/dump ChatTypeInfo` and `/etrace` while someone types from
