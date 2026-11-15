@@ -144,6 +144,9 @@ local function Drain()
     sending = false
     return
   end
+  -- Schedule the next line first: if the send below raises an error, the
+  -- queue still moves on instead of staying "sending" forever.
+  C_Timer.After(SEND_GAP, Drain)
   local now = GetTime()
   while sent[1] and now - sent[1] > 60 do table.remove(sent, 1) end
   if #sent >= PER_MINUTE then
@@ -152,7 +155,6 @@ local function Drain()
     sent[#sent + 1] = now
     SendChatMessage(item.line:sub(1, MAX_LEN), item.chatType, nil, item.target)
   end
-  C_Timer.After(SEND_GAP, Drain)
 end
 
 local function Enqueue(line, chatType, target)

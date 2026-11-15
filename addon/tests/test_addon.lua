@@ -1358,6 +1358,22 @@ test("test: a disabled type still whispers its line and says it wasn't recorded"
   assert(slash("test levelup"):find("emitted 1 test level_up", 1, true), "enabled again: recorded")
 end)
 
+test("announce: a send that errors doesn't stall the lines after it", function()
+  announceReset()
+  local real, calls = SendChatMessage, 0
+  SendChatMessage = function(...)
+    calls = calls + 1
+    if calls == 1 then error("boom") end
+    return real(...)
+  end
+  pcall(fire, "PLAYER_LEVEL_UP", 20) -- this send throws
+  fire("PLAYER_LEVEL_UP", 30)
+  runTimers()
+  SendChatMessage = real
+  eq(#chat, 1, "the next line went out after the timer")
+  eq(lastChat()[1], "Ding! Level 30.", "which line")
+end)
+
 ------------------------------------------------------------------ options page
 
 local function control(variable)
