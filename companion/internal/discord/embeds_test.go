@@ -396,3 +396,32 @@ func TestBossKillFirstKillAndGroup(t *testing.T) {
 		t.Error("empty group made a field")
 	}
 }
+
+func TestLevelUpShowsTimePlayed(t *testing.T) {
+	ev := event("level_up", map[string]any{"level": 20.0})
+	if _, has := BuildEmbed(ev, nil)["description"]; has {
+		t.Error("no played field: no line")
+	}
+	ev.Played, ev.HasPlayed = 408475, true
+	if got := BuildEmbed(ev, nil)["description"]; got != "Time played: 4d 17h 27m" {
+		t.Errorf("description %v", got)
+	}
+	// Only level-ups show it; the field is still in the event for other tools.
+	quest := event("quest", map[string]any{"quest_id": 1.0, "title": "T", "xp": 5.0})
+	plain := BuildEmbed(quest, nil)["description"]
+	quest.Played, quest.HasPlayed = 408475, true
+	if got := BuildEmbed(quest, nil)["description"]; got != plain {
+		t.Errorf("quest description changed: %v", got)
+	}
+}
+
+func TestFormatPlayed(t *testing.T) {
+	for seconds, want := range map[int64]string{
+		0: "under a minute", 59: "under a minute", 60: "1m", 2462: "41m", 3600: "1h 0m",
+		7325: "2h 2m", 86400: "1d 0h 0m", 408475: "4d 17h 27m",
+	} {
+		if got := FormatPlayed(seconds); got != want {
+			t.Errorf("%d: %q, want %q", seconds, got, want)
+		}
+	}
+}

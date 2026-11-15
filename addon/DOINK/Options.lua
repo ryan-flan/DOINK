@@ -147,6 +147,11 @@ local function Discord(layout)
   OptionCheckbox { variable = "battleground_wins_only", name = "Battlegrounds: wins only",
     type = "battleground", key = "wins_only",
     tooltip = "Losses are neither recorded for Discord nor announced in chat." }
+  Checkbox { variable = "general_played", name = "Add time played to events", default = false,
+    get = function() return ns:GetOption("general", "played") end,
+    set = function(on) ns:SetPlayed(on) end,
+    tooltip = "Every recorded event carries this character's total time played. Discord shows it on "
+      .. "level-ups; other tools can read it from any event. Same as /doink played on." }
 end
 
 local function Realtime(layout)

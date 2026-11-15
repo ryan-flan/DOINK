@@ -124,6 +124,7 @@ Event JSON schema:
   "realm": "Whatever",
   "class": "WARRIOR",
   "level": 20,
+  "played": 408475,            // optional; total seconds played (v0.19+)
   "type":  "level_up",
   "data":  { ... type-specific ... },
   "test":  true                 // optional; only present on /doink test events
@@ -138,6 +139,19 @@ Rules:
   Source: `UnitName("player")` returns the surname as its 2nd value on Forever
   (verified; nil elsewhere). Since v0.3.0; both halves migrate v0.2.0's
   first-name keys (the addon also stamps `surname` into queued events).
+- `played` is the character's total time played in whole seconds, present
+  only when the player turned it on (`general.played`, off by default;
+  `/doink played on|off`, Settings checkbox; per character) and the client
+  has answered. `Core.lua` calls `RequestTimePlayed()` once (at login, or
+  when the option is turned on, or at the first event if neither
+  happened), remembers `TIME_PLAYED_MSG`'s total with `GetTime()` and
+  counts on from there; the player's own `/played` refreshes it. While
+  the request is out, the chat frames registered for `TIME_PLAYED_MSG`
+  are unregistered so the two "time played" chat lines don't print, and
+  re-registered a frame after the answer or after 5 s. The companion
+  shows it on the level-up embed only ("Time played: 4d 17h 27m");
+  `forward_url` receivers get it on every event. An event whose `played`
+  isn't a non-negative integer is skipped like any bad entry.
 - Webhook for a character's events: `webhooks["Name-Realm"]`, else
   `webhooks["*"]`, else the companion's `config.toml`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
@@ -395,6 +409,7 @@ tests/test_addon.lua`.
 /doink debug             toggle verbose logging of every event notifiers see
 /doink flush             ReloadUI() to force SavedVariables write
 /doink enable|disable <type>
+/doink played on|off     add total time played to every recorded event
 ```
 
 ## Companion conventions
@@ -869,6 +884,16 @@ fixture included; that's a stand-in for the real name, by decision.)
     hello, printed both embeds and would have deleted all three files. This is the basis for the planned `Screenshot()`
   channel (spec "Later"). Tip: run `/run` lines one at a time; pasting
   several at once ran none of them, silently.
+- [x] **`RequestTimePlayed()` works from addon code without a key press**
+  (Forever, 2026-11-15): called from a `C_Timer.After` callback it fired
+  `TIME_PLAYED_MSG` with `408475, 2462` (total seconds, seconds at this
+  level), matching the chat lines "Total time played: 4 days, 17 hours,
+  27 minutes, 55 seconds" / "Time played this level: 0 days, 0 hours, 41
+  minutes, 2 seconds". No blocked-action popup reported.
+  - [ ] Whether unregistering `TIME_PLAYED_MSG` from `ChatFrame1..N`
+    really hides those two lines on Forever (the standard trick on other
+    clients): `/doink played on`, `/reload`, and no "Total time played"
+    line should appear at login.
 - [x] Achievements present? API exists (`GetTotalAchievementPoints()` → `0`),
   not enabled in beta yet. Exploration achievements have been shown. v1.1.
 - [x] **`COMBAT_LOG_EVENT_UNFILTERED` is protected for addons** (as in the

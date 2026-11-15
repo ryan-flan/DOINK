@@ -89,6 +89,19 @@ DUEL_WINNER_KNOCKOUT = "%1$s has defeated %2$s in a duel"
 DUEL_WINNER_RETREAT = "%2$s has fled from %1$s in a duel"
 MAKGORA_WINNER_TEST = "%1$s has slain %2$s in a Mak'gora" -- stand-in; real names unknown until launch
 
+-- /played: RequestTimePlayed() is answered with TIME_PLAYED_MSG, which the
+-- chat frames print unless they stopped listening.
+local playedRequests, playedLines = 0, 0
+function RequestTimePlayed() playedRequests = playedRequests + 1 end
+NUM_CHAT_WINDOWS = 2
+for i = 1, NUM_CHAT_WINDOWS do
+  local chatFrame = CreateFrame("Frame")
+  function chatFrame:IsEventRegistered(e) return self.events[e] == true end
+  chatFrame:RegisterEvent("TIME_PLAYED_MSG")
+  chatFrame:SetScript("OnEvent", function() playedLines = playedLines + 1 end)
+  _G["ChatFrame" .. i] = chatFrame
+end
+
 local now, level = 1000, 9
 time = function() return 1790870000 end
 function GetTime() return now end
@@ -256,7 +269,7 @@ fire("PLAYER_LOGIN")
 local SHIPPED = {}
 for t, d in pairs(ns.Defaults) do
   if d.enabled ~= nil then SHIPPED[t] = d.enabled end
-  if t ~= "announce" then d.enabled = true end
+  if t ~= "announce" and t ~= "general" then d.enabled = true end
 end
 local SHIPPED_ANNOUNCE = {}
 for k, v in pairs(ns.Defaults.announce) do SHIPPED_ANNOUNCE[k] = v end
@@ -1402,10 +1415,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 10 + 7 + 2, "announce 7+3, discord 10+7, realtime 2")
+  eq(#settings.controls, 7 + 3 + 10 + 7 + 1 + 2, "announce 7+3, discord 10+7+1, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 23, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 24, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")
@@ -1494,6 +1507,102 @@ test("upgrade: v0.17 characters keep their effective settings, new ones start of
   fire("PLAYER_LOGIN")
   eq(next(ns.db.chars[key].config), nil, "no overrides for a new character")
   eq(ns.db.chars[key].optIn, true, "marked")
+end)
+
+------------------------------------------------------------------ time played
+
+-- Runs last: once the total is known it stays known for the session.
+test("played: off by default, nothing asked and no field", function()
+  eq(ns.Defaults.general.played, false, "shipped off")
+  eq(playedRequests, 0, "never asked while off, not even at the logins above")
+  fire("PLAYER_LEVEL_UP", 31)
+  assert(not has('"played"'), last())
+  assert(slash(""):find("time played in events: off", 1, true), "status line")
+end)
+
+test("played: a client without the API still records events, without the field", function()
+  local real = RequestTimePlayed
+  RequestTimePlayed = nil
+  slash("played on")
+  local n = count()
+  fire("PLAYER_LEVEL_UP", 31)
+  RequestTimePlayed = real
+  assert(count() > n, "recorded")
+  assert(not has('"played"'), last())
+  eq(_G["ChatFrame1"]:IsEventRegistered("TIME_PLAYED_MSG"), true, "chat frames untouched")
+  slash("played off")
+end)
+
+test("played: a client that never answers gets its chat lines back", function()
+  timers = {}
+  slash("played on")
+  eq(playedRequests, 1, "asked")
+  eq(_G["ChatFrame1"]:IsEventRegistered("TIME_PLAYED_MSG"), false, "hidden while waiting")
+  eq(#timers, 1, "one fallback timer"); eq(timers[1][1], 5, "after 5 s")
+  runTimers()
+  eq(_G["ChatFrame1"]:IsEventRegistered("TIME_PLAYED_MSG"), true, "listening again")
+  eq(_G["ChatFrame2"]:IsEventRegistered("TIME_PLAYED_MSG"), true, "all of them")
+  slash("played off")
+  playedRequests = 0
+  now = now + 11 -- past the gap between two requests
+end)
+
+test("played: turning it on asks once, quietly, and events carry the running total", function()
+  timers = {}
+  local out = slash("played on")
+  assert(out:find("time played on", 1, true), out)
+  eq(playedRequests, 1, "asked")
+  eq(_G["ChatFrame1"]:IsEventRegistered("TIME_PLAYED_MSG"), false, "chat frames stopped listening")
+
+  -- Not answered yet: the event goes out without the field, and isn't asked again.
+  fire("PLAYER_LEVEL_UP", 32)
+  assert(not has('"played"'), last())
+  eq(playedRequests, 1, "one request, not one per event")
+
+  fire("TIME_PLAYED_MSG", 408475, 2462)
+  eq(playedLines, 0, "the game's two chat lines stayed hidden")
+  -- Only the restore the answer scheduled, not the 5 s fallback.
+  for i = #timers, 1, -1 do
+    if timers[i][1] == 5 then table.remove(timers, i) end
+  end
+  eq(#timers, 1, "the answer schedules the restore")
+  runTimers()
+  eq(_G["ChatFrame1"]:IsEventRegistered("TIME_PLAYED_MSG"), true, "chat frames listen again")
+  eq(_G["ChatFrame2"]:IsEventRegistered("TIME_PLAYED_MSG"), true, "all of them")
+
+  now = now + 90.6
+  fire("PLAYER_LEVEL_UP", 33)
+  eq(last(), '{"char":"Flano","class":"WARRIOR","data":{"level":33},"level":33,"played":408565,'
+    .. '"realm":"Classic Beta PvE 2","seq":' .. ns.char.seq .. ',"surname":"Wren",'
+    .. '"ts":1790870000,"type":"level_up"}', "total + seconds since, whole seconds")
+  eq(playedRequests, 1, "counted on, not asked again")
+  assert(slash(""):find("time played in events: on", 1, true), "status line")
+
+  -- The player's own /played refreshes the total and prints as usual.
+  fire("TIME_PLAYED_MSG", 500000, 10)
+  eq(playedLines, 2, "their /played shows in chat")
+  runTimers()
+  fire("QUEST_TURNED_IN", 818, 625, 0)
+  assert(has('"played":500000'), last())
+end)
+
+test("played: off again drops the field; bad arguments only explain", function()
+  assert(slash("played off"):find("time played off", 1, true))
+  fire("PLAYER_LEVEL_UP", 34)
+  assert(not has('"played"'), last())
+  local out = slash("played maybe")
+  assert(out:find("usage: /doink played on|off", 1, true), out)
+  eq(ns:GetOption("general", "played"), false, "unchanged")
+end)
+
+test("played: the settings checkbox is the same switch", function()
+  local c = control("general_played")
+  eq(c.get(), false, "off")
+  c.set(true)
+  eq(ns:GetOption("general", "played"), true, "on")
+  fire("PLAYER_LEVEL_UP", 35)
+  assert(has('"played":'), last())
+  c.set(false)
 end)
 
 print = io.write

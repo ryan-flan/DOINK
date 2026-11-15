@@ -255,3 +255,20 @@ func TestDecodeEventKeepsTheRawJSON(t *testing.T) {
 		t.Fatalf("raw %q, %v", e.Raw, err)
 	}
 }
+
+func TestDecodeEventPlayed(t *testing.T) {
+	base := `{"seq":7,"char":"Flano","realm":"R","type":"level_up"`
+	e, err := DecodeEvent([]byte(base + `}`))
+	if err != nil || e.HasPlayed {
+		t.Fatalf("absent: %+v, %v", e, err)
+	}
+	e, err = DecodeEvent([]byte(base + `,"played":408475}`))
+	if err != nil || !e.HasPlayed || e.Played != 408475 {
+		t.Fatalf("present: %+v, %v", e, err)
+	}
+	for _, bad := range []string{`"4d"`, `1.5`, `-1`, `null`} {
+		if _, err := DecodeEvent([]byte(base + `,"played":` + bad + `}`)); err == nil || err.Error() != "played isn't a whole number of seconds" {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+}

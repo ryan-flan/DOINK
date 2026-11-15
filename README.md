@@ -146,6 +146,7 @@ realtime state, and which event types are enabled.
 | `/doink debug` | Toggle printing of every event the addon sees, for troubleshooting |
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
+| `/doink played on` / `off` | Only for the Discord companion: add this character's total time played to every recorded event (off by default). Discord shows it on level-ups |
 | `/doink realtime on` / `off` / `test` | Only for the Discord companion: post each event within seconds instead of at the next reload (see [Instant posts](#instant-posts-realtime)) |
 | `/doink realtime image on` / `off` | With instant posts: also attach the screenshot to the Discord post (off by default; see [Instant posts](#instant-posts-realtime)) |
 
@@ -391,6 +392,11 @@ announcement rules above work on their own. The one exception is `wins_only`, wh
 | `duel` | A duel or Mak'gora ends | `wins_only` on |
 | `battleground` | A battleground match ends | `wins_only` on |
 
+**Time played.** `/doink played on` (or the checkbox on the settings page)
+adds your total time played to every recorded event, and the level-up post
+shows it ("Time played: 4d 17h 27m"). Off by default. The addon asks the
+game once at login, the way `/played` does.
+
 Money options accept `1g50s` (e.g. `/doink set loot min_vendor_value 25g`, also a slider in `/doink config` up to 100g), `75s`, `30c` or plain copper. Quality: 0 poor,
 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
 
@@ -422,8 +428,10 @@ as the addon recorded it:
 
 ```json
 {"seq":42,"ts":1759300000,"char":"Flano","surname":"Wren","realm":"Whatever",
- "class":"WARRIOR","level":20,"type":"level_up","data":{"level":20}}
+ "class":"WARRIOR","level":20,"played":408475,"type":"level_up","data":{"level":20}}
 ```
+
+`played` (total seconds played) is there only with `/doink played on`.
 
 The `data` fields of each type are listed under "Data contract" in
 [CLAUDE.md](https://github.com/ryan-flan/DOINK/blob/main/CLAUDE.md#data-contract-both-halves-depend-on-this--do-not-change-casually). Events from `/doink test` carry `"test":true`.

@@ -4,6 +4,7 @@ package discord
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -169,6 +170,22 @@ func levelUp(name string, d data) Embed {
 		level = number(f)
 	}
 	return Embed{"title": name + " reached level " + level}
+}
+
+// FormatPlayed turns seconds played into "4d 17h 27m": the two or three
+// largest units, minutes at the finest.
+func FormatPlayed(seconds int64) string {
+	minutes := seconds / 60
+	days, hours, mins := minutes/(24*60), minutes/60%24, minutes%60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+	case hours > 0:
+		return fmt.Sprintf("%dh %dm", hours, mins)
+	case mins > 0:
+		return fmt.Sprintf("%dm", mins)
+	}
+	return "under a minute"
 }
 
 func loot(name string, d data, item *wowhead.Item) Embed {
@@ -398,6 +415,9 @@ func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 	switch e.Type {
 	case "level_up":
 		embed = levelUp(name, d)
+		if e.HasPlayed {
+			embed["description"] = "Time played: " + FormatPlayed(e.Played)
+		}
 	case "loot":
 		embed = loot(name, d, item)
 	case "death":

@@ -23,7 +23,8 @@ read_globals = {
   "GetRealmName", "GetSkillLineInfo", "GetSubZoneText", "GetTime",
   "GetTitleText", "GetZoneText", "IsInGroup", "IsInGuild", "IsInInstance",
   "IsInRaid", "issecretvalue", "LOOT_ITEM_SELF", "LOOT_ITEM_SELF_MULTIPLE",
-  "MinimalSliderWithSteppersMixin", "ReloadUI", "Screenshot",
+  "MinimalSliderWithSteppersMixin", "NUM_CHAT_WINDOWS", "ReloadUI",
+  "RequestTimePlayed", "Screenshot",
   "SendChatMessage", "SetCVar", "Settings", "SKILL_RANK_UP", "time",
   "UIParent", "UnitClass", "UnitExists", "UnitFactionGroup",
   "UnitIsFeignDeath", "UnitLevel", "UnitName",
@@ -36,6 +37,7 @@ files["addon/tests/**"] = {
   ignore = { "131" }, -- unused global stubs are fine
   globals = {
     "DOINK_WRITE_FIXTURE", "DeathRecap_GetEvents", "DeathRecap_HasEvents",
-    "GetProfessionInfo", "GetProfessions", "issecretvalue", "UnitIsFeignDeath",
+    "GetProfessionInfo", "GetProfessions", "issecretvalue", "RequestTimePlayed",
+    "UnitIsFeignDeath",
   },
 }

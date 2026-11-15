@@ -23,6 +23,10 @@ ns.Defaults = {
   duel      = { enabled = false, wins_only = true },
   battleground = { enabled = false, wins_only = true },
 
+  -- Not tied to one type. played: add the character's total time played
+  -- (seconds) to every recorded event.
+  general = { played = false },
+
   -- In-game chat announcements (Announce.lua). These rules alone decide
   -- what goes to chat: `enabled` and the filters above (except wins_only)
   -- only decide what is recorded for Discord.

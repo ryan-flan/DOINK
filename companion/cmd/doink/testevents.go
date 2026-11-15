@@ -83,6 +83,8 @@ func testEvents(names []string, now time.Time) ([]savedvars.Event, error) {
 		events = append(events, savedvars.Event{
 			Seq: i + 1, Char: "Flano", Surname: "Wren", Realm: "DOINK", Class: "WARRIOR", Level: 59,
 			TS: now.Unix(), HasTS: true, Type: t, Test: true, Data: data,
+			// As with /doink played on, so the level-up embed shows its line.
+			Played: 408475, HasPlayed: true,
 		})
 	}
 	return events, nil

@@ -41,7 +41,11 @@ type Event struct {
 	HasTS   bool
 	Type    string
 	Test    bool
-	Data    map[string]any // never nil; numbers are float64
+	// Played is the character's total time played in seconds; valid only
+	// if HasPlayed (the player turned it on: /doink played on).
+	Played    int64
+	HasPlayed bool
+	Data      map[string]any // never nil; numbers are float64
 	// Raw is the event's JSON as the addon queued it (invalid UTF-8
 	// replaced), for forward_url. Empty for events built in code.
 	Raw []byte
@@ -235,6 +239,13 @@ func DecodeEvent(raw []byte) (Event, error) {
 			return Event{}, errors.New("ts isn't an integer")
 		}
 		e.TS, e.HasTS = ts, true
+	}
+	if v, present := obj["played"]; present {
+		played, ok := intOf(v)
+		if !ok || played < 0 {
+			return Event{}, errors.New("played isn't a whole number of seconds")
+		}
+		e.Played, e.HasPlayed = played, true
 	}
 	if v, present := obj["test"]; present {
 		b, ok := v.(bool)

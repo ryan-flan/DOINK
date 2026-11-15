@@ -219,6 +219,69 @@ local function InitChar()
   }
 end
 
+------------------------------------------------------------------ time played
+
+-- Optional `played` field on every event (general.played, off by default).
+-- The client only tells the total on request: RequestTimePlayed() is
+-- answered with TIME_PLAYED_MSG(total, thisLevel), both in seconds
+-- (verified on Forever 2026-11-15, called from a timer). We ask once and
+-- count on from there with GetTime().
+local played       -- { total = seconds, at = GetTime() }, once known
+local playedAsked  -- GetTime() of the last request
+local playedHidden -- chat frames that get TIME_PLAYED_MSG back
+
+local function RestorePlayedChat()
+  for _, chatFrame in ipairs(playedHidden or {}) do
+    chatFrame:RegisterEvent("TIME_PLAYED_MSG")
+  end
+  playedHidden = nil
+end
+
+local function RequestPlayed()
+  if not RequestTimePlayed then return end
+  if playedAsked and GetTime() - playedAsked < 10 then return end
+  if not pcall(frame.RegisterEvent, frame, "TIME_PLAYED_MSG") then return end
+  playedAsked = GetTime()
+  -- The chat frames print "Total time played: ..." for this event. Take
+  -- it away from them until our answer is in, so asking stays quiet. If
+  -- this client's chat frames don't work that way, the two lines show.
+  playedHidden = playedHidden or {}
+  C_Timer.After(5, RestorePlayedChat) -- no answer: /played must keep working
+  for i = 1, NUM_CHAT_WINDOWS or 0 do
+    local chatFrame = _G["ChatFrame" .. i]
+    if chatFrame and chatFrame.IsEventRegistered and chatFrame:IsEventRegistered("TIME_PLAYED_MSG") then
+      chatFrame:UnregisterEvent("TIME_PLAYED_MSG")
+      playedHidden[#playedHidden + 1] = chatFrame
+    end
+  end
+  RequestTimePlayed()
+end
+
+local function OnTimePlayed(total)
+  if type(total) == "number" and not ns.IsSecret(total) then
+    played = { total = total, at = GetTime() }
+  end
+  -- Not now: a frame registered while the event is being handed out
+  -- might still get this one.
+  C_Timer.After(0, RestorePlayedChat)
+end
+
+-- Total seconds played, or nil when the option is off or the client
+-- hasn't answered yet (asking is started then, for the next event).
+function ns:Played()
+  if not self:GetOption("general", "played") then return nil end
+  if not played then
+    RequestPlayed()
+    return nil
+  end
+  return math.floor(played.total + (GetTime() - played.at))
+end
+
+function ns:SetPlayed(on)
+  self:SetOption("general", "played", on)
+  self:Played() -- on: ask now, so the next event has it
+end
+
 ------------------------------------------------------------------ emit
 
 -- Builds the envelope and hands the event to the transports.
@@ -256,6 +319,7 @@ function ns:Emit(eventType, data, isTest, filtered)
     realm = self.player.realm,
     class = self.player.class,
     level = level,
+    played = self:Played(), -- nil leaves the field out
     type = eventType,
     data = data or {},
   }
@@ -344,6 +408,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
     if ns.Options then
       xpcall(ns.Options.Register, geterrorhandler())
     end
+    ns:Played() -- if the option is on: ask at login, before the first event
+  elseif event == "TIME_PLAYED_MSG" then
+    OnTimePlayed(...)
   else
     if event == "PLAYER_LEVEL_UP" then
       ns.knownLevel = ... -- before notifiers run, so their Emit sees it
@@ -398,6 +465,7 @@ local HELP = {
   "/doink announce <type> <rule> - e.g. announce loot rare, announce quest on (types: level_up, loot, death, quest, boss_kill, skill_up, mount, duel, battleground)",
   "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
+  "/doink played on|off - add your total time played to every recorded event",
   "/doink realtime on|off|test|image on|off - post to Discord instantly via screenshots (needs the companion)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
@@ -491,6 +559,7 @@ commands[""] = function()
   ns:Print("announce: %s", ns.Transports.Announce.Status())
   ns:Print("webhook: %s", WebhookStatus())
   ns:Print("realtime: %s", ns.Transports.Screenshot.Status())
+  ns:Print("time played in events: %s", ns:GetOption("general", "played") and "on" or "off")
   ns:Print("recorded for Discord (/doink enable <type>):")
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
@@ -676,6 +745,22 @@ commands.announce = function(args)
     end
     ns:SetOption("announce", notifier.type, value)
     ns:Print("announce %s: %s", notifier.type, FormatValue(notifier.type, value))
+  end
+end
+
+commands.played = function(args)
+  local value = ParseValue(false, args)
+  if value == nil then
+    ns:Print("time played in events: %s", ns:GetOption("general", "played") and "on" or "off")
+    ns:Print("usage: /doink played on|off")
+    return
+  end
+  ns:SetPlayed(value)
+  if value then
+    ns:Print("time played on: every recorded event carries your total time played. "
+      .. "Discord shows it on level-ups")
+  else
+    ns:Print("time played off")
   end
 end
 
