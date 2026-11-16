@@ -74,6 +74,7 @@ shape depends on `type`.
 | `class` | string | always | The class in capitals, the same in every language: `WARRIOR`, `PALADIN`, `HUNTER`, `ROGUE`, `PRIEST`, `SHAMAN`, `MAGE`, `WARLOCK`, `DRUID`. |
 | `level` | integer | always | The character's level when the event happened. On a `level_up` it is the new level. |
 | `played` | integer | only with `/doink played on` | Total time played on this character, in seconds. Missing until the game has answered the addon's request, so the first event after turning it on may not have it. |
+| `group` | array of strings | only with `/doink group on`, in a party | Who else was in the party, each as `"Name Surname (Class Level)"` (the surname only when the client gives one), at most 4. Left out when the character was alone, in a raid, or when the game hid a name (party names shouldn't be hidden, but every value is checked). Discord doesn't show it. |
 | `type` | string | always | What happened. One of the types below. |
 | `data` | object | always | The details. See the section for the `type`. |
 | `test` | `true` | only on test events | The event was made with `/doink test` and nothing really happened. Never `false`: the field is left out instead. |

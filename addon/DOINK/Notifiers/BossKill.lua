@@ -5,38 +5,6 @@ local ADDON, ns = ...
 -- "Rethilgore" 1 5 1 <table>. The sixth argument is new in Forever and
 -- ignored here.
 
--- "WARRIOR" -> "Warrior"
-local function TitleCase(word)
-  return word:sub(1, 1):upper() .. word:sub(2):lower()
-end
-
--- Party members other than you, "Name Surname (Class Level)", or nil in a
--- raid, when alone, or when the client hides any of it (secret values
--- during an encounter).
-local function Group()
-  if IsInRaid() then return nil end
-  local list = {}
-  for i = 1, 4 do
-    local unit = "party" .. i
-    if UnitExists(unit) then
-      local name, second = UnitName(unit)
-      local _, classFile = UnitClass(unit)
-      local level = UnitLevel(unit)
-      if ns.IsSecret(name) or ns.IsSecret(second) or ns.IsSecret(classFile)
-          or ns.IsSecret(level) then
-        return nil
-      end
-      if type(name) == "string" then
-        local display = name .. (second and second ~= "" and (" " .. second) or "")
-        local class = type(classFile) == "string" and TitleCase(classFile) or "?"
-        list[#list + 1] = ("%s (%s %d)"):format(display, class, tonumber(level) or 0)
-      end
-    end
-  end
-  if #list == 0 then return nil end
-  return list
-end
-
 ns.Notifiers.BossKill = {
   type = "boss_kill",
   events = { "ENCOUNTER_END" },
@@ -63,7 +31,7 @@ ns.Notifiers.BossKill = {
       success = true,
       group_size = groupSize,
       first_kill = first,
-      group = Group() or ns.Json.null,
+      group = ns:PartyList() or ns.Json.null,
     }, false, filtered)
   end,
 

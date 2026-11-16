@@ -756,6 +756,30 @@ test("boss_kill: first kill flagged once, group lists party members, first_kill_
   assert(has('"group":null'), "solo: " .. last())
 end)
 
+test("group: off by default; on, every event lists the party; left out alone, in a raid or when secret", function()
+  local function quest() fire("QUEST_TURNED_IN", 7, 100, 0) end
+  partyOn = true
+  quest()
+  assert(not has('"group"'), "off by default: " .. last())
+  slash("group on")
+  eq(ns:GetOption("general", "group"), true, "/doink group on")
+  quest()
+  assert(has('"group":["Grakkor Highmountain (Shaman 24)","Mira (Mage 22)"]'), last())
+  inRaid = true
+  quest()
+  assert(not has('"group"'), "raid: " .. last())
+  inRaid = false
+  issecretvalue = function(v) return v == "Mira" end
+  quest()
+  assert(not has('"group"'), "secret: " .. last())
+  issecretvalue = nil
+  partyOn = false
+  quest()
+  assert(not has('"group"'), "alone: " .. last())
+  slash("group off")
+  eq(ns:GetOption("general", "group"), false, "/doink group off")
+end)
+
 test("set: numbers, money and booleans, typed by the default", function()
   slash("set loot min_quality 4")
   eq(ns:GetOption("loot", "min_quality"), 4, "number")
@@ -1453,10 +1477,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 10 + 7 + 1 + 2, "announce 7+3, discord 10+7+1, realtime 2")
+  eq(#settings.controls, 7 + 3 + 11 + 7 + 1 + 2, "announce 7+3, discord 11+7+1, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 24, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 25, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")

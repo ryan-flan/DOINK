@@ -42,6 +42,13 @@
       "minimum": 0,
       "description": "Total time played on this character, in seconds. Present only when the player turned it on (/doink played on) and the client has answered."
     },
+    "group": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 4,
+      "description": "Who else was in the character's party, each as \"Name Surname (Class Level)\". Present only when the player turned it on (/doink group on) and was in a party; left out when alone, in a raid, or when the client hid a name."
+    },
     "type": {
       "type": "string",
       "description": "What happened; decides the shape of data.",

@@ -126,6 +126,7 @@ Event JSON schema:
   "class": "WARRIOR",
   "level": 20,
   "played": 408475,            // optional; total seconds played (v0.19+)
+  "group": ["Grakkor Highmountain (Shaman 24)"], // optional; party members
   "type":  "level_up",
   "data":  { ... type-specific ... },
   "test":  true                 // optional; only present on /doink test events
@@ -163,6 +164,13 @@ Rules:
   shows it on the level-up embed only ("Time played: 4d 17h 27m");
   `forward_url` receivers get it on every event. An event whose `played`
   isn't a non-negative integer is skipped like any bad entry.
+- `group` lists the other party members as `"Name Surname (Class Level)"`
+  (`ns:PartyList()`, the same list as `boss_kill.group`), present only when
+  the player turned it on (`general.group`, off by default; `/doink group
+  on|off`, Settings checkbox; per character) and is in a party. Left out
+  alone, in a raid (39 names don't fit a realtime shot's 1024 bytes) and
+  when any value is secret. Discord doesn't show it; it is for
+  `forward_url` receivers.
 - Webhook for a character's events: `webhooks["Name-Realm"]`, else
   `webhooks["*"]`, else the companion's `config.toml`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
@@ -427,6 +435,7 @@ tests/test_addon.lua`.
 /doink flush             ReloadUI() to force SavedVariables write
 /doink enable|disable <type>
 /doink played on|off     add total time played to every recorded event
+/doink group on|off      add the other party members to every recorded event
 ```
 
 ## Companion conventions

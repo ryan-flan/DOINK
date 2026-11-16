@@ -147,6 +147,7 @@ realtime state, and which event types are enabled.
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
 | `/doink played on` / `off` | Only for the Discord companion: add this character's total time played to every recorded event (off by default). Discord shows it on level-ups |
+| `/doink group on` / `off` | Only for tools reading `forward_url`: add who else is in your party to every recorded event (off by default). Discord doesn't show it |
 | `/doink realtime on` / `off` / `test` | Only for the Discord companion: post each event within seconds instead of at the next reload (see [Instant posts](#instant-posts-realtime)) |
 | `/doink realtime image on` / `off` | With instant posts: also attach the screenshot to the Discord post (off by default; see [Instant posts](#instant-posts-realtime)) |
 
@@ -397,6 +398,11 @@ adds your total time played to every recorded event, and the level-up post
 shows it ("Time played: 4d 17h 27m"). Off by default. The addon asks the
 game once at login, the way `/played` does.
 
+**Your party.** `/doink group on` (or the checkbox on the settings page)
+adds who else is in your party to every recorded event, for tools reading
+[`forward_url`](#sending-events-to-your-own-tool). Discord posts don't
+change. Off by default; left out when you're alone or in a raid.
+
 Money options accept `1g50s` (e.g. `/doink set loot min_vendor_value 25g`, also a slider in `/doink config` up to 100g), `75s`, `30c` or plain copper. Quality: 0 poor,
 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
 
@@ -431,7 +437,8 @@ as the addon recorded it:
  "class":"WARRIOR","level":20,"played":408475,"type":"level_up","data":{"level":20}}
 ```
 
-`played` (total seconds played) is there only with `/doink played on`.
+`played` (total seconds played) is there only with `/doink played on`,
+and `group` (your party members) only with `/doink group on`.
 
 Every field of every event type is described, with an example each, in
 the [event reference](https://github.com/ryan-flan/DOINK/blob/main/docs/events.md);

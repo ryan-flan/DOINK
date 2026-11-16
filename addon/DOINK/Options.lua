@@ -152,6 +152,9 @@ local function Discord(layout)
     set = function(on) ns:SetPlayed(on) end,
     tooltip = "Every recorded event carries this character's total time played. Discord shows it on "
       .. "level-ups; other tools can read it from any event. Same as /doink played on." }
+  OptionCheckbox { variable = "general_group", name = "Add your party to events", type = "general", key = "group",
+    tooltip = "Every recorded event lists who else is in your party (not in a raid). Discord doesn't show it; "
+      .. "tools reading forward_url can. Same as /doink group on." }
 end
 
 local function Realtime(layout)
