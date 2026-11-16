@@ -165,6 +165,7 @@ not seen, because the game hides chat from addons until the fight ends.
     "zone": "Westfall",
     "subzone": "Moonbrook",
     "killer": "Hogger",
+    "killer_kind": "npc",
     "environment": null
   }
 }
@@ -175,6 +176,7 @@ not seen, because the game hides chat from addons until the fight ends.
 | `zone` | string | The zone the character died in. |
 | `subzone` | string or `null` | The area within the zone. `null` where the game names none. |
 | `killer` | string or `null` | Who landed the last hit: a creature's or a player's name. `null` for an environmental death, or when the game gave no cause. |
+| `killer_kind` | string or `null` | What the killer was: `player`, `pet` (a player's pet; whose isn't known) or `npc`, from its GUID in the death recap. Some player summons (totems, guardians) may read as `npc`. `null` when the game gave no GUID or hid it, and when there was no killer. A creature can share a player's name, so `player` is the reliable sign of a PvP death. Added after 0.19.0: older addons leave it out. |
 | `environment` | string or `null` | For an environmental death, its kind in capitals: `FALLING`, `DROWNING`, `FATIGUE`, `FIRE`, `LAVA` or `SLIME`. The value comes from the game, so allow for others. `null` otherwise. |
 
 At most one of `killer` and `environment` is set. Both are `null` when

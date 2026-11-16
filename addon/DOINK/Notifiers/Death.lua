@@ -37,11 +37,24 @@ local function RecapAPI()
   end
 end
 
+-- What dealt the killing blow, from its GUID: "player", "pet" (a player's
+-- pet; whose isn't known), "npc" for anything else, or nil
+-- when there is no GUID or the client hides it (secret). Recap entries
+-- carry sourceGUID: Blizzard's own Forever UI reads deathEvents[1].sourceGUID
+-- (Blizzard_PTRFeedback_Events.lua). Player GUIDs start "Player-". Some
+-- summons (totems, guardians) may carry Creature- GUIDs and read as "npc".
+local function KillerKind(guid)
+  if ns.IsSecret(guid) or type(guid) ~= "string" or guid == "" then return nil end
+  if guid:find("^Player%-") then return "player" end
+  if guid:find("^Pet%-") then return "pet" end
+  return "npc"
+end
+
 -- The killing blow is the newest entry: by timestamp when the client stamps
 -- them, otherwise the first one listed (Blizzard's own recap marks entry 1
 -- as the hit that caused the death: `causedDeath = i == 1` in
--- Blizzard_DeathRecap.lua). Returns killer, environment: one of them at
--- most. environment is the recap's environmentalType upper-cased (FALLING,
+-- Blizzard_DeathRecap.lua). Returns killer, environment (one of them at
+-- most) and the killer's kind. environment is the recap's environmentalType upper-cased (FALLING,
 -- DROWNING, FATIGUE, FIRE, LAVA, SLIME), so chat and Discord can word those
 -- deaths themselves.
 -- A recap field the client hides (a secret value) can't be compared or
@@ -64,15 +77,16 @@ local function Cause()
   end
   local environment, source = Known(last.environmentalType), Known(last.sourceName)
   if environment then return nil, string.upper(tostring(environment)) end
-  if type(source) == "string" and source ~= "" then return source end
+  if type(source) == "string" and source ~= "" then return source, nil, KillerKind(last.sourceGUID) end
   return nil
 end
 
-local function EmitDeath(killer, environment)
+local function EmitDeath(killer, environment, kind)
   retryPending = false
   lastDeath = GetTime()
   local zone, subzone = Location()
   ns:Emit("death", { zone = zone, subzone = subzone, killer = killer or ns.Json.null,
+                     killer_kind = kind or ns.Json.null,
                      environment = environment or ns.Json.null })
 end
 
@@ -89,9 +103,9 @@ ns.Notifiers.Death = {
       ns:Debug("death: duplicate PLAYER_DEAD within %ds, ignored", DEATH_COOLDOWN)
       return
     end
-    local killer, environment = Cause()
+    local killer, environment, kind = Cause()
     if killer or environment or not (RecapAPI() and C_Timer) then
-      return EmitDeath(killer, environment)
+      return EmitDeath(killer, environment, kind)
     end
     -- The recap may land a moment after PLAYER_DEAD; give it one chance.
     retryPending = true
@@ -100,6 +114,6 @@ ns.Notifiers.Death = {
 
   Test = function()
     local zone, subzone = Location()
-    return { zone = zone, subzone = subzone, killer = "Hogger", environment = ns.Json.null }
+    return { zone = zone, subzone = subzone, killer = "Hogger", killer_kind = "npc", environment = ns.Json.null }
   end,
 }

@@ -99,11 +99,15 @@
     },
     "death": {
       "type": "object",
-      "required": ["zone", "subzone", "killer", "environment"],
+      "required": ["zone", "subzone", "killer", "killer_kind", "environment"],
       "properties": {
         "zone": { "type": "string", "description": "The zone's name in the player's game language." },
         "subzone": { "type": ["string", "null"], "description": "The area within the zone. null where the game names none." },
         "killer": { "type": ["string", "null"], "description": "Who landed the last hit, from the game's death recap. null for an environmental death or when the recap was empty." },
+        "killer_kind": {
+          "enum": ["player", "pet", "npc", null],
+          "description": "What the killer was, from its GUID in the death recap: player, pet (a player's pet; whose isn't known) or npc. Some player summons (totems, guardians) may read as npc. null when the recap had no GUID, the game hid it, or there was no killer. Added after 0.19.0; older addons leave it out."
+        },
         "environment": {
           "type": ["string", "null"],
           "description": "The kind of environmental death, in capitals. null when something killed the character or the cause is unknown.",

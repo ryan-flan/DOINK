@@ -183,7 +183,10 @@ Rules:
   and Discord word those themselves ("Forgot I couldn't fly."). Both `null`
   when the recap is empty (the notifier retries once after 0.5 s) or the
   API is absent. The combat log is protected, so there is no other source.
-  The recap API is
+  `death.killer_kind` is the killing blow's `sourceGUID` read as `player`
+  (`Player-…`), `pet` (`Pet-…`) or `npc` (anything else; some summons
+  such as totems may read as `npc`); `null` without a GUID, when it's
+  secret, or with no killer. The recap API is
   `C_DeathRecap.GetRecapEvents()`; `DeathRecap_GetEvents` is only an alias
   while the `loadDeprecationFallbacks` CVar is on, kept as the fallback.
   Without timestamps, entry 1 is the killing blow (Blizzard's recap UI:
@@ -197,7 +200,7 @@ Rules:
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
   - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234, "boe": true|false|null, "gear": true|false|null}`
-  - `death`:     `{"zone": "Westfall", "subzone": "..."|null, "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
+  - `death`:     `{"zone": "Westfall", "subzone": "..."|null, "killer": "Defias Pillager"|null, "killer_kind": "player"|"pet"|"npc"|null, "environment": "FALLING"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
   - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "..."|null, "difficulty": 1, "success": true, "group_size": 5, "first_kill": true|false, "group": ["Flano Wren (Warrior 23)", ...]|null}`
   - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150|null}`

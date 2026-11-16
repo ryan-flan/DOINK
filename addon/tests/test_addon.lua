@@ -513,6 +513,35 @@ test("death: a recap the client hides (secret values) still records the death, k
   C_DeathRecap = nil
 end)
 
+test("death: killer_kind from the killing blow's GUID; null when unknown or secret", function()
+  local recap = {}
+  C_DeathRecap = {
+    HasRecapEvents = function() return #recap > 0 end,
+    GetRecapEvents = function() return recap end,
+  }
+  recap = { { sourceName = "Grakkor", sourceGUID = "Player-5826-0A1B2C3D" } }
+  die()
+  assert(has('"killer":"Grakkor"') and has('"killer_kind":"player"'), last())
+  recap = { { sourceName = "Wolf", sourceGUID = "Pet-0-5826-0-1234-1-0100A1B2C3" } }
+  die()
+  assert(has('"killer_kind":"pet"'), last())
+  recap = { { sourceName = "Hogger", sourceGUID = "Creature-0-5826-0-1234-448-0000A1B2C3" } }
+  die()
+  assert(has('"killer_kind":"npc"'), last())
+  recap = { { sourceName = "Hogger" } }
+  die()
+  assert(has('"killer_kind":null'), "no GUID: " .. last())
+  issecretvalue = function(v) return type(v) == "string" and v:find("^Player") ~= nil end
+  recap = { { sourceName = "Grakkor", sourceGUID = "Player-5826-0A1B2C3D" } }
+  die()
+  assert(has('"killer":"Grakkor"') and has('"killer_kind":null'), "secret GUID: " .. last())
+  issecretvalue = nil
+  recap = { { environmentalType = "Drowning" } }
+  die()
+  assert(has('"killer_kind":null') and has('"environment":"DROWNING"'), last())
+  C_DeathRecap = nil
+end)
+
 test("quest: title from reward screen when log lookup fails", function()
   fire("QUEST_COMPLETE")
   fire("QUEST_TURNED_IN", 33, 450, 75)

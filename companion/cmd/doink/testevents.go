@@ -24,7 +24,7 @@ var testFixtures = map[string]map[string]any{
 		"link":    "|cnIQ5:|Hitem:19019::::::::|h[Thunderfury, Blessed Blade of the Windseeker]|h|r",
 		"quality": 5.0, "qty": 1.0, "vendor_value": 255355.0, "boe": true, "gear": true,
 	},
-	"death": {"zone": "Westfall", "subzone": "Moonbrook", "killer": "Hogger", "environment": nil},
+	"death": {"zone": "Westfall", "subzone": "Moonbrook", "killer": "Hogger", "killer_kind": "npc", "environment": nil},
 	"quest": {"quest_id": 783.0, "title": "A Threat Within", "xp": 40.0},
 	"boss_kill": {
 		"encounter_id": 672.0, "name": "Ragnaros", "instance": "Molten Core", "difficulty": 9.0,
