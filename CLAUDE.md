@@ -1068,6 +1068,36 @@ fixture included; that's a stand-in for the real name, by decision.)
   strings with `\"` escapes, one per line:
   `"{\"char\":\"Flano\",...,\"type\":\"level_up\"}",`
 
+- [ ] **From Blizzard's Forever UI source, not yet seen in game**
+  (2026-11-16; build 1.60.1 (70938), the `forever` branch of
+  github.com/Gethe/wow-ui-source; "API docs" = its
+  `Blizzard_APIDocumentationGenerated`):
+  - `DeathRecap_HasEvents` / `DeathRecap_GetEvents` are aliases for
+    `C_DeathRecap.HasRecapEvents` / `GetRecapEvents`, defined only while the
+    `loadDeprecationFallbacks` CVar is on
+    (`Blizzard_DeprecatedCombatLog/Deprecated_CombatLog.lua`).
+  - Recap entries carry `sourceGUID`
+    (`Blizzard_PTRFeedback/Blizzard_PTRFeedback_Events.lua` reads
+    `deathEvents[1].sourceGUID`), and entry 1 is the killing blow
+    (`Blizzard_DeathRecap.lua`: `causedDeath = i == 1`). Whether recap
+    fields are secret after a PvP death is undocumented. Check: after
+    dying to a player, `/dump C_DeathRecap.GetRecapEvents()[1]`.
+  - `PARTY_KILL(attackerGUID, targetGUID)` exists, tagged
+    `SecretWhenUnitIdentityRestricted`: secret "when the unit isn't
+    player-controlled or in the party/raid". Check: register it, kill a
+    player, print `issecretvalue` of both GUIDs.
+  - `GetPlayerInfoByGUID` returns class, race, sex, name, realmName and
+    (new) level; it may return nothing. What Forever puts in realmName
+    (the surname?) is unknown.
+  - `UnitName` / `UnitClass` of party and raid members are never secret
+    (same predicate); `UnitLevel` has no secret tag.
+  - Chat events tagged `SecretInChatMessagingLockdown` are secret during
+    encounters, challenge modes and PvP matches, "and when the player is on
+    a communication-restricted map such as a dungeon or raid": possibly the
+    whole dungeon visit, not only boss fights. Tagged: `CHAT_MSG_SKILL`,
+    `CHAT_MSG_SYSTEM` (duel results) and the say/party/guild/whisper
+    families. Not tagged: `CHAT_MSG_LOOT`, `CHAT_MSG_COMBAT_HONOR_GAIN`.
+
 ## Milestones
 
 - **M1 — Skeleton. ✅ Done.** TOC (all files listed), Core, Json, Defaults, LevelUp
