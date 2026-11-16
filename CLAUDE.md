@@ -74,6 +74,7 @@ DOINK/
         ├── discover/         # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
         ├── watcher/          # (mtime, size) polling with a settle poll
         ├── status/           # thread-safe state for the tooltip/notifications
+        ├── toon/             # character summary (last logged in, recent events) for --status-file
         ├── runner/           # the watch-and-post loop (Process, Run, RunOnce)
         ├── updates/          # GitHub release check + one-click install
         ├── tray/             # Windows tray icon + menu + single instance (x/sys)
@@ -511,8 +512,10 @@ tests/test_addon.lua`.
   while later routed runs still post (a first-sight character's earlier
   seqs are kept as `missing`, not skipped). Keys must be the addon's types
   (`config.EventTypes`), values Discord webhook URLs, or Load fails.
-  Events with no resolvable webhook log an error and stay queued (state
-  not advanced) until one is set; `Process`
+  `settings.Set` writes `webhooks.<type>` inside an existing `[webhooks]`
+  table, else as a top-level dotted key. Events with no resolvable
+  webhook log an error and stay queued (state not advanced) until one is
+  set; `Process`
   returns `runner.ErrNoWebhook` and `Run` stops retrying that file until
   it or `config.toml` changes (one error line, not one per retry). Only
   transient failures (network, Discord down) back off: poll interval
@@ -578,6 +581,34 @@ tests/test_addon.lua`.
   tests). One `syscall.NewCallback` window procedure for the process,
   dispatching by `hwnd`. Icons are embedded (`companion/assets`) and written
   to `%TEMP%\doink-*.ico` for `LoadImageW`.
+- `doink config show` prints JSON: `values` (only keys set in
+  config.toml, among webhook_url, forward_url, wow_dir, dry_run, wowhead,
+  realtime, update_check, update_notify, max_backlog, poll_interval),
+  `found`, `wow_dirs`, `game_webhooks` (description, no URLs), `routes`
+  (`[webhooks]`: type -> URL), `error`. `doink config set key=value...`
+  (also `webhooks.<type>=url`) validates (webhook/forward URL,
+  `settings.WowFolder`, types), writes with `settings.Set` (now typed:
+  string, bool, int, float; "" removes), then loads the file like the
+  companion and puts the old one back if that fails.
+- `--status-file <path>` (console mode, not with `--once`): the companion
+  rewrites a JSON snapshot atomically on every `Status` change and every
+  5 s, and deletes it on exit: `version`, `pid`, `updated`, `every`,
+  `dry_run`, `watching`, `files`, `error`, `line` (the tooltip text),
+  `recent` posts, and `toons` (`internal/toon`). With it, "WoW not found"
+  is shown as `error` and the companion keeps running instead of exiting.
+  The file list is the start-up one (a live config reload that changes
+  paths shows after a restart). Not a contract for other tools.
+- `internal/toon`: "last logged in" is the newest file time in the game's
+  `WTF/Account/<acct>/<realm-id>/<Name-Surname>/` folder (the client
+  writes it at logout and `/reload`); matched to DOINK's characters by
+  full name only, because that realm folder is a number. Class, level,
+  played and the 8 newest events come from DOINK.lua (test events are
+  left out); characters with a folder but no DOINK entry still appear,
+  name only. Fallback when there is no folder: the newest event's `ts`.
+- Discovery on macOS: `/`, `/Applications`, `~/Applications`, every
+  non-hidden `/Volumes/*` (and its `Applications`), deduplicated by
+  resolved path (`/Volumes/Macintosh HD` links to `/`), then the same
+  Wine prefixes as Linux (CrossOver/Whisky).
 - Realtime: see "Screenshot transport contract". The companion never
   captures the screen.
 - Updates (`internal/updates`): one GET of the release list

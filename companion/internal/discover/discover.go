@@ -5,7 +5,8 @@
 // (Windows), every /mnt/<letter> (WSL) and every Wine/Proton prefix's
 // drive_c (Lutris, Steam, plain Wine), and in every flavor folder
 // (_forever_, _classic_beta_, ...) that has the DOINK addon installed, for
-// each account under WTF/Account.
+// each account under WTF/Account. On macOS it looks in /Applications,
+// ~/Applications and every mounted volume.
 package discover
 
 import (
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 )
 
 // WowDirs are the install folders tried under each drive root.
@@ -43,9 +45,33 @@ func DriveRoots() []string {
 	var roots []string
 	seen := map[string]bool{}
 	add := func(path string) {
-		if !seen[path] && isDir(path) {
-			seen[path] = true
+		key := path
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			key = resolved // /Volumes/Macintosh HD is a link to /
+		}
+		if !seen[key] && isDir(path) {
+			seen[key] = true
 			roots = append(roots, path)
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		// The Mac client installs to /Applications/World of Warcraft;
+		// also try the user's own Applications folder and the
+		// Applications folder (or root) of every other mounted volume.
+		// Wine prefixes (CrossOver, Whisky) are searched below as on
+		// Linux.
+		add("/")
+		add("/Applications")
+		if home, err := os.UserHomeDir(); err == nil {
+			add(filepath.Join(home, "Applications"))
+		}
+		volumes, _ := os.ReadDir("/Volumes")
+		for _, v := range volumes { // ReadDir sorts by name
+			if strings.HasPrefix(v.Name(), ".") {
+				continue
+			}
+			add(filepath.Join("/Volumes", v.Name(), "Applications"))
+			add(filepath.Join("/Volumes", v.Name()))
 		}
 	}
 	// WSL mounts Windows drives as /mnt/c, /mnt/d, ...

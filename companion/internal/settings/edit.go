@@ -9,17 +9,54 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-// KV is one top-level string setting. Value "" removes the key.
-type KV struct{ Key, Value string }
+// KV is one top-level setting. Value is a string, bool, int, int64 or
+// float64; "" or nil removes the key.
+type KV struct {
+	Key   string
+	Value any
+}
+
+func (kv KV) remove() bool { return kv.Value == nil || kv.Value == "" }
+
+// literal is kv's value as TOML.
+func (kv KV) literal() string {
+	switch v := kv.Value.(type) {
+	case bool:
+		return strconv.FormatBool(v)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case float64:
+		f := strconv.FormatFloat(v, 'f', -1, 64)
+		if !strings.ContainsAny(f, ".eEn") {
+			f += ".0" // TOML floats need a fraction
+		}
+		return f
+	case string:
+		return Quote(v)
+	}
+	return Quote(fmt.Sprint(kv.Value))
+}
+
+// decoded is the value as the TOML decoder returns it, for verify.
+func (kv KV) decoded() any {
+	switch v := kv.Value.(type) {
+	case int:
+		return int64(v)
+	}
+	return kv.Value
+}
 
 var tableHeader = regexp.MustCompile(`^\s*\[`)
 
-// Set writes top-level string keys into the config.toml at path, keeping
+// Set writes top-level keys into the config.toml at path, keeping
 // everything else as it was: comments, other keys, their order, the line
 // endings. An existing `key = ...` line is replaced in place (or removed
 // for ""), a new key goes after the last top-level line. The result is
@@ -63,33 +100,59 @@ func Set(path string, values []KV) error {
 	return nil
 }
 
-func setLine(lines []string, kv KV) []string {
-	key := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(kv.Key) + `\s*=`)
-	end := len(lines) // end of the top-level section: the first [table]
+// section is where kv's line belongs: the top level (before the first
+// [table]), or for "table.key" the body of an existing [table], else the
+// top level as a dotted key. name is the key as written in that section.
+func section(lines []string, kv KV) (from, to int, name string) {
+	to = len(lines)
 	for i, line := range lines {
 		if tableHeader.MatchString(line) {
-			end = i
+			to = i
 			break
 		}
 	}
-	for i := 0; i < end; i++ {
+	table, sub, dotted := strings.Cut(kv.Key, ".")
+	if !dotted {
+		return 0, to, kv.Key
+	}
+	header := regexp.MustCompile(`^\s*\[\s*` + regexp.QuoteMeta(table) + `\s*\]\s*(#.*)?$`)
+	for i, line := range lines {
+		if !header.MatchString(line) {
+			continue
+		}
+		end := len(lines)
+		for j := i + 1; j < len(lines); j++ {
+			if tableHeader.MatchString(lines[j]) {
+				end = j
+				break
+			}
+		}
+		return i + 1, end, sub
+	}
+	return 0, to, kv.Key
+}
+
+func setLine(lines []string, kv KV) []string {
+	from, end, name := section(lines, kv)
+	key := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) + `\s*=`)
+	for i := from; i < end; i++ {
 		if key.MatchString(lines[i]) {
-			if kv.Value == "" {
+			if kv.remove() {
 				return append(lines[:i:i], lines[i+1:]...)
 			}
-			lines[i] = kv.Key + " = " + Quote(kv.Value)
+			lines[i] = name + " = " + kv.literal()
 			return lines
 		}
 	}
-	if kv.Value == "" {
+	if kv.remove() {
 		return lines
 	}
-	// After the last non-blank top-level line, so it lands above any table.
+	// After the section's last non-blank line, so it lands above any table.
 	at := end
-	for at > 0 && strings.TrimSpace(lines[at-1]) == "" {
+	for at > from && strings.TrimSpace(lines[at-1]) == "" {
 		at--
 	}
-	line := kv.Key + " = " + Quote(kv.Value)
+	line := name + " = " + kv.literal()
 	return append(lines[:at:at], append([]string{line}, lines[at:]...)...)
 }
 
@@ -130,16 +193,30 @@ func verify(out string, values []KV) error {
 		return fmt.Errorf("config.toml couldn't be updated safely (%w); edit it by hand", err)
 	}
 	for _, kv := range values {
-		got, present := raw[kv.Key]
-		if kv.Value == "" {
+		got, present := lookup(raw, kv.Key)
+		if kv.remove() {
 			if present {
 				return fmt.Errorf("config.toml couldn't be updated safely (%s is still set); edit it by hand", kv.Key)
 			}
 			continue
 		}
-		if got != kv.Value {
+		if got != kv.decoded() {
 			return fmt.Errorf("config.toml couldn't be updated safely (%s didn't read back); edit it by hand", kv.Key)
 		}
 	}
 	return nil
+}
+
+// lookup finds "a.b" in decoded TOML (nested tables).
+func lookup(raw map[string]any, key string) (any, bool) {
+	head, rest, dotted := strings.Cut(key, ".")
+	v, ok := raw[head]
+	if !ok || !dotted {
+		return v, ok
+	}
+	table, ok := v.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return lookup(table, rest)
 }
