@@ -168,13 +168,19 @@ Rules:
   `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` comes from the client's death recap
-  (`DeathRecap_GetEvents()`, present in Forever): the attacker of the newest
-  hit. For an environmental death `killer` is `null` and
+  (`C_DeathRecap.GetRecapEvents()`, present in Forever): the attacker of the
+  killing blow. For an environmental death `killer` is `null` and
   `death.environment` holds the recap's `environmentalType` upper-cased
   (`FALLING`, `DROWNING`, `FATIGUE`, `FIRE`, `LAVA`, `SLIME`); both chat
   and Discord word those themselves ("Forgot I couldn't fly."). Both `null`
   when the recap is empty (the notifier retries once after 0.5 s) or the
   API is absent. The combat log is protected, so there is no other source.
+  The recap API is
+  `C_DeathRecap.GetRecapEvents()`; `DeathRecap_GetEvents` is only an alias
+  while the `loadDeprecationFallbacks` CVar is on, kept as the fallback.
+  Without timestamps, entry 1 is the killing blow (Blizzard's recap UI:
+  `causedDeath = i == 1`). A secret name, timestamp or environment counts
+  as unknown: a secret can't be compared or encoded.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -990,8 +996,8 @@ fixture included; that's a stand-in for the real name, by decision.)
   and graveyard helpers (`GetCorpseMapPosition`, `GetDeathReleasePosition`,
   `GetSelfResurrectOptions`, `GetGraveyardsForMap`, `UseSelfResurrectOption`).
   - [ ] Whether entries carry `timestamp` and which index is the killing
-    blow: unverified; the notifier takes the newest by timestamp, else the
-    last entry.
+    blow: unverified in game; the notifier takes the newest by timestamp,
+    else entry 1 (Blizzard's recap UI marks entry 1 as the cause).
   - [x] The recap is already filled when `PLAYER_DEAD` fires: a real death
     named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
   - [ ] Environmental `environmentalType` values unseen; retail uses

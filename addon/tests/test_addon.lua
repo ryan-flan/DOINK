@@ -474,6 +474,44 @@ test("death: killer is the newest death recap hit", function()
   DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
 end)
 
+test("death: C_DeathRecap first; without timestamps the first entry is the killing blow", function()
+  -- Blizzard's recap marks entry 1 as the hit that caused the death.
+  local recap = { { sourceName = "Hogger" }, { sourceName = "Kobold Vermin" } }
+  DeathRecap_HasEvents = function() return true end
+  DeathRecap_GetEvents = function() return { { sourceName = "Old Alias" } } end
+  C_DeathRecap = {
+    HasRecapEvents = function() return #recap > 0 end,
+    GetRecapEvents = function() return recap end,
+  }
+  die()
+  assert(has('"killer":"Hogger"'), last())
+  C_DeathRecap = nil
+  die()
+  assert(has('"killer":"Old Alias"'), "the aliases still work alone: " .. last())
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
+end)
+
+test("death: a recap the client hides (secret values) still records the death, killer unknown", function()
+  local recap = { { sourceName = "Hidden Harry", timestamp = "secret-ts" },
+                  { sourceName = "Kobold Vermin", timestamp = 4 } }
+  C_DeathRecap = {
+    HasRecapEvents = function() return true end,
+    GetRecapEvents = function() return recap end,
+  }
+  issecretvalue = function(v) return v == "Hidden Harry" or v == "secret-ts" end
+  local n = count()
+  timers = {}
+  die(); runTimers()
+  eq(count(), n + 1, "the death is still recorded")
+  assert(has('"killer":"Kobold Vermin"'), "a secret timestamp is skipped: " .. last())
+  recap = { { sourceName = "Hidden Harry" } }
+  die(); runTimers()
+  eq(count(), n + 2, "recorded")
+  assert(has('"killer":null'), "a secret name counts as unknown: " .. last())
+  issecretvalue = nil
+  C_DeathRecap = nil
+end)
+
 test("quest: title from reward screen when log lookup fails", function()
   fire("QUEST_COMPLETE")
   fire("QUEST_TURNED_IN", 33, 450, 75)
