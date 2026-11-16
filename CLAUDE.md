@@ -602,7 +602,8 @@ tests/test_addon.lua`.
   counts). Launch at Login is `SMAppService.mainApp`. `DOINK_BIN`
   overrides the binary for development; `DOINK_OPEN_PANEL=1` opens the
   panel at launch (for screenshots). `build.sh` signs ad hoc; not
-  notarized, not in `release.yml` yet.
+  notarized (first launch: Privacy & Security → Open Anyway). Released
+  by `release.yml`'s `macos` job as `DOINK-vX.Y.Z-macos.zip`.
   Not `MenuBarExtra` (decided 2026-11-16): it resizes its window from the
   bottom edge, so a shorter tab left the panel hanging below the menu
   bar. The SwiftUI content measures itself (preference keys) and the
@@ -779,8 +780,13 @@ file wasn't bumped; bump it and release the next number.
 - `linux` (Ubuntu; same gate): builds `doink` (linux/amd64), smoke-tests
   it, packages `DOINK-vX.Y.Z-linux-amd64.tar.gz` (doink,
   config.example.toml, README, LICENSE) + `.sha256`.
+- `macos` (macos-latest; same gate): Go tests, `mac/build.sh <version>`
+  (Swift app and companion universal), smoke test (signature, both
+  archs, bundled `doink --once` and `config show` on a dry-run config),
+  packages `DOINK-vX.Y.Z-macos.zip` (`DOINK.app` at the root, made by
+  `ditto` so the signature survives) + `.sha256`.
 - `release` (tags only; needs `plan` ok and, when the companion is in,
-  `build` and `linux` ok; a failed `addon` store upload never blocks it):
+  `build`, `linux` and `macos` ok; a failed `addon` store upload never blocks it):
   downloads whatever was produced, writes the notes (the one-line header
   above, then GitHub's generated notes from the previous `v*` tag via
   `gh api .../releases/generate-notes`), runs `gh release create` with
@@ -789,7 +795,7 @@ file wasn't bumped; bump it and release the next number.
   if GitHub disagrees. So nobody has to guess which file is which, the
   notes carry a "Which file do I need?" list under the header line, and
   every asset is uploaded as `file#label` ("Addon only: …", "Companion
-  app for Windows (with the addon): …", "Companion app for Linux: …",
+  app for Windows (with the addon): …", "Companion app for Linux: …", "DOINK for Mac (menu bar app): …",
   checksums). A label only changes
   what the release page shows: asset names and download URLs, which the
   updaters and WowUp Hub read, stay as they are. Never rename the files

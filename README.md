@@ -412,19 +412,26 @@ by itself. Its files are in `~/Library/Application Support/DOINK`
 (`config.toml`, `state.json`, `doink.log`); Settings → Files opens them.
 It needs macOS 14 or newer.
 
-There's no download yet. Build it from the source (needs Xcode or the
-Command Line Tools, and Go):
+Download `DOINK-<version>-macos.zip` from the release marked **Latest**,
+unzip it, move `DOINK.app` to Applications and open it. It works on
+Apple silicon and Intel Macs.
+
+The app isn't notarized by Apple (that needs a paid developer account),
+so the first time macOS says it can't check it for malicious software.
+Click **Done**, then open System Settings → Privacy & Security, scroll
+down to "DOINK was blocked" and click **Open Anyway** (on macOS 14,
+right-click the app → **Open** also works). After that it opens
+normally.
+
+If the D doesn't show up on a MacBook with a notch, the menu bar is
+full: hold ⌘ and drag other icons out of the way, or quit some.
+
+To build it yourself (needs Xcode or the Command Line Tools, and Go):
 
 ```bash
 devbox shell        # or have Go on your PATH
 mac/build.sh        # -> mac/build/DOINK.app and DOINK-v<version>-macos.zip
 ```
-
-Move `DOINK.app` to Applications and open it. The build is signed for
-this Mac only (ad hoc), so a copy downloaded on another Mac needs
-right-click → **Open** the first time. If the D doesn't show up on a
-MacBook with a notch, the menu bar is full: hold ⌘ and drag other icons
-out of the way, or quit some.
 
 ### Notifiers (what gets recorded for Discord)
 
