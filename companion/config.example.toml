@@ -56,3 +56,12 @@
 
 # Notifier on/off switches and filters live in the game:
 #   /doink enable|disable <type>, /doink options, /doink set <type> <option> <value>
+
+# One webhook per action (event type), ahead of every other webhook,
+# including the ones set in game. Types without one use the usual webhook.
+# Types: level_up, loot, death, quest, boss_kill, skill_up, mount, duel,
+# battleground. This table must stay at the end of the file (TOML puts
+# every key after a [table] line inside that table).
+# [webhooks]
+# loot = "https://discord.com/api/webhooks/..."
+# death = "https://discord.com/api/webhooks/..."
