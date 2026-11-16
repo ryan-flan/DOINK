@@ -239,7 +239,7 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
     "Notifiers/Mount.lua", "Notifiers/Duel.lua", "Notifiers/Battleground.lua",
-    "Notifiers/Session.lua",
+    "Notifiers/Session.lua", "Notifiers/PvpKill.lua",
     "Announce.lua", "Transports/Screenshot.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
@@ -825,6 +825,31 @@ test("session: login and reload recorded, zoning ignored, logout recorded; never
   assert(ns.RecordOnly.session, "record-only: no screenshot, no Discord post")
 end)
 
+test("pvp_kill: our killing blows on players only, with what the client knows of the victim", function()
+  GetPlayerInfoByGUID = function(guid)
+    if guid == "Player-5826-0A1B2C3D" then
+      return "Shaman", "SHAMAN", "Orc", "Orc", 2, "Grakkor", "", 24
+    end
+  end
+  local me = UnitGUID("player")
+  local n = count()
+  fire("PARTY_KILL", me, "Player-5826-0A1B2C3D")
+  eq(count(), n + 1, "a player we killed")
+  assert(has('"type":"pvp_kill"') and has('"victim":"Grakkor"') and has('"class":"SHAMAN"')
+    and has('"race":"Orc"') and has('"level":24') and has('"zone":"Elwynn Forest"'), last())
+  fire("PARTY_KILL", me, "Creature-0-5826-0-1234-448-0000A1B2C3")
+  fire("PARTY_KILL", "Player-5826-99999999", "Player-5826-0A1B2C3D")
+  eq(count(), n + 1, "creatures and other people's kills ignored")
+  fire("PARTY_KILL", me, "Player-5826-77777777")
+  eq(count(), n + 2, "an unknown player still counts")
+  assert(has('"victim":null') and has('"level":null'), last())
+  issecretvalue = function(v) return v == me end
+  fire("PARTY_KILL", me, "Player-5826-0A1B2C3D")
+  eq(count(), n + 2, "secret GUIDs are ignored")
+  issecretvalue = nil
+  GetPlayerInfoByGUID = nil
+end)
+
 test("set: numbers, money and booleans, typed by the default", function()
   slash("set loot min_quality 4")
   eq(ns:GetOption("loot", "min_quality"), 4, "number")
@@ -878,7 +903,7 @@ end)
 
 test("every notifier has a working /doink test fixture", function()
   for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup",
-      "mount", "duel", "battleground", "session" }) do
+      "mount", "duel", "battleground", "session", "pvpkill" }) do
     local n = count()
     SlashCmdList.DOINK("test " .. t)
     eq(count(), n + 1, t)
@@ -1357,7 +1382,7 @@ end)
 -- The suite runs with every type enabled (see SHIPPED above), which is not
 -- what a new player has: these tests switch the Discord toggles off again.
 local ALL_TYPES = { "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
-  "mount", "duel", "battleground", "session" }
+  "mount", "duel", "battleground", "session", "pvp_kill" }
 
 -- Sets `enabled` for the given types; returns a function that puts back
 -- whatever overrides were there.
@@ -1533,10 +1558,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 12 + 7 + 1 + 2, "announce 7+3, discord 12+7+1, realtime 2")
+  eq(#settings.controls, 7 + 3 + 13 + 7 + 1 + 2, "announce 7+3, discord 13+7+1, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 26, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 27, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")

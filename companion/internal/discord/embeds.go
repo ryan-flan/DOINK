@@ -371,6 +371,37 @@ func battleground(name string, d data) Embed {
 	return Embed{"title": name + " lost " + bg, "description": "Defeat in " + bg + "."}
 }
 
+// pvpKill: "Flano Wren killed Grakkor", with what the client knew of the
+// victim ("Level 24 Orc Shaman") and where.
+func pvpKill(name string, d data) Embed {
+	victim := d.str("victim")
+	if victim == "" {
+		victim = "a player"
+	}
+	where := d.str("zone")
+	if where == "" {
+		where = "somewhere"
+	}
+	if sub := d.str("subzone"); sub != "" {
+		where = sub + ", " + where
+	}
+	var who []string
+	if level, ok := d.num("level"); ok {
+		who = append(who, "Level "+number(level))
+	}
+	if race := d.str("race"); race != "" {
+		who = append(who, race)
+	}
+	if class := d.str("class"); class != "" {
+		who = append(who, strings.ToUpper(class[:1])+strings.ToLower(class[1:]))
+	}
+	description := "in " + where
+	if len(who) > 0 {
+		description = strings.Join(who, " ") + ", " + description
+	}
+	return Embed{"title": name + " killed " + victim, "description": description}
+}
+
 func skillUp(name string, d data) Embed {
 	skill := d.str("skill")
 	if skill == "" {
@@ -443,6 +474,8 @@ func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 		embed = duel(name, d)
 	case "battleground":
 		embed = battleground(name, d)
+	case "pvp_kill":
+		embed = pvpKill(name, d)
 	default:
 		embed = generic(name, e.Type, d)
 	}

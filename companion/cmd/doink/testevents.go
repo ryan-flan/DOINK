@@ -39,6 +39,10 @@ var testFixtures = map[string]map[string]any{
 	"duel":         {"opponent": "Grakkor Highmountain", "won": true, "fled": false, "makgora": false},
 	"battleground": {"name": "Warsong Gulch", "won": true},
 	"session":      {"state": "login"},
+	"pvp_kill": {
+		"victim": "Grakkor", "class": "SHAMAN", "race": "Orc", "level": 24.0,
+		"zone": "Westfall", "subzone": "Moonbrook",
+	},
 }
 
 func testTypes() []string {

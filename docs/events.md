@@ -97,6 +97,7 @@ whole numbers.
 | [`duel`](#duel) | A duel ends |
 | [`battleground`](#battleground) | A battleground ends |
 | [`session`](#session) | The character logs in or out (never posted to Discord) |
+| [`pvp_kill`](#pvp_kill) | The character lands the killing blow on another player |
 
 A type is only recorded if the player turned it on, and each has filters
 the player can change (for example "rare items and better"), so which
@@ -348,6 +349,35 @@ together, seconds after the logout.
   is there on `logout` once the game has answered. Without it, the session's length is the logout's
   `ts` minus the login's `ts`.
 - A crash or Alt-F4 saves nothing, so that session's events never arrive.
+
+### `pvp_kill`
+
+```json
+{
+  "seq": 52, "ts": 1759301100, "char": "Flano", "surname": "Wren",
+  "realm": "Whatever", "class": "WARRIOR", "level": 20,
+  "type": "pvp_kill",
+  "data": {
+    "victim": "Grakkor",
+    "class": "SHAMAN",
+    "race": "Orc",
+    "level": 24,
+    "zone": "Westfall",
+    "subzone": "Moonbrook"
+  }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `victim` | string or `null` | The player killed, by first name. `null` when the game had no details on them. |
+| `class` | string or `null` | Their class in capitals, the same in every language. |
+| `race` | string or `null` | Their race in English. |
+| `level` | integer or `null` | Their level. |
+| `zone` | string | Where it happened. |
+| `subzone` | string or `null` | The area within the zone. `null` where the game names none. |
+
+Only killing blows count, not every kill you helped with. PvP kills are posted to Discord but never announced in chat.
 
 ## Test events
 

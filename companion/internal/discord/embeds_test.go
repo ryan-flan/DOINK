@@ -354,6 +354,19 @@ func TestDuel(t *testing.T) {
 	}
 }
 
+func TestPvpKill(t *testing.T) {
+	e := BuildEmbed(event("pvp_kill", map[string]any{"victim": "Grakkor", "class": "SHAMAN", "race": "Orc",
+		"level": 24.0, "zone": "Westfall", "subzone": "Moonbrook"}), nil)
+	if e["title"] != "Flano killed Grakkor" || e["description"] != "Level 24 Orc Shaman, in Moonbrook, Westfall" {
+		t.Errorf("known: %q / %q", e["title"], e["description"])
+	}
+	e = BuildEmbed(event("pvp_kill", map[string]any{"victim": nil, "class": nil, "race": nil,
+		"level": nil, "zone": "Westfall", "subzone": nil}), nil)
+	if e["title"] != "Flano killed a player" || e["description"] != "in Westfall" {
+		t.Errorf("unknown: %q / %q", e["title"], e["description"])
+	}
+}
+
 func TestBattleground(t *testing.T) {
 	e := BuildEmbed(event("battleground", map[string]any{"name": "Warsong Gulch", "won": true}), nil)
 	if e["title"] != "Flano won Warsong Gulch" || e["description"] != "Victory in Warsong Gulch." {

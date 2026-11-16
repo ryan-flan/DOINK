@@ -22,7 +22,7 @@ local TYPE_NAMES = {
   level_up = "Level-ups", loot = "Loot", death = "Deaths", quest = "Quest turn-ins",
   boss_kill = "Boss kills", skill_up = "Skill-ups",
   mount = "New mounts", duel = "Duels", battleground = "Battlegrounds",
-  session = "Logins and logouts",
+  session = "Logins and logouts", pvp_kill = "PvP kills",
 }
 
 local ANNOUNCE_LABELS = {
@@ -119,7 +119,7 @@ local DISCORD_ONLY = " Only affects what is recorded for the companion app; chat
 local function Discord(layout)
   Header(layout, "Recorded for Discord, via the companion app (this character)")
   for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
-      "mount", "duel", "battleground" }) do
+      "mount", "duel", "battleground", "pvp_kill" }) do
     OptionCheckbox { variable = "enabled_" .. t, name = TYPE_NAMES[t], type = t, key = "enabled",
       tooltip = "Record " .. TYPE_NAMES[t]:lower() .. " for the companion to post to Discord."
         .. " Chat announcements don't need this." }

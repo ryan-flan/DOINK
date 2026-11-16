@@ -137,7 +137,7 @@ realtime state, and which event types are enabled.
 | `/doink announce guild` / `officer` / `party` / `raid` / `off` | Choose where announcements go |
 | `/doink announce loot rare` | Change a rule (any event type, values as listed above) |
 | `/doink announce test` | Whisper yourself a sample of every announcement, with whether the current rules would send it |
-| `/doink enable <type>` / `disable <type>` | Only for the Discord companion: record an event type or not (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`; `session` is only forwarded, never posted). Chat announcements don't need it |
+| `/doink enable <type>` / `disable <type>` | Only for the Discord companion: record an event type or not (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`, `pvp_kill`; `session` is only forwarded, never posted). Chat announcements don't need it |
 | `/doink options [type]` | Show the event settings (for example the loot quality and vendor-value thresholds used for Discord) |
 | `/doink set <type> <option> <value>` | Change one, e.g. `/doink set loot min_quality 4` |
 | `/doink reset <type>` | Back to defaults |
@@ -393,6 +393,7 @@ announcement rules above work on their own. The one exception is `wins_only`, wh
 | `duel` | A duel or Mak'gora ends | `wins_only` on |
 | `battleground` | A battleground match ends | `wins_only` on |
 | `session` | You log in or out (never posted to Discord; for [`forward_url`](#sending-events-to-your-own-tool)) | |
+| `pvp_kill` | You land the killing blow on another player | |
 
 **Time played.** `/doink played on` (or the checkbox on the settings page)
 adds your total time played to every recorded event, and the level-up post

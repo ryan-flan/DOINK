@@ -52,7 +52,7 @@
     "type": {
       "type": "string",
       "description": "What happened; decides the shape of data.",
-      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground", "session"]
+      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground", "session", "pvp_kill"]
     },
     "data": {
       "type": "object",
@@ -73,7 +73,8 @@
     { "if": { "properties": { "type": { "const": "mount" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/mount" } } } },
     { "if": { "properties": { "type": { "const": "duel" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/duel" } } } },
     { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } },
-    { "if": { "properties": { "type": { "const": "session" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session" } } } }
+    { "if": { "properties": { "type": { "const": "session" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session" } } } },
+    { "if": { "properties": { "type": { "const": "pvp_kill" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/pvp_kill" } } } }
   ],
   "$defs": {
     "level_up": {
@@ -189,6 +190,18 @@
           "enum": ["login", "reload", "logout"],
           "description": "login: the character entered the world from character select. reload: the UI was reloaded. logout: the character logged out or the UI is about to reload (a reload records logout, then reload)."
         }
+      }
+    },
+    "pvp_kill": {
+      "type": "object",
+      "required": ["victim", "class", "race", "level", "zone", "subzone"],
+      "properties": {
+        "victim": { "type": ["string", "null"], "description": "The player killed, by first name, as the game knew them. null when the game had no details." },
+        "class": { "type": ["string", "null"], "description": "The victim's class in capitals, e.g. SHAMAN. null when unknown." },
+        "race": { "type": ["string", "null"], "description": "The victim's race in English, e.g. Orc. null when unknown." },
+        "level": { "type": ["integer", "null"], "minimum": 1, "description": "The victim's level. null when unknown." },
+        "zone": { "type": "string", "description": "The zone's name in the player's game language." },
+        "subzone": { "type": ["string", "null"], "description": "The area within the zone. null where the game names none." }
       }
     }
   }

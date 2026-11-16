@@ -208,6 +208,7 @@ Rules:
   - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
   - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
   - `session`:   `{"state": "login"|"reload"|"logout"}`
+  - `pvp_kill`:  `{"victim": "Grakkor"|null, "class": "SHAMAN"|null, "race": "Orc"|null, "level": 24|null, "zone": "Westfall", "subzone": "..."|null}`
 - `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is
   unknown). `loot.gear` is item class 2 (weapon) or 4 (armor); `null` when
   the class is unknown.
@@ -231,6 +232,7 @@ Rules:
 | `duel`      | `CHAT_MSG_SYSTEM`          | wins only (`wins_only`)                          |
 | `battleground` | `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE`, `PLAYER_ENTERING_WORLD` | wins only (`wins_only`) |
 | `session`   | `PLAYER_ENTERING_WORLD` (login/reload), `PLAYER_LOGOUT` | always; record-only |
+| `pvp_kill`  | `PARTY_KILL`               | our killing blows on players (`Player-` GUID) |
 
 `session` is **record-only** (`ns.RecordOnly`, companion
 `discord.RecordOnly`): never a realtime screenshot (a shot and a "Screen

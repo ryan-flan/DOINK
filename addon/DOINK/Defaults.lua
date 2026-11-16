@@ -22,6 +22,8 @@ ns.Defaults = {
   -- wins_only: losses are ignored, for Discord and for chat alike.
   duel      = { enabled = false, wins_only = true },
   battleground = { enabled = false, wins_only = true },
+  -- Players this character kills (killing blows).
+  pvp_kill  = { enabled = false },
   -- Logins and logouts: only for tools reading forward_url; the companion
   -- never posts them to Discord (ns.RecordOnly).
   session   = { enabled = false },

@@ -67,11 +67,19 @@ func TestPostTestEvents(t *testing.T) {
 			posted++
 		}
 	}
-	if len(r.embeds) != 1 || len(r.embeds[0]) != posted {
-		t.Fatalf("messages %d", len(r.embeds))
+	// Ten embeds per message, as Discord allows.
+	var all []discord.Embed
+	for _, m := range r.embeds {
+		if len(m) > discord.MaxEmbedsPerMessage {
+			t.Fatalf("%d embeds in one message", len(m))
+		}
+		all = append(all, m...)
+	}
+	if len(all) != posted {
+		t.Fatalf("messages %d, embeds %d", len(r.embeds), len(all))
 	}
 	titles := map[string]bool{}
-	for _, e := range r.embeds[0] {
+	for _, e := range all {
 		titles[e["title"].(string)] = true
 		if e["title"] == "[TEST] Flano Wren looted Thunderfury, Blessed Blade of the Windseeker" && e["thumbnail"] == nil {
 			t.Error("loot not enriched")
@@ -80,12 +88,13 @@ func TestPostTestEvents(t *testing.T) {
 	for _, want := range []string{"[TEST] Flano Wren reached level 60", "[TEST] Flano Wren died to Hogger",
 		"[TEST] Flano Wren defeated Ragnaros", "[TEST] Flano Wren reached 150 Blacksmithing",
 		"[TEST] Flano Wren completed A Threat Within", "[TEST] Flano Wren bought a new mount: Gray Wolf",
-		"[TEST] Flano Wren won a duel against Grakkor Highmountain", "[TEST] Flano Wren won Warsong Gulch"} {
+		"[TEST] Flano Wren won a duel against Grakkor Highmountain", "[TEST] Flano Wren won Warsong Gulch",
+		"[TEST] Flano Wren killed Grakkor"} {
 		if !titles[want] {
 			t.Errorf("missing %q in %v", want, titles)
 		}
 	}
-	for _, e := range r.embeds[0] {
+	for _, e := range all {
 		switch e["title"] {
 		case "[TEST] Flano Wren bought a new mount: Gray Wolf":
 			if e["thumbnail"] == nil {
