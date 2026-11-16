@@ -52,7 +52,7 @@
     "type": {
       "type": "string",
       "description": "What happened; decides the shape of data.",
-      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground"]
+      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground", "session"]
     },
     "data": {
       "type": "object",
@@ -72,7 +72,8 @@
     { "if": { "properties": { "type": { "const": "skill_up" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/skill_up" } } } },
     { "if": { "properties": { "type": { "const": "mount" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/mount" } } } },
     { "if": { "properties": { "type": { "const": "duel" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/duel" } } } },
-    { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } }
+    { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } },
+    { "if": { "properties": { "type": { "const": "session" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session" } } } }
   ],
   "$defs": {
     "level_up": {
@@ -174,6 +175,16 @@
       "properties": {
         "name": { "type": "string", "description": "The battleground's name in the player's game language." },
         "won": { "type": "boolean", "description": "Whether this character's faction won." }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "enum": ["login", "reload", "logout"],
+          "description": "login: the character entered the world from character select. reload: the UI was reloaded. logout: the character logged out or the UI is about to reload (a reload records logout, then reload)."
+        }
       }
     }
   }

@@ -22,6 +22,7 @@ Notifiers\SkillUp.lua
 Notifiers\Mount.lua
 Notifiers\Duel.lua
 Notifiers\Battleground.lua
+Notifiers\Session.lua
 Announce.lua
 Transports\Screenshot.lua
 Options.lua

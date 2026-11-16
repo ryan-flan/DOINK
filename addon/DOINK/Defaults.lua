@@ -22,6 +22,9 @@ ns.Defaults = {
   -- wins_only: losses are ignored, for Discord and for chat alike.
   duel      = { enabled = false, wins_only = true },
   battleground = { enabled = false, wins_only = true },
+  -- Logins and logouts: only for tools reading forward_url; the companion
+  -- never posts them to Discord (ns.RecordOnly).
+  session   = { enabled = false },
 
   -- Not tied to one type. played: add the character's total time played
   -- (seconds) to every recorded event. group: add who else is in your

@@ -333,6 +333,10 @@ end
 
 ------------------------------------------------------------------ emit
 
+-- Types that are only recorded for tools reading forward_url: no realtime
+-- screenshot, no chat, and the companion doesn't post them to Discord.
+ns.RecordOnly = { session = true }
+
 -- Builds the envelope and hands the event to the transports.
 --
 -- An event is queued (seq assigned, JSON stored for the companion) when its

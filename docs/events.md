@@ -96,6 +96,7 @@ whole numbers.
 | [`mount`](#mount) | The character gets a new mount |
 | [`duel`](#duel) | A duel ends |
 | [`battleground`](#battleground) | A battleground ends |
+| [`session`](#session) | The character logs in or out (never posted to Discord) |
 
 A type is only recorded if the player turned it on, and each has filters
 the player can change (for example "rare items and better"), so which
@@ -316,6 +317,35 @@ By default only wins are recorded.
 | `won` | boolean | Whether this character's faction won. |
 
 By default only wins are recorded.
+
+### `session`
+
+```json
+{
+  "seq": 51, "ts": 1759301000, "char": "Flano", "surname": "Wren",
+  "realm": "Whatever", "class": "WARRIOR", "level": 20,
+  "type": "session",
+  "data": { "state": "login" }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `state` | string | `login`: entered the world from character select. `reload`: the UI was reloaded. `logout`: logged out, or the UI is about to reload. |
+
+Logins and logouts exist for tools like yours: the companion forwards them
+but never posts them to Discord, and the addon never sends them as a
+realtime screenshot. They reach you with the game's next save, at
+`/reload` or logout, so a session's `login` and `logout` usually arrive
+together, seconds after the logout.
+
+- A `/reload` records `logout` and then `reload` within a second or two.
+  A `logout` not followed by a `reload` is a real logout.
+- `played` (with `/doink played on`) is usually missing on `login` and
+  `reload`, because the game hasn't answered the addon's request yet; it
+  is there on `logout` once the game has answered. Without it, the session's length is the logout's
+  `ts` minus the login's `ts`.
+- A crash or Alt-F4 saves nothing, so that session's events never arrive.
 
 ## Test events
 

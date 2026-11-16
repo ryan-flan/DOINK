@@ -204,6 +204,7 @@ Rules:
   - `mount`:     `{"name": "Gray Wolf"|null, "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
   - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
   - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
+  - `session`:   `{"state": "login"|"reload"|"logout"}`
 - `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is
   unknown). `loot.gear` is item class 2 (weapon) or 4 (armor); `null` when
   the class is unknown.
@@ -226,6 +227,17 @@ Rules:
 | `mount`     | `NEW_MOUNT_ADDED`, `CHAT_MSG_LOOT` | always (one per 120 s)                   |
 | `duel`      | `CHAT_MSG_SYSTEM`          | wins only (`wins_only`)                          |
 | `battleground` | `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE`, `PLAYER_ENTERING_WORLD` | wins only (`wins_only`) |
+| `session`   | `PLAYER_ENTERING_WORLD` (login/reload), `PLAYER_LOGOUT` | always; record-only |
+
+`session` is **record-only** (`ns.RecordOnly`, companion
+`discord.RecordOnly`): never a realtime screenshot (a shot and a "Screen
+captured" at every login would cost too much), never announced in chat,
+never posted to Discord. It is queued like any event, so it reaches the
+companion with the next SavedVariables write (`/reload` or logout:
+`PLAYER_LOGOUT` fires just before that write) and is forwarded to
+`forward_url`. Zone changes between instances (`PLAYER_ENTERING_WORLD`
+with both flags false) aren't sessions. A `/reload` records `logout`
+then `reload`.
 
 Loot: `rares_boe_only` (default true) drops rares (quality 3) only when they
 are known not to be Bind on Equip (an unknown bind type, `boe = null`,

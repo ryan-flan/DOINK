@@ -88,7 +88,9 @@ func item(d Deps, e savedvars.Event) *wowhead.Item {
 func forwardOnly(d Deps, key string, events []savedvars.Event, firstSightBacklog int) error {
 	sent, err := forwardEvents(d, key, events)
 	for _, e := range events[:sent] {
-		d.Status.Posted(e.FullName(), e.Type)
+		if !discord.RecordOnly(e.Type) {
+			d.Status.Posted(e.FullName(), e.Type)
+		}
 		d.State.MarkPosted(key, e.Seq, firstSightBacklog)
 	}
 	if err != nil {
@@ -104,6 +106,9 @@ func forwardOnly(d Deps, key string, events []savedvars.Event, firstSightBacklog
 // post error; state is saved after each message, so a retry resumes
 // cleanly. img, when set, is attached to the message and shown on its first
 // embed: realtime posts one event at a time, so it belongs to that event.
+//
+// Record-only types (discord.RecordOnly: logins and logouts) are recorded
+// and forwarded like the rest but never posted.
 //
 // With forward_url set, each event is also forwarded at the moment it is
 // recorded (so never twice). Next to Discord that is best effort: the
@@ -139,15 +144,21 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 	for start := 0; start < len(events); start += discord.MaxEmbedsPerMessage {
 		batch := events[start:min(start+discord.MaxEmbedsPerMessage, len(events))]
 		embeds := make([]discord.Embed, 0, len(batch))
-		for _, e := range batch {
-			embeds = append(embeds, discord.BuildEmbed(e, item(d, e)))
-		}
 		names := make([]string, 0, len(batch))
 		for _, e := range batch {
+			if discord.RecordOnly(e.Type) {
+				continue
+			}
+			embeds = append(embeds, discord.BuildEmbed(e, item(d, e)))
 			names = append(names, fmt.Sprintf("#%d %s", e.Seq, e.Type))
 		}
-		err := d.Sender.SendWithImage(url, embeds, img)
+		var err error
+		if len(embeds) > 0 {
+			err = d.Sender.SendWithImage(url, embeds, img)
+		}
 		switch {
+		case len(embeds) == 0:
+			// Only record-only events: nothing to post.
 		case errors.Is(err, discord.ErrRejected):
 			// The message itself is wrong; retrying would block every
 			// later event of this character behind it. Drop the batch.
@@ -165,7 +176,7 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 			d.Log.Info(fmt.Sprintf("%s: %s %s%s", key, verb, strings.Join(names, ", "), with))
 		}
 		for _, e := range batch {
-			if err == nil {
+			if err == nil && !discord.RecordOnly(e.Type) {
 				d.Status.Posted(e.FullName(), e.Type)
 			}
 			d.State.MarkPosted(key, e.Seq, firstSightBacklog) // posted, or dropped for good

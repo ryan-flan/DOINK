@@ -2,6 +2,7 @@ package runner
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -289,5 +290,45 @@ func TestForwardWithoutAForwarderLosesNothing(t *testing.T) {
 	ok, s := f.run(eventsFile(1), nil)
 	if ok || lastSeen(s, "Flano-R") != -1 {
 		t.Errorf("ok %v last %d: must not be recorded as delivered", ok, lastSeen(s, "Flano-R"))
+	}
+}
+
+// Logins and logouts (record-only) are forwarded and recorded, never posted.
+func TestRecordOnlyEventsAreForwardedNotPosted(t *testing.T) {
+	session := func(seq int, st string) string {
+		return fmt.Sprintf(`"{\"char\":\"Flano\",\"class\":\"MAGE\",\"data\":{\"state\":\"%s\"},\"realm\":\"R\",\"seq\":%d,\"ts\":1790870764,\"type\":\"session\"}",`, st, seq)
+	}
+	file := "[\"events\"] = {\n" + session(1, "login") + "\n" +
+		strings.TrimSuffix(strings.TrimPrefix(eventsFile(2), "[\"events\"] = {\n"), "\n},") + "\n" +
+		session(3, "logout") + "\n},"
+
+	f := newFixture(t)
+	ff := withForward(f)
+	ok, s := f.run(file, nil)
+	if !ok {
+		t.Fatalf("logs %v", f.logs.recs)
+	}
+	if got := f.sender.titles(); len(got) != 1 || !strings.Contains(got[0], "level 2") {
+		t.Errorf("discord got %v, want only the level-up", got)
+	}
+	if len(ff.bodies) != 3 || !strings.Contains(ff.bodies[0], `"state":"login"`) || !strings.Contains(ff.bodies[2], `"state":"logout"`) {
+		t.Errorf("forwarded %v", ff.bodies)
+	}
+	if n := lastSeen(s, "Flano-R"); n != 3 {
+		t.Errorf("last seen %d, want 3: a login must not wait for anything", n)
+	}
+
+	// Without forward_url they are recorded and dropped, still never posted.
+	g := newFixture(t)
+	if ok, s := g.run(file, nil); !ok || len(g.sender.sent) != 1 || lastSeen(s, "Flano-R") != 3 {
+		t.Errorf("ok %v discord %v", ok, g.sender.titles())
+	}
+
+	// forward_url and no webhook: everything is forwarded, nothing posted.
+	h := newFixture(t)
+	h.cfg.WebhookURL = ""
+	hf := withForward(h)
+	if ok, s := h.run(file, nil); !ok || len(hf.bodies) != 3 || len(h.sender.sent) != 0 || lastSeen(s, "Flano-R") != 3 {
+		t.Errorf("forward-only: ok %v forwarded %d discord %v", ok, len(hf.bodies), h.sender.titles())
 	}
 }

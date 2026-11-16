@@ -239,6 +239,7 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
     "Notifiers/Mount.lua", "Notifiers/Duel.lua", "Notifiers/Battleground.lua",
+    "Notifiers/Session.lua",
     "Announce.lua", "Transports/Screenshot.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
@@ -780,6 +781,21 @@ test("group: off by default; on, every event lists the party; left out alone, in
   eq(ns:GetOption("general", "group"), false, "/doink group off")
 end)
 
+test("session: login and reload recorded, zoning ignored, logout recorded; never a realtime shot", function()
+  local n = count()
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  eq(count(), n + 1, "login")
+  assert(has('"type":"session"') and has('"state":"login"'), last())
+  fire("PLAYER_ENTERING_WORLD", false, false)
+  eq(count(), n + 1, "zoning between instances isn't a session")
+  fire("PLAYER_LOGOUT")
+  assert(has('"state":"logout"'), last())
+  fire("PLAYER_ENTERING_WORLD", false, true)
+  assert(has('"state":"reload"'), last())
+  eq(count(), n + 3, "three recorded")
+  assert(ns.RecordOnly.session, "record-only: no screenshot, no Discord post")
+end)
+
 test("set: numbers, money and booleans, typed by the default", function()
   slash("set loot min_quality 4")
   eq(ns:GetOption("loot", "min_quality"), 4, "number")
@@ -833,7 +849,7 @@ end)
 
 test("every notifier has a working /doink test fixture", function()
   for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup",
-      "mount", "duel", "battleground" }) do
+      "mount", "duel", "battleground", "session" }) do
     local n = count()
     SlashCmdList.DOINK("test " .. t)
     eq(count(), n + 1, t)
@@ -1047,6 +1063,17 @@ test("realtime: image on sets flag bit 1 on events, never on hellos", function()
   drainShots()
   assert(slash("realtime image"):find("realtime image: off", 1, true), "prints the state")
   eq(DOINKDB.realtime.image, false, "asking changes nothing")
+end)
+
+test("realtime: session events are never shot (they wait for /reload or logout)", function()
+  local wasOn = DOINKDB.realtime.enabled
+  slash("realtime on")
+  drainShots()
+  local n = count()
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  eq(count(), n + 1, "recorded")
+  eq(#T.queue(), 0, "no screenshot queued for a login")
+  if not wasOn then slash("realtime off") end
 end)
 
 test("realtime: a hello for /doink realtime test", function()
@@ -1301,7 +1328,7 @@ end)
 -- The suite runs with every type enabled (see SHIPPED above), which is not
 -- what a new player has: these tests switch the Discord toggles off again.
 local ALL_TYPES = { "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
-  "mount", "duel", "battleground" }
+  "mount", "duel", "battleground", "session" }
 
 -- Sets `enabled` for the given types; returns a function that puts back
 -- whatever overrides were there.
@@ -1477,10 +1504,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 11 + 7 + 1 + 2, "announce 7+3, discord 11+7+1, realtime 2")
+  eq(#settings.controls, 7 + 3 + 12 + 7 + 1 + 2, "announce 7+3, discord 12+7+1, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 25, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 26, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")

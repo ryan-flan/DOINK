@@ -38,6 +38,7 @@ var testFixtures = map[string]map[string]any{
 	},
 	"duel":         {"opponent": "Grakkor Highmountain", "won": true, "fled": false, "makgora": false},
 	"battleground": {"name": "Warsong Gulch", "won": true},
+	"session":      {"state": "login"},
 }
 
 func testTypes() []string {
@@ -98,12 +99,18 @@ func postTestEvents(events []savedvars.Event, url string, sender discord.Sender,
 		batch := events[start:min(start+discord.MaxEmbedsPerMessage, len(events))]
 		embeds := make([]discord.Embed, 0, len(batch))
 		for _, e := range batch {
+			if discord.RecordOnly(e.Type) {
+				continue // never posted, so there is nothing to preview
+			}
 			var item *wowhead.Item
 			id, ok := e.Data["item_id"].(float64)
 			if ok && id == math.Trunc(id) && items != nil && (e.Type == "loot" || e.Type == "mount") {
 				item = items.Lookup(int(id))
 			}
 			embeds = append(embeds, discord.BuildEmbed(e, item))
+		}
+		if len(embeds) == 0 {
+			continue
 		}
 		if err := sender.Send(url, embeds); err != nil {
 			return err
@@ -156,7 +163,13 @@ func runTestEvents(args []string, cfg *config.Config, log *slog.Logger) int {
 	}
 	var kinds []string
 	for _, e := range events {
-		kinds = append(kinds, e.Type)
+		if !discord.RecordOnly(e.Type) {
+			kinds = append(kinds, e.Type)
+		}
+	}
+	if len(kinds) == 0 {
+		log.Info("nothing to post: session events are never posted to Discord")
+		return 0
 	}
 	log.Info(fmt.Sprintf("%s test %s", verb, strings.Join(kinds, ", ")))
 	return 0

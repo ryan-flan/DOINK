@@ -22,6 +22,7 @@ local TYPE_NAMES = {
   level_up = "Level-ups", loot = "Loot", death = "Deaths", quest = "Quest turn-ins",
   boss_kill = "Boss kills", skill_up = "Skill-ups",
   mount = "New mounts", duel = "Duels", battleground = "Battlegrounds",
+  session = "Logins and logouts",
 }
 
 local ANNOUNCE_LABELS = {
@@ -147,6 +148,9 @@ local function Discord(layout)
   OptionCheckbox { variable = "battleground_wins_only", name = "Battlegrounds: wins only",
     type = "battleground", key = "wins_only",
     tooltip = "Losses are neither recorded for Discord nor announced in chat." }
+  OptionCheckbox { variable = "enabled_session", name = TYPE_NAMES.session, type = "session", key = "enabled",
+    tooltip = "Record when this character logs in and out, for tools reading forward_url. "
+      .. "Never posted to Discord; they reach the companion at your next /reload or logout." }
   Checkbox { variable = "general_played", name = "Add time played to events", default = false,
     get = function() return ns:GetOption("general", "played") end,
     set = function(on) ns:SetPlayed(on) end,

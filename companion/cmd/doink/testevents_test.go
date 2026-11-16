@@ -61,7 +61,13 @@ func TestPostTestEvents(t *testing.T) {
 	if err := postTestEvents(events, "https://discord.com/api/webhooks/1/x", r, items); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.embeds) != 1 || len(r.embeds[0]) != len(testFixtures) {
+	posted := 0 // record-only types (session) are never posted
+	for typ := range testFixtures {
+		if !discord.RecordOnly(typ) {
+			posted++
+		}
+	}
+	if len(r.embeds) != 1 || len(r.embeds[0]) != posted {
 		t.Fatalf("messages %d", len(r.embeds))
 	}
 	titles := map[string]bool{}

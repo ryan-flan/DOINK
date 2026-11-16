@@ -339,6 +339,8 @@ end
 
 -- Transport entry point: Core passes (json, envelope); the JSON is sent.
 function Shot.Send(json, envelope)
+  -- A login isn't worth a screenshot; these wait for the next /reload or logout.
+  if envelope and ns.RecordOnly[envelope.type] then return end
   Queue(json, Settings().image and FLAG_IMAGE or 0)
 end
 

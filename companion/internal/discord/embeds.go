@@ -405,6 +405,15 @@ func generic(name, kind string, d data) Embed {
 	return Embed{"title": name + ": " + kind, "description": "```json\n" + body + "\n```"}
 }
 
+// recordOnly are the event types that exist only for tools reading
+// forward_url (logins and logouts): the addon never sends them as a
+// realtime screenshot, and they are never posted to Discord.
+var recordOnly = map[string]bool{"session": true}
+
+// RecordOnly reports whether events of this type are never posted to
+// Discord, only forwarded.
+func RecordOnly(eventType string) bool { return recordOnly[eventType] }
+
 // BuildEmbed turns one event into an embed. item is Wowhead's details for a
 // loot or mount event, when the lookup is on and succeeded; other types
 // ignore it.
