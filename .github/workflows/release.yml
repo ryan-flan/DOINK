@@ -234,8 +234,76 @@ jobs:
             ${{ env.TARBALL }}
             ${{ env.TARBALL }}.sha256
 
+  # DOINK for Mac: the SwiftUI menu bar app with the companion inside,
+  # both universal (Apple silicon + Intel; the runner's Xcode can build
+  # both Swift slices). mac/build.sh does the work; it signs ad hoc, so the
+  # app isn't notarized (first launch: Privacy & Security → Open Anyway).
+  macos:
+    needs: plan
+    # Same gate as build: the companion ships as a whole or not at all.
+    if: needs.plan.outputs.companion == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: companion/go.mod }
+
+      - name: Companion tests (on macOS)
+        working-directory: companion
+        run: go test ./...
+
+      - name: Build DOINK.app
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then ver="${GITHUB_REF_NAME#v}"; else ver=0.0.0; fi
+          GO="$(command -v go)" mac/build.sh "$ver"
+
+      # The bundled companion must run (same check as the other builds),
+      # both binaries must carry both architectures, and the signature
+      # must hold after packaging.
+      - name: Smoke test the app
+        run: |
+          set -euo pipefail
+          app=mac/build/DOINK.app
+          codesign --verify --strict "$app"
+          for bin in "$app/Contents/MacOS/DOINK" "$app/Contents/Resources/doink"; do
+            archs="$(lipo -archs "$bin")"
+            echo "$bin: $archs"
+            case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::$bin is not universal"; exit 1 ;; esac
+          done
+          mkdir smoke
+          cat > smoke/DOINK.lua <<'LUA'
+          DOINKDB = {
+          ["chars"] = {
+          ["Flano Wren-R"] = {
+          ["events"] = {
+          "{\"char\":\"Flano\",\"surname\":\"Wren\",\"realm\":\"R\",\"seq\":1,\"type\":\"level_up\",\"data\":{\"level\":2}}",
+          },
+          },
+          },
+          }
+          LUA
+          printf "savedvariables_path = '%s'\ndry_run = true\n" "$PWD/smoke/DOINK.lua" > smoke/config.toml
+          "$app/Contents/Resources/doink" --once --config smoke/config.toml
+          "$app/Contents/Resources/doink" config show --config smoke/config.toml
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then name="DOINK-$GITHUB_REF_NAME-macos"; else name="DOINK-dev-macos"; fi
+          mv mac/build/DOINK-v*-macos.zip "$name.zip"
+          printf '%s  %s' "$(shasum -a 256 "$name.zip" | cut -d' ' -f1)" "$name.zip" > "$name.zip.sha256"
+          echo "MACZIP=$name.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doink-macos
+          path: |
+            ${{ env.MACZIP }}
+            ${{ env.MACZIP }}.sha256
+
   release:
-    needs: [plan, addon, build, linux]
+    needs: [plan, addon, build, linux, macos]
     # !cancelled(): without a status function a job needs ALL of its needs
     #   to succeed, and a skipped or failed need counts as not succeeded.
     #   !cancelled() lifts that (like always()) but stays off when the whole
@@ -243,7 +311,7 @@ jobs:
     # ref_type == 'tag': manual runs stop at the artifacts.
     # plan.result == 'success': a tag matching neither half fails in plan;
     #   then every other job is skipped and nothing is released.
-    # companion != 'true' || build == 'success' (same for linux): when the
+    # companion != 'true' || build == 'success' (same for linux, macos): when the
     #   companion is part of this release its jobs must have succeeded;
     #   when it isn't, they are 'skipped' and that is fine. (needs.<job>.result
     #   is one of success / failure / cancelled / skipped.)
@@ -255,6 +323,7 @@ jobs:
       && needs.plan.result == 'success'
       && (needs.plan.outputs.companion != 'true' || needs.build.result == 'success')
       && (needs.plan.outputs.companion != 'true' || needs.linux.result == 'success')
+      && (needs.plan.outputs.companion != 'true' || needs.macos.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -293,7 +362,8 @@ jobs:
           mkdir -p dist
           ls -l dist
           if [ "$COMPANION" = true ]; then
-            for f in "DOINK-$TAG.zip" "DOINK-$TAG.zip.sha256" "DOINK-$TAG-linux-amd64.tar.gz" "DOINK-$TAG-linux-amd64.tar.gz.sha256"; do
+            for f in "DOINK-$TAG.zip" "DOINK-$TAG.zip.sha256" "DOINK-$TAG-linux-amd64.tar.gz" "DOINK-$TAG-linux-amd64.tar.gz.sha256" \
+                     "DOINK-$TAG-macos.zip" "DOINK-$TAG-macos.zip.sha256"; do
               [ -f "dist/$f" ] || { echo "::error::dist/$f is missing; the installed updaters need DOINK-<tag>.zip and its .sha256"; exit 1; }
             done
           fi
@@ -320,6 +390,7 @@ jobs:
             if [ "$COMPANION" = true ]; then
               printf -- '- **Companion app for Windows** (posts to Discord; optional): `DOINK-%s.zip`. It also contains a copy of the addon.\n' "$TAG"
               printf -- '- **Companion app for Linux** (optional): `DOINK-%s-linux-amd64.tar.gz`. No addon inside.\n' "$TAG"
+              printf -- '- **DOINK for Mac** (menu bar app, optional; macOS 14+): `DOINK-%s-macos.zip`. Unzip, move to Applications. Not notarized: the first time, open it, then System Settings → Privacy & Security → **Open Anyway**. No addon inside.\n' "$TAG"
             else
               printf -- '- **Companion app**: not part of this release. Get it from [v%s](https://github.com/%s/releases/tag/v%s).\n' "$COMPANION_VERSION" "$GITHUB_REPOSITORY" "$COMPANION_VERSION"
             fi
@@ -349,6 +420,8 @@ jobs:
               "DOINK-$TAG.zip.sha256")              l="Companion app for Windows, checksum: $n" ;;
               "DOINK-$TAG-linux-amd64.tar.gz")      l="Companion app for Linux: $n" ;;
               "DOINK-$TAG-linux-amd64.tar.gz.sha256") l="Companion app for Linux, checksum: $n" ;;
+              "DOINK-$TAG-macos.zip")               l="DOINK for Mac (menu bar app): $n" ;;
+              "DOINK-$TAG-macos.zip.sha256")        l="DOINK for Mac, checksum: $n" ;;
               *)                                    l="$n" ;;
             esac
             files+=("$f#$l")

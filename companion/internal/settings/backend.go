@@ -128,13 +128,13 @@ func (b *Backend) View() View {
 		return v
 	}
 	v.Found = cfg.SavedVariablesPaths
-	v.GameWebhook = gameWebhooks(cfg.SavedVariablesPaths)
+	v.GameWebhook = GameWebhooks(cfg.SavedVariablesPaths)
 	return v
 }
 
-// gameWebhooks describes the webhooks set in game, which win over
+// GameWebhooks describes the webhooks set in game, which win over
 // config.toml's: "all characters", "Flano Wren-Realm", "3 characters".
-func gameWebhooks(paths []string) string {
+func GameWebhooks(paths []string) string {
 	all := false
 	chars := map[string]bool{}
 	for _, path := range paths {

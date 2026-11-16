@@ -64,6 +64,15 @@ func TestSet(t *testing.T) {
 			"# hi\r\nwebhook_url = '" + hook + "'\r\n"},
 		{"two keys at once", "", []KV{{"webhook_url", hook}, {"wow_dir", "/w"}},
 			"webhook_url = '" + hook + "'\nwow_dir = '/w'\n"},
+		{"bools and numbers", "dry_run = false # keep\n",
+			[]KV{{"dry_run", true}, {"max_backlog", 25}, {"poll_interval", 2.0}, {"wowhead", false}},
+			"dry_run = true\nmax_backlog = 25\npoll_interval = 2.0\nwowhead = false\n"},
+		{"fractional float", "", []KV{{"poll_interval", 1.5}}, "poll_interval = 1.5\n"},
+		{"nil removes", "realtime = false\n", []KV{{"realtime", nil}}, ""},
+		{"table key as dotted", "dry_run = true\n[notifiers]\nx = 1\n", []KV{{"webhooks.loot", hook}},
+			"dry_run = true\nwebhooks.loot = '" + hook + "'\n[notifiers]\nx = 1\n"},
+		{"table key inside its table", "[webhooks]\ndeath = 'd'\n\n[other]\n", []KV{{"webhooks.loot", hook}, {"webhooks.death", ""}},
+			"[webhooks]\nloot = '" + hook + "'\n\n[other]\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

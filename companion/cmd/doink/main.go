@@ -3,7 +3,8 @@
 //
 // On Windows it runs as a tray app by default; elsewhere, and with --once,
 // --console, --dry-run, --test-webhook or `doink test <type>`, it is a
-// console program. `doink test <type>... [url]` posts the same fake events
+// console program. `doink config show|set key=value...` reads and edits
+// config.toml (for the macOS app's settings page). `doink test <type>... [url]` posts the same fake events
 // as the in-game /doink test, without the game. `doink decode <image>...`
 // reads the realtime code in screenshots and changes nothing. During
 // development pass --config: `go run` builds into a temporary folder, so
@@ -61,7 +62,9 @@ type options struct {
 	testEvents  bool     // doink test <type>... [url]
 	testArgs    []string // its arguments
 	decode      []string // doink decode <image>...
+	configArgs  []string // doink config show | set key=value...
 	verbose     bool
+	statusFile  string // --status-file: JSON snapshot for a menu bar app
 	updatedFrom string // set by the self-update: the version it replaced
 }
 
@@ -90,6 +93,7 @@ func run() int {
 	fs.BoolVar(&o.tray, "tray", false, "run as a tray app (Windows only; the default there)")
 	fs.Var(&o.testWebhook, "test-webhook", "post a test message to `URL` (default: the configured webhook) and exit")
 	fs.BoolVar(&o.verbose, "v", false, "debug logging")
+	fs.StringVar(&o.statusFile, "status-file", "", "keep a JSON snapshot of the companion and your characters in `file` (for the macOS menu bar app)")
 	fs.StringVar(&o.updatedFrom, "updated-from", "", "`version` this one replaced (set by the self-update; don't pass by hand)")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	// Flags may come before or after positional arguments
@@ -121,6 +125,11 @@ func run() int {
 	case "":
 	case "test":
 		o.testEvents, o.testArgs = true, positional[1:]
+	case "config":
+		o.configArgs = positional[1:]
+		if o.configArgs == nil {
+			o.configArgs = []string{}
+		}
 	case "decode":
 		if len(positional) < 2 {
 			fmt.Fprintln(os.Stderr, "usage: doink decode <screenshot>...")
@@ -134,6 +143,10 @@ func run() int {
 	if *showVersion {
 		fmt.Println("DOINK companion v" + version)
 		return 0
+	}
+
+	if o.configArgs != nil {
+		return runConfig(o.config, o.configArgs, os.Stdout, os.Stderr)
 	}
 
 	oneShot := o.testWebhook.set || o.testEvents || o.decode != nil
@@ -161,8 +174,11 @@ func runConsole(o options) int {
 	slog.SetDefault(log)
 
 	cfg, err := config.Load(o.config, o.dryRun)
-	// The one-shot test commands can run without a WoW install.
-	noWoWIsFine := errors.Is(err, config.ErrNoWoW) && (o.testWebhook.set || o.testEvents)
+	// The one-shot test commands can run without a WoW install, and so
+	// can a companion under the menu bar app, which shows the problem.
+	noWoW := errors.Is(err, config.ErrNoWoW)
+	keepRunning := noWoW && o.statusFile != "" && !o.once
+	noWoWIsFine := noWoW && (o.testWebhook.set || o.testEvents) || keepRunning
 	if err != nil && !noWoWIsFine {
 		log.Error(err.Error())
 		return 1
@@ -179,7 +195,14 @@ func runConsole(o options) int {
 		log.Error(err.Error())
 		return 1
 	}
-	d := deps(cfg, st, status.New(nil), log)
+	poke := make(chan struct{}, 1)
+	s := status.New(func(string) {
+		select {
+		case poke <- struct{}{}:
+		default: // a rewrite is already due
+		}
+	})
+	d := deps(cfg, st, s, log)
 	if o.once {
 		if err := runner.RunOnce(d); err != nil {
 			log.Error(err.Error())
@@ -190,6 +213,18 @@ func runConsole(o options) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if o.statusFile != "" {
+		done := make(chan struct{})
+		go func() {
+			runStatusFile(ctx, o.statusFile, s, cfg.SavedVariablesPaths, cfg.DryRun, poke)
+			close(done)
+		}()
+		defer func() { stop(); <-done }() // the writer removes the file
+	}
+	if keepRunning {
+		log.Error(err.Error())
+		s.Failed(err.Error())
+	}
 	reload := func() (*config.Config, error) { return config.Load(o.config, o.dryRun) }
 	if err := runner.Run(ctx, d, o.config, reload); err != nil {
 		log.Error(err.Error())

@@ -160,6 +160,22 @@ func (s *Status) Update() *updates.Info {
 	return s.update
 }
 
+// Snapshot is everything a status display shows, copied under the lock.
+type Snapshot struct {
+	Watching int
+	Error    string
+	Recent   []Post // newest first
+	Summary  string
+}
+
+// Snapshot copies the current state.
+func (s *Status) Snapshot() Snapshot {
+	summary := s.Summary()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return Snapshot{Watching: s.watching, Error: s.err, Recent: append([]Post(nil), s.recent...), Summary: summary}
+}
+
 // Summary is the one-line tooltip text.
 func (s *Status) Summary() string {
 	s.mu.Lock()

@@ -665,3 +665,65 @@ func TestRunWaitsForAWebhookWithoutRetrying(t *testing.T) {
 		t.Errorf("status %q logs %v", f.status.Error(), f.logs.recs)
 	}
 }
+
+func typed(seq int, typ string) savedvars.Event {
+	e := event(seq)
+	e.Type = typ
+	return e
+}
+
+func TestTypeWebhooksRouteEvents(t *testing.T) {
+	const lootHook = "https://discord.com/api/webhooks/9/loot"
+	f := newFixture(t)
+	f.cfg.TypeWebhooks = map[string]string{"loot": lootHook}
+	s := f.state()
+	events := []savedvars.Event{typed(1, "level_up"), typed(2, "loot"), typed(3, "loot"), typed(4, "death")}
+	// The route beats even the character's own in-game webhook.
+	hooks := map[string]string{"Flano-R": charHook}
+	if err := PostEvents(f.deps(s), "Flano-R", events, hooks, 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(f.sender.urls, []string{charHook, lootHook, charHook}) {
+		t.Errorf("urls %v", f.sender.urls)
+	}
+	if len(f.sender.sent[1]) != 2 {
+		t.Errorf("loot not posted together: %v", f.sender.titles())
+	}
+	if lastSeen(s, "Flano-R") != 4 {
+		t.Errorf("last seen %d", lastSeen(s, "Flano-R"))
+	}
+}
+
+func TestTypeWebhooksWithoutDefaultKeepOthersPending(t *testing.T) {
+	const lootHook = "https://discord.com/api/webhooks/9/loot"
+	f := newFixture(t)
+	f.cfg.WebhookURL = ""
+	f.cfg.TypeWebhooks = map[string]string{"loot": lootHook}
+	s := f.state()
+	events := []savedvars.Event{typed(1, "level_up"), typed(2, "loot"), typed(3, "quest")}
+	err := PostEvents(f.deps(s), "Flano-R", events, nil, 0, nil)
+	if !errors.Is(err, ErrNoWebhook) {
+		t.Fatalf("err %v", err)
+	}
+	// The loot went out; the others wait for a webhook instead of being
+	// skipped, even on this character's first post.
+	if !reflect.DeepEqual(f.sender.urls, []string{lootHook}) {
+		t.Errorf("urls %v", f.sender.urls)
+	}
+	for seq, pending := range map[int]bool{1: true, 2: false, 3: true} {
+		if s.IsPending("Flano-R", seq) != pending {
+			t.Errorf("seq %d pending = %v", seq, !pending)
+		}
+	}
+	f.cfg.WebhookURL = configHook
+	f.sender.reset()
+	var rest []savedvars.Event
+	for _, e := range events {
+		if s.IsPending("Flano-R", e.Seq) {
+			rest = append(rest, e)
+		}
+	}
+	if err := PostEvents(f.deps(s), "Flano-R", rest, nil, 0, nil); err != nil || len(f.sender.titles()) != 2 {
+		t.Errorf("err %v sent %v", err, f.sender.titles())
+	}
+}

@@ -19,8 +19,9 @@ Therefore DOINK is two parts:
 
 1. **Addon (Lua)** — detects events, announces them in chat (`Announce.lua`,
    needs nothing else) and appends them to a queue in SavedVariables.
-2. **Companion (Go, runs on the gaming PC: Windows, or Linux for Lutris/Proton; optional)** — reads
-   the queue and POSTs to Discord.
+2. **Companion (Go, runs on the gaming PC: Windows, macOS, or Linux for Lutris/Proton; optional)** — reads
+   the queue and POSTs to Discord. On macOS it runs inside a SwiftUI
+   menu bar app (`mac/`).
 
 The addon is transport-agnostic. The companion decides how it learns about
 events: a file watcher on SavedVariables, plus (since v0.14) the
@@ -74,11 +75,16 @@ DOINK/
         ├── discover/         # finds <WoW>/_*_/WTF/Account/*/SavedVariables/DOINK.lua
         ├── watcher/          # (mtime, size) polling with a settle poll
         ├── status/           # thread-safe state for the tooltip/notifications
+        ├── toon/             # character summary (last logged in, recent events) for --status-file
         ├── runner/           # the watch-and-post loop (Process, Run, RunOnce)
         ├── updates/          # GitHub release check + one-click install
         ├── tray/             # Windows tray icon + menu + single instance (x/sys)
         ├── settings/         # settings window (WebView2, Windows) + config.toml editing
         └── autostart/        # "Start with Windows": HKCU\...\Run\DOINK
+└── mac/                      # macOS menu bar app (SwiftUI, SwiftPM), runs companion
+    ├── Package.swift         # macOS 14+, one executable target, no dependencies
+    ├── build.sh              # -> mac/build/DOINK.app + DOINK-v<ver>-macos.zip
+    └── Sources/DOINKBar/     # App, Companion (child process), PanelView, Palette, MenuBarIcon
 ```
 
 ## Data contract (both halves depend on this — do not change casually)
@@ -163,8 +169,10 @@ Rules:
   shows it on the level-up embed only ("Time played: 4d 17h 27m");
   `forward_url` receivers get it on every event. An event whose `played`
   isn't a non-negative integer is skipped like any bad entry.
-- Webhook for a character's events: `webhooks["Name-Realm"]`, else
-  `webhooks["*"]`, else the companion's `config.toml`. Set in game with
+- Webhook for a character's events: the companion's per-action
+  `[webhooks]` entry for the event's type (config.toml only, since
+  2026-11-16), else `webhooks["Name-Realm"]`, else `webhooks["*"]`, else
+  the companion's `webhook_url`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` comes from the client's death recap
@@ -502,9 +510,17 @@ tests/test_addon.lua`.
   exists, and watches every account's file. Notifier toggles are **not**
   companion config.
 - `config.toml`, `state.json` and `doink.log` live next to the executable.
-- Webhook precedence: in-game per-char > in-game `*` > `webhook_url` in
-  config.toml. A character with no resolvable webhook logs an error and its
-  events stay queued (state not advanced) until one is set; `Process`
+- Webhook precedence, per event: `[webhooks] <type>` in config.toml
+  (decided 2026-11-16: per-action wins over everything) > in-game
+  per-char > in-game `*` > `webhook_url`. `PostEvents` posts runs of
+  consecutive events sharing a URL; a run with no webhook stays pending
+  while later routed runs still post (a first-sight character's earlier
+  seqs are kept as `missing`, not skipped). Keys must be the addon's types
+  (`config.EventTypes`), values Discord webhook URLs, or Load fails.
+  `settings.Set` writes `webhooks.<type>` inside an existing `[webhooks]`
+  table, else as a top-level dotted key. Events with no resolvable
+  webhook log an error and stay queued (state not advanced) until one is
+  set; `Process`
   returns `runner.ErrNoWebhook` and `Run` stops retrying that file until
   it or `config.toml` changes (one error line, not one per retry). Only
   transient failures (network, Discord down) back off: poll interval
@@ -570,6 +586,66 @@ tests/test_addon.lua`.
   tests). One `syscall.NewCallback` window procedure for the process,
   dispatching by `hwnd`. Icons are embedded (`companion/assets`) and written
   to `%TEMP%\doink-*.ico` for `LoadImageW`.
+- **macOS app** (`mac/`, since 2026-11-16). An `NSStatusItem` plus a
+  borderless non-activating `NSPanel` hosting SwiftUI (`PanelWindow.swift`,
+  `LSUIElement`), modelled on OpenUsage's panel
+  (github.com/robinebers/openusage: neutral cards, capsule segmented
+  control, ring rows, a "…" footer menu; DOINK gold `#F2B83A` on
+  charcoal `#202326`, WoW class colours). It does **no** DOINK logic of
+  its own: it runs the bundled `doink` (`Contents/Resources/doink`,
+  universal, CGO off) as a child with `--console --config
+  ~/Library/Application Support/DOINK/config.toml --status-file
+  .../status.json`, appends its output to `doink.log` there (rotated at
+  1 MB), restarts it with back-off if it dies, SIGTERMs it on quit,
+  refuses a second copy of itself (double posts), and polls
+  `status.json` once a second (only a file whose `pid` is its own child
+  counts). Launch at Login is `SMAppService.mainApp`. `DOINK_BIN`
+  overrides the binary for development; `DOINK_OPEN_PANEL=1` opens the
+  panel at launch (for screenshots). `build.sh` signs ad hoc; not
+  notarized (first launch: Privacy & Security → Open Anyway). Released
+  by `release.yml`'s `macos` job as `DOINK-vX.Y.Z-macos.zip`.
+  Not `MenuBarExtra` (decided 2026-11-16): it resizes its window from the
+  bottom edge, so a shorter tab left the panel hanging below the menu
+  bar. The SwiftUI content measures itself (preference keys) and the
+  controller animates the window's height with the top edge fixed under
+  the item (0.22 s, none with Reduce Animations), max the screen's
+  height 72% of the screen (just under 3/4; taller content scrolls).
+  Corners are 6 px. It closes on a
+  click in another app or Esc.
+  Settings page (gear in the footer): companion settings go through
+  `doink config show|set` (below), never written by Swift; changing
+  `dry_run`, `wowhead` or `wow_dir` restarts the companion, the rest is
+  picked up by its live reload. URLs are shown masked (host + last 4).
+  App-only preferences (theme, menu bar text: name and level / level /
+  icon, reduce animations) are `UserDefaults` (`AppPrefs.swift`).
+- `doink config show` prints JSON: `values` (only keys set in
+  config.toml, among webhook_url, forward_url, wow_dir, dry_run, wowhead,
+  realtime, update_check, update_notify, max_backlog, poll_interval),
+  `found`, `wow_dirs`, `game_webhooks` (description, no URLs), `routes`
+  (`[webhooks]`: type -> URL), `error`. `doink config set key=value...`
+  (also `webhooks.<type>=url`) validates (webhook/forward URL,
+  `settings.WowFolder`, types), writes with `settings.Set` (now typed:
+  string, bool, int, float; "" removes), then loads the file like the
+  companion and puts the old one back if that fails.
+- `--status-file <path>` (console mode, not with `--once`): the companion
+  rewrites a JSON snapshot atomically on every `Status` change and every
+  5 s, and deletes it on exit: `version`, `pid`, `updated`, `every`,
+  `dry_run`, `watching`, `files`, `error`, `line` (the tooltip text),
+  `recent` posts, and `toons` (`internal/toon`). With it, "WoW not found"
+  is shown as `error` and the companion keeps running instead of exiting.
+  The file list is the start-up one (a live config reload that changes
+  paths shows after a restart). Not a contract for other tools.
+- `internal/toon`: "last logged in" is the newest file time in the game's
+  `WTF/Account/<acct>/<realm-id>/<Name-Surname>/` folder (the client
+  writes it at logout and `/reload`); matched to DOINK's characters by
+  full name only, because that realm folder is a number. Class, level,
+  played and the 8 newest events come from DOINK.lua (test events are
+  left out); characters with a folder but no DOINK entry still appear,
+  name only. Fallback when there is no folder: the newest event's `ts`.
+- Discovery on macOS: `/`, `/Applications`, `~/Applications`, every
+  non-hidden `/Volumes/*` (and its `Applications`), deduplicated by
+  resolved path (`/Volumes/Macintosh HD` links to `/`), then the same
+  Wine prefixes as Linux (CrossOver/Whisky).
 - Realtime: see "Screenshot transport contract". The companion never
   captures the screen.
 - Updates (`internal/updates`): one GET of the release list
@@ -704,8 +780,13 @@ file wasn't bumped; bump it and release the next number.
 - `linux` (Ubuntu; same gate): builds `doink` (linux/amd64), smoke-tests
   it, packages `DOINK-vX.Y.Z-linux-amd64.tar.gz` (doink,
   config.example.toml, README, LICENSE) + `.sha256`.
+- `macos` (macos-latest; same gate): Go tests, `mac/build.sh <version>`
+  (Swift app and companion universal), smoke test (signature, both
+  archs, bundled `doink --once` and `config show` on a dry-run config),
+  packages `DOINK-vX.Y.Z-macos.zip` (`DOINK.app` at the root, made by
+  `ditto` so the signature survives) + `.sha256`.
 - `release` (tags only; needs `plan` ok and, when the companion is in,
-  `build` and `linux` ok; a failed `addon` store upload never blocks it):
+  `build`, `linux` and `macos` ok; a failed `addon` store upload never blocks it):
   downloads whatever was produced, writes the notes (the one-line header
   above, then GitHub's generated notes from the previous `v*` tag via
   `gh api .../releases/generate-notes`), runs `gh release create` with
@@ -714,7 +795,7 @@ file wasn't bumped; bump it and release the next number.
   if GitHub disagrees. So nobody has to guess which file is which, the
   notes carry a "Which file do I need?" list under the header line, and
   every asset is uploaded as `file#label` ("Addon only: …", "Companion
-  app for Windows (with the addon): …", "Companion app for Linux: …",
+  app for Windows (with the addon): …", "Companion app for Linux: …", "DOINK for Mac (menu bar app): …",
   checksums). A label only changes
   what the release page shows: asset names and download URLs, which the
   updaters and WowUp Hub read, stay as they are. Never rename the files
