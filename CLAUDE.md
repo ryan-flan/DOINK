@@ -19,8 +19,9 @@ Therefore DOINK is two parts:
 
 1. **Addon (Lua)** — detects events, announces them in chat (`Announce.lua`,
    needs nothing else) and appends them to a queue in SavedVariables.
-2. **Companion (Go, runs on the gaming PC: Windows, or Linux for Lutris/Proton; optional)** — reads
-   the queue and POSTs to Discord.
+2. **Companion (Go, runs on the gaming PC: Windows, macOS, or Linux for Lutris/Proton; optional)** — reads
+   the queue and POSTs to Discord. On macOS it runs inside a SwiftUI
+   menu bar app (`mac/`).
 
 The addon is transport-agnostic. The companion decides how it learns about
 events: a file watcher on SavedVariables, plus (since v0.14) the
@@ -80,6 +81,10 @@ DOINK/
         ├── tray/             # Windows tray icon + menu + single instance (x/sys)
         ├── settings/         # settings window (WebView2, Windows) + config.toml editing
         └── autostart/        # "Start with Windows": HKCU\...\Run\DOINK
+└── mac/                      # macOS menu bar app (SwiftUI, SwiftPM), runs companion
+    ├── Package.swift         # macOS 14+, one executable target, no dependencies
+    ├── build.sh              # -> mac/build/DOINK.app + DOINK-v<ver>-macos.zip
+    └── Sources/DOINKBar/     # App, Companion (child process), PanelView, Palette, MenuBarIcon
 ```
 
 ## Data contract (both halves depend on this — do not change casually)
@@ -581,6 +586,37 @@ tests/test_addon.lua`.
   tests). One `syscall.NewCallback` window procedure for the process,
   dispatching by `hwnd`. Icons are embedded (`companion/assets`) and written
   to `%TEMP%\doink-*.ico` for `LoadImageW`.
+- **macOS app** (`mac/`, since 2026-11-16). An `NSStatusItem` plus a
+  borderless non-activating `NSPanel` hosting SwiftUI (`PanelWindow.swift`,
+  `LSUIElement`), modelled on OpenUsage's panel
+  (github.com/robinebers/openusage: neutral cards, capsule segmented
+  control, ring rows, a "…" footer menu; DOINK gold `#F2B83A` on
+  charcoal `#202326`, WoW class colours). It does **no** DOINK logic of
+  its own: it runs the bundled `doink` (`Contents/Resources/doink`,
+  universal, CGO off) as a child with `--console --config
+  ~/Library/Application Support/DOINK/config.toml --status-file
+  .../status.json`, appends its output to `doink.log` there (rotated at
+  1 MB), restarts it with back-off if it dies, SIGTERMs it on quit,
+  refuses a second copy of itself (double posts), and polls
+  `status.json` once a second (only a file whose `pid` is its own child
+  counts). Launch at Login is `SMAppService.mainApp`. `DOINK_BIN`
+  overrides the binary for development; `DOINK_OPEN_PANEL=1` opens the
+  panel at launch (for screenshots). `build.sh` signs ad hoc; not
+  notarized, not in `release.yml` yet.
+  Not `MenuBarExtra` (decided 2026-11-16): it resizes its window from the
+  bottom edge, so a shorter tab left the panel hanging below the menu
+  bar. The SwiftUI content measures itself (preference keys) and the
+  controller animates the window's height with the top edge fixed under
+  the item (0.22 s, none with Reduce Animations), max the screen's
+  height 72% of the screen (just under 3/4; taller content scrolls).
+  Corners are 6 px. It closes on a
+  click in another app or Esc.
+  Settings page (gear in the footer): companion settings go through
+  `doink config show|set` (below), never written by Swift; changing
+  `dry_run`, `wowhead` or `wow_dir` restarts the companion, the rest is
+  picked up by its live reload. URLs are shown masked (host + last 4).
+  App-only preferences (theme, menu bar text: name and level / level /
+  icon, reduce animations) are `UserDefaults` (`AppPrefs.swift`).
 - `doink config show` prints JSON: `values` (only keys set in
   config.toml, among webhook_url, forward_url, wow_dir, dry_run, wowhead,
   realtime, update_check, update_notify, max_backlog, poll_interval),

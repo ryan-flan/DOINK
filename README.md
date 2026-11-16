@@ -198,7 +198,7 @@ not put in guild chat (quests, skill-ups, every rare drop).
 
 **Required for Discord.** Nothing in this section works with the addon
 alone. Discord posting needs the DOINK companion running on your PC
-(Windows, or Linux if you play through Lutris, Steam/Proton or Wine),
+(Windows, macOS, or Linux if you play through Lutris, Steam/Proton or Wine),
 because WoW addons cannot access the network. The addon's guild chat
 announcements need nothing extra.
 
@@ -304,7 +304,8 @@ over the one in `config.toml`: per character first, then
 `config.toml`. Webhook changes reach the companion on the next reload.
 
 **One channel per action?** Loot in `#loot`, deaths in `#graveyard`: give
-an event type its own webhook in `config.toml`:
+an event type its own webhook in `config.toml` (or on the Mac, Settings →
+Discord → Advanced: Webhook per Action):
 
 ```toml
 [webhooks]
@@ -388,6 +389,42 @@ Then `systemctl --user enable --now doink`, and
 `journalctl --user -u doink -f` to watch its log. If it can't find WoW it
 exits with an error in that log; set `wow_dir` and it starts on the next
 retry.
+
+### On macOS
+
+DOINK for Mac is a menu bar app. Its **D** sits in the menu bar with your
+last character's name and level next to it ("Myra / Lv 28"). Click it for
+a panel showing that character's class, level, realm, when you last
+played, what DOINK recorded lately (levels, boss kills, quests, deaths)
+and your other characters. The **Activity** tab lists what was posted to
+Discord and which files are watched. The gear opens **Settings**: the
+Discord webhook (and one per action, under Advanced), the forward URL,
+the game folder, instant posts, Wowhead details, dry run, how often to
+check, Launch at Login, the menu bar text and the theme. Changes are
+saved to `config.toml` at once and checked first, so a typo can't break
+it. The panel grows and shrinks with its content, up to about three
+quarters of the screen, then scrolls.
+
+The app runs the same companion as on Windows and Linux (`doink`, inside
+the app), so posting, realtime screenshots, `forward_url` and the webhook
+rules all work the same way. It finds `/Applications/World of Warcraft`
+by itself. Its files are in `~/Library/Application Support/DOINK`
+(`config.toml`, `state.json`, `doink.log`); Settings → Files opens them.
+It needs macOS 14 or newer.
+
+There's no download yet. Build it from the source (needs Xcode or the
+Command Line Tools, and Go):
+
+```bash
+devbox shell        # or have Go on your PATH
+mac/build.sh        # -> mac/build/DOINK.app and DOINK-v<version>-macos.zip
+```
+
+Move `DOINK.app` to Applications and open it. The build is signed for
+this Mac only (ad hoc), so a copy downloaded on another Mac needs
+right-click → **Open** the first time. If the D doesn't show up on a
+MacBook with a notch, the menu bar is full: hold ⌘ and drag other icons
+out of the way, or quit some.
 
 ### Notifiers (what gets recorded for Discord)
 
@@ -598,6 +635,7 @@ Bugs and requests: https://github.com/ryan-flan/DOINK/issues.
 addon/DOINK/       the addon (Lua 5.1)
 addon/tests/       offline harness with WoW API stubs
 companion/         the companion (Go; BurntSushi/toml, x/sys, go-webview2)
+mac/               the macOS menu bar app (SwiftUI); runs the companion
 ```
 
 ```bash
