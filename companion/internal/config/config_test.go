@@ -83,9 +83,37 @@ func TestDefaults(t *testing.T) {
 		SavedVariablesPaths: []string{sv},
 		StatePath:           filepath.Join(filepath.Dir(path), "state.json"),
 		PollInterval:        2.0, MaxBacklog: 10, Wowhead: true, UpdateCheck: true, Realtime: true,
+		TypeWebhooks: map[string]string{},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("got %+v", cfg)
+	}
+}
+
+func TestTypeWebhooks(t *testing.T) {
+	sv := filepath.Join(t.TempDir(), "DOINK.lua")
+	hook := "https://discord.com/api/webhooks/1/loot"
+	path := setup(t, "savedvariables_path = '"+sv+"'\n[webhooks]\nloot = '"+hook+"'\n")
+	cfg, err := Load(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg.TypeWebhooks, map[string]string{"loot": hook}) {
+		t.Errorf("got %v", cfg.TypeWebhooks)
+	}
+	// Dotted keys at the top level are the same table.
+	path = setup(t, "savedvariables_path = '"+sv+"'\nwebhooks.death = '"+hook+"'\n")
+	if cfg, err := Load(path, false); err != nil || cfg.TypeWebhooks["death"] != hook {
+		t.Errorf("dotted: %v %v", cfg, err)
+	}
+	for name, body := range map[string]string{
+		"unknown type":  "[webhooks]\nlooot = '" + hook + "'\n",
+		"not a webhook": "[webhooks]\nloot = 'https://example.com/x'\n",
+		"not a table":   "webhooks = 'x'\n",
+	} {
+		if _, err := Load(setup(t, "savedvariables_path = '"+sv+"'\n"+body), false); err == nil {
+			t.Errorf("%s: no error", name)
+		}
 	}
 }
 

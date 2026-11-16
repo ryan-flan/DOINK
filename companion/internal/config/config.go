@@ -48,11 +48,17 @@ type Config struct {
 	UpdateCheck         bool // daily GET to GitHub for the latest release version
 	UpdateNotify        bool // also pop a notification (the tray tooltip always shows it)
 	Realtime            bool // read the screenshots the addon takes for instant posts
+	// TypeWebhooks sends one event type to its own webhook ([webhooks]
+	// loot = "..."), ahead of every other webhook. Never nil.
+	TypeWebhooks map[string]string
 }
+
+// EventTypes are the addon's event types, the keys [webhooks] accepts.
+var EventTypes = []string{"level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground"}
 
 // knownKeys are the settings Load reads; anything else gets a warning.
 var knownKeys = []string{"savedvariables_path", "wow_dir", "webhook_url", "forward_url", "dry_run", "poll_interval",
-	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "notifiers"}
+	"max_backlog", "wowhead", "update_check", "update_notify", "realtime", "notifiers", "webhooks"}
 
 // ErrNoWoW: no SavedVariables file to watch.
 var ErrNoWoW = errors.New("couldn't find World of Warcraft with the DOINK addon installed")
@@ -193,6 +199,24 @@ func Load(path string, dryRun bool) (*Config, error) {
 	}
 	if cfg.WebhookURL != "" && !discord.IsWebhookURL(cfg.WebhookURL) {
 		return nil, fmt.Errorf("%s: webhook_url doesn't look like a Discord webhook URL", path)
+	}
+
+	cfg.TypeWebhooks = map[string]string{}
+	if v, present := raw["webhooks"]; present {
+		table, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s: webhooks must be a table: [webhooks] then loot = \"https://discord.com/api/webhooks/...\"", path)
+		}
+		for _, typ := range slices.Sorted(maps.Keys(table)) {
+			url, ok := table[typ].(string)
+			switch {
+			case !slices.Contains(EventTypes, typ):
+				return nil, fmt.Errorf("%s: [webhooks] %s isn't an event type (%s)", path, typ, strings.Join(EventTypes, ", "))
+			case !ok || !discord.IsWebhookURL(url):
+				return nil, fmt.Errorf("%s: [webhooks] %s doesn't look like a Discord webhook URL", path, typ)
+			}
+			cfg.TypeWebhooks[typ] = url
+		}
 	}
 
 	if cfg.ForwardURL != "" && !IsForwardURL(cfg.ForwardURL) {

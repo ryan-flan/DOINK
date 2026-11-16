@@ -303,6 +303,20 @@ over the one in `config.toml`: per character first, then
 `/doink webhook <url>` (all characters), then `webhook_url` in
 `config.toml`. Webhook changes reach the companion on the next reload.
 
+**One channel per action?** Loot in `#loot`, deaths in `#graveyard`: give
+an event type its own webhook in `config.toml`:
+
+```toml
+[webhooks]
+loot = "https://discord.com/api/webhooks/..."
+death = "https://discord.com/api/webhooks/..."
+```
+
+Types: `level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`,
+`mount`, `duel`, `battleground`. A per-action webhook wins over every
+other one, including those set in game; types without one use the order
+above.
+
 ### Instant posts (realtime)
 
 Off by default. With `/doink realtime on` (or **Post to Discord
@@ -406,7 +420,8 @@ Settings live in `config.toml` next to `doink.exe` (the settings window
 edits the webhook and WoW folder there; the link at its bottom opens the
 file). Every key is optional: `webhook_url`, `wow_dir`, `dry_run`,
 `max_backlog`, `poll_interval`, an exact `savedvariables_path`, `wowhead`,
-`forward_url`, `realtime`, `update_check`, `update_notify`; see `config.example.toml`.
+`forward_url`, `realtime`, `update_check`, `update_notify`, and a
+`[webhooks]` table (one webhook per action, above); see `config.example.toml`.
 DOINK picks up changes while it runs, except `dry_run`, `wowhead`,
 `update_check` and `update_notify`, which need a restart.
 

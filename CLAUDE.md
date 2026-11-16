@@ -163,8 +163,10 @@ Rules:
   shows it on the level-up embed only ("Time played: 4d 17h 27m");
   `forward_url` receivers get it on every event. An event whose `played`
   isn't a non-negative integer is skipped like any bad entry.
-- Webhook for a character's events: `webhooks["Name-Realm"]`, else
-  `webhooks["*"]`, else the companion's `config.toml`. Set in game with
+- Webhook for a character's events: the companion's per-action
+  `[webhooks]` entry for the event's type (config.toml only, since
+  2026-11-16), else `webhooks["Name-Realm"]`, else `webhooks["*"]`, else
+  the companion's `webhook_url`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` comes from the client's death recap
@@ -502,9 +504,15 @@ tests/test_addon.lua`.
   exists, and watches every account's file. Notifier toggles are **not**
   companion config.
 - `config.toml`, `state.json` and `doink.log` live next to the executable.
-- Webhook precedence: in-game per-char > in-game `*` > `webhook_url` in
-  config.toml. A character with no resolvable webhook logs an error and its
-  events stay queued (state not advanced) until one is set; `Process`
+- Webhook precedence, per event: `[webhooks] <type>` in config.toml
+  (decided 2026-11-16: per-action wins over everything) > in-game
+  per-char > in-game `*` > `webhook_url`. `PostEvents` posts runs of
+  consecutive events sharing a URL; a run with no webhook stays pending
+  while later routed runs still post (a first-sight character's earlier
+  seqs are kept as `missing`, not skipped). Keys must be the addon's types
+  (`config.EventTypes`), values Discord webhook URLs, or Load fails.
+  Events with no resolvable webhook log an error and stay queued (state
+  not advanced) until one is set; `Process`
   returns `runner.ErrNoWebhook` and `Run` stops retrying that file until
   it or `config.toml` changes (one error line, not one per retry). Only
   transient failures (network, Discord down) back off: poll interval

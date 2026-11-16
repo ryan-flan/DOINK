@@ -57,6 +57,15 @@ type Deps struct {
 	Started func()
 }
 
+// WebhookForEvent picks the webhook for one event: config.toml's for its
+// type ([webhooks]) first, then the character's (WebhookFor).
+func WebhookForEvent(key, typ string, gameHooks map[string]string, cfg *config.Config) string {
+	if url := cfg.TypeWebhooks[typ]; url != "" {
+		return url
+	}
+	return WebhookFor(key, gameHooks, cfg)
+}
+
 // WebhookFor picks a character's webhook: its own in-game one, else the
 // account-wide in-game one, else config.toml's.
 func WebhookFor(key string, gameHooks map[string]string, cfg *config.Config) string {
@@ -100,10 +109,14 @@ func forwardOnly(d Deps, key string, events []savedvars.Event, firstSightBacklog
 }
 
 // PostEvents posts events (one character, ascending seq) and records each
-// one. It returns ErrNoWebhook when there is no usable webhook, else the
-// post error; state is saved after each message, so a retry resumes
-// cleanly. img, when set, is attached to the message and shown on its first
-// embed: realtime posts one event at a time, so it belongs to that event.
+// one. Each event goes to WebhookForEvent's webhook; consecutive events
+// with the same one are posted together. A run with no usable webhook is
+// left pending (ErrNoWebhook) while later runs still post: an event type
+// routed to its own channel doesn't wait behind one that has nowhere to
+// go. Any other failure stops here and is returned (state is saved after
+// each message, so a retry resumes cleanly). img, when set, is attached to
+// the message and shown on its first embed: realtime posts one event at a
+// time, so it belongs to that event.
 //
 // With forward_url set, each event is also forwarded at the moment it is
 // recorded (so never twice). Next to Discord that is best effort: the
@@ -111,11 +124,37 @@ func forwardOnly(d Deps, key string, events []savedvars.Event, firstSightBacklog
 // endpoint that is down can't hold Discord up. Without any webhook the
 // endpoint is the destination (forwardOnly).
 func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[string]string, firstSightBacklog int, img *discord.Attachment) error {
-	url := WebhookFor(key, gameHooks, d.Config)
 	forwarding := d.Config.ForwardURL != ""
+	var waiting error
+	for start := 0; start < len(events); {
+		url := WebhookForEvent(key, events[start].Type, gameHooks, d.Config)
+		end := start + 1
+		for end < len(events) && WebhookForEvent(key, events[end].Type, gameHooks, d.Config) == url {
+			end++
+		}
+		// A character's first post: keep the events before this run (which
+		// had no webhook) pending rather than skipped.
+		backlog := firstSightBacklog
+		if backlog == 0 {
+			backlog = events[start].Seq - events[0].Seq + 1
+		}
+		err := postRun(d, key, url, events[start:end], backlog, img, &forwarding)
+		switch {
+		case errors.Is(err, ErrNoWebhook):
+			waiting = err
+		case err != nil:
+			return err
+		}
+		start = end
+	}
+	return waiting
+}
+
+// postRun posts events that share one webhook (url, "" for none).
+func postRun(d Deps, key, url string, events []savedvars.Event, firstSightBacklog int, img *discord.Attachment, forwarding *bool) error {
 	if len(events) > 0 && !d.Config.DryRun {
 		who := events[len(events)-1].FullName()
-		if url == "" && forwarding {
+		if url == "" && *forwarding {
 			return forwardOnly(d, key, events, firstSightBacklog)
 		}
 		if url == "" {
@@ -170,9 +209,9 @@ func PostEvents(d Deps, key string, events []savedvars.Event, gameHooks map[stri
 			}
 			d.State.MarkPosted(key, e.Seq, firstSightBacklog) // posted, or dropped for good
 		}
-		if forwarding {
+		if *forwarding {
 			if sent, ferr := forwardEvents(d, key, batch); ferr != nil {
-				forwarding = false
+				*forwarding = false
 				d.Log.Warn(fmt.Sprintf("%s: forwarding to %s failed: %v; %d events not forwarded",
 					key, forwardHost(d.Config.ForwardURL), ferr, len(events)-start-sent))
 			}
