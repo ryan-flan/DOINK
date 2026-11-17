@@ -207,7 +207,7 @@ Rules:
   - `mount`:     `{"name": "Gray Wolf"|null, "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
   - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
   - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
-  - `session`:   `{"state": "login"|"reload"|"logout"}`
+  - `session`:   `{"state": "login"|"reload"|"logout", "settings": {"recorded": [types], "played", "group", "realtime", "realtime_image"}}`
   - `pvp_kill`:  `{"victim": "Grakkor"|null, "class": "SHAMAN"|null, "race": "Orc"|null, "level": 24|null, "zone": "Westfall", "subzone": "..."|null}`
 - `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is
   unknown). `loot.gear` is item class 2 (weapon) or 4 (armor); `null` when
@@ -242,7 +242,10 @@ companion with the next SavedVariables write (`/reload` or logout:
 `PLAYER_LOGOUT` fires just before that write) and is forwarded to
 `forward_url`. Zone changes between instances (`PLAYER_ENTERING_WORLD`
 with both flags false) aren't sessions. A `/reload` records `logout`
-then `reload`.
+then `reload`. Each carries `settings`, the character's settings at that
+moment (the enabled types, played, group, realtime and realtime image), so
+a tool can tell an event that didn't happen from one that isn't recorded;
+settings are otherwise only in SavedVariables.
 
 Loot: `rares_boe_only` (default true) drops rares (quality 3) only when they
 are known not to be Bind on Equip (an unknown bind type, `boe = null`,

@@ -392,7 +392,7 @@ announcement rules above work on their own. The one exception is `wins_only`, wh
 | `mount` | You get a new mount | |
 | `duel` | A duel or Mak'gora ends | `wins_only` on |
 | `battleground` | A battleground match ends | `wins_only` on |
-| `session` | You log in or out (never posted to Discord; for [`forward_url`](#sending-events-to-your-own-tool)) | |
+| `session` | You log in or out, with which events you record (never posted to Discord; for [`forward_url`](#sending-events-to-your-own-tool)) | |
 | `pvp_kill` | You land the killing blow on another player | |
 
 **Time played.** `/doink played on` (or the checkbox on the settings page)

@@ -328,13 +328,34 @@ By default only wins are recorded.
   "seq": 51, "ts": 1759301000, "char": "Flano", "surname": "Wren",
   "realm": "Whatever", "class": "WARRIOR", "level": 20,
   "type": "session",
-  "data": { "state": "login" }
+  "data": {
+    "state": "login",
+    "settings": {
+      "recorded": ["boss_kill", "death", "level_up", "loot", "session"],
+      "played": true, "group": false, "realtime": true, "realtime_image": false
+    }
+  }
 }
 ```
 
 | Field | Type | Meaning |
 |---|---|---|
 | `state` | string | `login`: entered the world from character select. `reload`: the UI was reloaded. `logout`: logged out, or the UI is about to reload. |
+| `settings` | object | The character's settings at that moment (below). |
+
+`settings` lets a tool tell "nothing happened" from "not recorded": no
+`mount` event is only news if `mount` is in `recorded`. DOINK keeps its
+settings in the game's saved data and sends them nowhere else, so this is
+how a tool sees them, and it can point the player at the box to tick. A
+change made mid-session shows at the next logout or `/reload`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `recorded` | array of strings | The event types this character records for the companion (ticked under **Discord, via the companion app**), sorted. Always includes `session`. |
+| `played` | boolean | Time played is added to events (`/doink played on`). |
+| `group` | boolean | The party is added to events (`/doink group on`). |
+| `realtime` | boolean | Events go out instantly as screenshots (`/doink realtime on`). Account-wide. |
+| `realtime_image` | boolean | The companion attaches each screenshot to the post (`/doink realtime image on`). Account-wide. |
 
 Logins and logouts exist for tools like yours: the companion forwards them
 but never posts them to Discord, and the addon never sends them as a

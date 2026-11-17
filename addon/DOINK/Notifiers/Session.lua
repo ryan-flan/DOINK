@@ -17,6 +17,30 @@ local ADDON, ns = ...
 -- event written here is saved with that same write. A /reload therefore
 -- records "logout" then "reload": a receiver pairs them to tell a reload
 -- from a real logout. A crash or Alt-F4 saves nothing at all.
+--
+-- Each one also carries the character's settings at that moment, so a tool
+-- can tell "nothing happened" from "not recorded" (no mount event because
+-- mounts aren't ticked, say) and point the player at the right box. The
+-- settings live only in SavedVariables, so this is the one way a tool sees
+-- them; a change made mid-session shows at the next logout or /reload.
+
+-- The types this character records for the companion, and the switches
+-- that change what an event carries or how it travels.
+local function Settings()
+  local recorded = {}
+  for _, notifier in pairs(ns.Notifiers) do
+    if ns:GetOption(notifier.type, "enabled") then recorded[#recorded + 1] = notifier.type end
+  end
+  table.sort(recorded)
+  local realtime = DOINKDB.realtime or {}
+  return {
+    recorded = recorded, -- never empty: session itself is on, or nothing is recorded
+    played = ns:GetOption("general", "played") and true or false,
+    group = ns:GetOption("general", "group") and true or false,
+    realtime = realtime.enabled and true or false,
+    realtime_image = realtime.image and true or false,
+  }
+end
 
 ns.Notifiers.Session = {
   type = "session",
@@ -24,15 +48,21 @@ ns.Notifiers.Session = {
 
   OnEvent = function(event, isInitialLogin, isReloadingUi)
     if event == "PLAYER_LOGOUT" then
-      ns:Emit("session", { state = "logout" })
+      ns:Emit("session", { state = "logout", settings = Settings() })
     elseif isInitialLogin then
-      ns:Emit("session", { state = "login" })
+      ns:Emit("session", { state = "login", settings = Settings() })
     elseif isReloadingUi then
-      ns:Emit("session", { state = "reload" })
+      ns:Emit("session", { state = "reload", settings = Settings() })
     end
   end,
 
   Test = function()
-    return { state = "login" }
+    return {
+      state = "login",
+      settings = {
+        recorded = { "boss_kill", "death", "level_up", "loot", "session" },
+        played = true, group = false, realtime = true, realtime_image = false,
+      },
+    }
   end,
 }

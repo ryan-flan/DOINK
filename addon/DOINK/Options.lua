@@ -149,7 +149,7 @@ local function Discord(layout)
     type = "battleground", key = "wins_only",
     tooltip = "Losses are neither recorded for Discord nor announced in chat." }
   OptionCheckbox { variable = "enabled_session", name = TYPE_NAMES.session, type = "session", key = "enabled",
-    tooltip = "Record when this character logs in and out, for tools reading forward_url. "
+    tooltip = "Record when this character logs in and out, and which events it records, for tools reading forward_url. "
       .. "Never posted to Discord; they reach the companion at your next /reload or logout." }
   Checkbox { variable = "general_played", name = "Add time played to events", default = false,
     get = function() return ns:GetOption("general", "played") end,

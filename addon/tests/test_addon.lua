@@ -825,6 +825,30 @@ test("session: login and reload recorded, zoning ignored, logout recorded; never
   assert(ns.RecordOnly.session, "record-only: no screenshot, no Discord post")
 end)
 
+test("session: each one carries the character's settings, so a tool can tell what isn't recorded", function()
+  local mountWas = ns:GetOption("mount", "enabled")
+  local realtimeWas, imageWas = DOINKDB.realtime.enabled, DOINKDB.realtime.image
+  slash("disable mount")
+  DOINKDB.realtime.enabled, DOINKDB.realtime.image = true, false
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  assert(has('"settings":{'), last())
+  assert(has('"realtime":true') and has('"realtime_image":false'), last())
+  assert(not has('"mount"'), "mount isn't ticked: " .. last())
+  assert(has('"recorded":[') and has('"session"'), "session is on, so it's listed: " .. last())
+  slash("enable mount")
+  fire("PLAYER_LOGOUT")
+  assert(has('"state":"logout"') and has('"mount"'), "ticked mid-session: shows at logout: " .. last())
+  -- recorded is sorted, so the list is stable for a reader.
+  local list = last():match('"recorded":%[(.-)%]')
+  local types = {}
+  for t in list:gmatch('"([%w_]+)"') do types[#types + 1] = t end
+  local sorted = { unpack(types) }
+  table.sort(sorted)
+  eq(table.concat(types, ","), table.concat(sorted, ","), "sorted")
+  ns:SetOption("mount", "enabled", mountWas)
+  DOINKDB.realtime.enabled, DOINKDB.realtime.image = realtimeWas, imageWas
+end)
+
 test("pvp_kill: our killing blows on players only, with what the client knows of the victim", function()
   GetPlayerInfoByGUID = function(guid)
     if guid == "Player-5826-0A1B2C3D" then

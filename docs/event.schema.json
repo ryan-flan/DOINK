@@ -184,11 +184,23 @@
     },
     "session": {
       "type": "object",
-      "required": ["state"],
+      "required": ["settings", "state"],
       "properties": {
         "state": {
           "enum": ["login", "reload", "logout"],
           "description": "login: the character entered the world from character select. reload: the UI was reloaded. logout: the character logged out or the UI is about to reload (a reload records logout, then reload)."
+        },
+        "settings": {
+          "type": "object",
+          "description": "The character's DOINK settings at that moment, so a tool can tell an event that didn't happen from one that isn't recorded.",
+          "required": ["group", "played", "realtime", "realtime_image", "recorded"],
+          "properties": {
+            "recorded": { "type": "array", "items": { "type": "string" }, "description": "The event types this character records for the companion (ticked under Discord, via the companion app), sorted. Always includes session." },
+            "played": { "type": "boolean", "description": "Time played is added to events (/doink played on)." },
+            "group": { "type": "boolean", "description": "The party is added to events (/doink group on)." },
+            "realtime": { "type": "boolean", "description": "Events are sent instantly as screenshots (/doink realtime on). Account-wide." },
+            "realtime_image": { "type": "boolean", "description": "The companion attaches each screenshot to the Discord post (/doink realtime image on). Account-wide." }
+          }
         }
       }
     },
