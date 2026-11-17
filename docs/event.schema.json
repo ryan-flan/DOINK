@@ -42,10 +42,17 @@
       "minimum": 0,
       "description": "Total time played on this character, in seconds. Present only when the player turned it on (/doink played on) and the client has answered."
     },
+    "group": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 4,
+      "description": "Who else was in the character's party, each as \"Name Surname (Class Level)\". Present only when the player turned it on (/doink group on) and was in a party; left out when alone, in a raid, or when the client hid a name."
+    },
     "type": {
       "type": "string",
       "description": "What happened; decides the shape of data.",
-      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground"]
+      "examples": ["level_up", "loot", "death", "quest", "boss_kill", "skill_up", "mount", "duel", "battleground", "session", "pvp_kill"]
     },
     "data": {
       "type": "object",
@@ -65,7 +72,9 @@
     { "if": { "properties": { "type": { "const": "skill_up" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/skill_up" } } } },
     { "if": { "properties": { "type": { "const": "mount" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/mount" } } } },
     { "if": { "properties": { "type": { "const": "duel" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/duel" } } } },
-    { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } }
+    { "if": { "properties": { "type": { "const": "battleground" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/battleground" } } } },
+    { "if": { "properties": { "type": { "const": "session" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session" } } } },
+    { "if": { "properties": { "type": { "const": "pvp_kill" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/pvp_kill" } } } }
   ],
   "$defs": {
     "level_up": {
@@ -91,11 +100,15 @@
     },
     "death": {
       "type": "object",
-      "required": ["zone", "subzone", "killer", "environment"],
+      "required": ["zone", "subzone", "killer", "killer_kind", "environment"],
       "properties": {
         "zone": { "type": "string", "description": "The zone's name in the player's game language." },
         "subzone": { "type": ["string", "null"], "description": "The area within the zone. null where the game names none." },
         "killer": { "type": ["string", "null"], "description": "Who landed the last hit, from the game's death recap. null for an environmental death or when the recap was empty." },
+        "killer_kind": {
+          "enum": ["player", "pet", "npc", null],
+          "description": "What the killer was, from its GUID in the death recap: player, pet (a player's pet; whose isn't known) or npc. Some player summons (totems, guardians) may read as npc. null when the recap had no GUID, the game hid it, or there was no killer. Added after 0.19.0; older addons leave it out."
+        },
         "environment": {
           "type": ["string", "null"],
           "description": "The kind of environmental death, in capitals. null when something killed the character or the cause is unknown.",
@@ -167,6 +180,40 @@
       "properties": {
         "name": { "type": "string", "description": "The battleground's name in the player's game language." },
         "won": { "type": "boolean", "description": "Whether this character's faction won." }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": ["settings", "state"],
+      "properties": {
+        "state": {
+          "enum": ["login", "reload", "logout"],
+          "description": "login: the character entered the world from character select. reload: the UI was reloaded. logout: the character logged out or the UI is about to reload (a reload records logout, then reload)."
+        },
+        "settings": {
+          "type": "object",
+          "description": "The character's DOINK settings at that moment, so a tool can tell an event that didn't happen from one that isn't recorded.",
+          "required": ["group", "played", "realtime", "realtime_image", "recorded"],
+          "properties": {
+            "recorded": { "type": "array", "items": { "type": "string" }, "description": "The event types this character records for the companion (ticked under Discord, via the companion app), sorted. Always includes session." },
+            "played": { "type": "boolean", "description": "Time played is added to events (/doink played on)." },
+            "group": { "type": "boolean", "description": "The party is added to events (/doink group on)." },
+            "realtime": { "type": "boolean", "description": "Events are sent instantly as screenshots (/doink realtime on). Account-wide." },
+            "realtime_image": { "type": "boolean", "description": "The companion attaches each screenshot to the Discord post (/doink realtime image on). Account-wide." }
+          }
+        }
+      }
+    },
+    "pvp_kill": {
+      "type": "object",
+      "required": ["victim", "class", "race", "level", "zone", "subzone"],
+      "properties": {
+        "victim": { "type": ["string", "null"], "description": "The player killed, by first name, as the game knew them. null when the game had no details." },
+        "class": { "type": ["string", "null"], "description": "The victim's class in capitals, e.g. SHAMAN. null when unknown." },
+        "race": { "type": ["string", "null"], "description": "The victim's race in English, e.g. Orc. null when unknown." },
+        "level": { "type": ["integer", "null"], "minimum": 1, "description": "The victim's level. null when unknown." },
+        "zone": { "type": "string", "description": "The zone's name in the player's game language." },
+        "subzone": { "type": ["string", "null"], "description": "The area within the zone. null where the game names none." }
       }
     }
   }

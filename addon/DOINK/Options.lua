@@ -22,6 +22,7 @@ local TYPE_NAMES = {
   level_up = "Level-ups", loot = "Loot", death = "Deaths", quest = "Quest turn-ins",
   boss_kill = "Boss kills", skill_up = "Skill-ups",
   mount = "New mounts", duel = "Duels", battleground = "Battlegrounds",
+  session = "Logins and logouts", pvp_kill = "PvP kills",
 }
 
 local ANNOUNCE_LABELS = {
@@ -118,7 +119,7 @@ local DISCORD_ONLY = " Only affects what is recorded for the companion app; chat
 local function Discord(layout)
   Header(layout, "Recorded for Discord, via the companion app (this character)")
   for _, t in ipairs({ "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
-      "mount", "duel", "battleground" }) do
+      "mount", "duel", "battleground", "pvp_kill" }) do
     OptionCheckbox { variable = "enabled_" .. t, name = TYPE_NAMES[t], type = t, key = "enabled",
       tooltip = "Record " .. TYPE_NAMES[t]:lower() .. " for the companion to post to Discord."
         .. " Chat announcements don't need this." }
@@ -147,11 +148,17 @@ local function Discord(layout)
   OptionCheckbox { variable = "battleground_wins_only", name = "Battlegrounds: wins only",
     type = "battleground", key = "wins_only",
     tooltip = "Losses are neither recorded for Discord nor announced in chat." }
+  OptionCheckbox { variable = "enabled_session", name = TYPE_NAMES.session, type = "session", key = "enabled",
+    tooltip = "Record when this character logs in and out, and which events it records, for tools reading forward_url. "
+      .. "Never posted to Discord; they reach the companion at your next /reload or logout." }
   Checkbox { variable = "general_played", name = "Add time played to events", default = false,
     get = function() return ns:GetOption("general", "played") end,
     set = function(on) ns:SetPlayed(on) end,
     tooltip = "Every recorded event carries this character's total time played. Discord shows it on "
       .. "level-ups; other tools can read it from any event. Same as /doink played on." }
+  OptionCheckbox { variable = "general_group", name = "Add your party to events", type = "general", key = "group",
+    tooltip = "Every recorded event lists who else is in your party (not in a raid). Discord doesn't show it; "
+      .. "tools reading forward_url can. Same as /doink group on." }
 end
 
 local function Realtime(layout)

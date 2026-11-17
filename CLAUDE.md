@@ -126,6 +126,7 @@ Event JSON schema:
   "class": "WARRIOR",
   "level": 20,
   "played": 408475,            // optional; total seconds played (v0.19+)
+  "group": ["Grakkor Highmountain (Shaman 24)"], // optional; party members
   "type":  "level_up",
   "data":  { ... type-specific ... },
   "test":  true                 // optional; only present on /doink test events
@@ -163,18 +164,34 @@ Rules:
   shows it on the level-up embed only ("Time played: 4d 17h 27m");
   `forward_url` receivers get it on every event. An event whose `played`
   isn't a non-negative integer is skipped like any bad entry.
+- `group` lists the other party members as `"Name Surname (Class Level)"`
+  (`ns:PartyList()`, the same list as `boss_kill.group`), present only when
+  the player turned it on (`general.group`, off by default; `/doink group
+  on|off`, Settings checkbox; per character) and is in a party. Left out
+  alone, in a raid (39 names don't fit a realtime shot's 1024 bytes) and
+  when any value is secret. Discord doesn't show it; it is for
+  `forward_url` receivers.
 - Webhook for a character's events: `webhooks["Name-Realm"]`, else
   `webhooks["*"]`, else the companion's `config.toml`. Set in game with
   `/doink webhook [here] <url>`; never print a full URL in chat.
 - `loot.vendor_value` is the whole stack (`sellPrice * qty`), in copper.
 - `death.killer` comes from the client's death recap
-  (`DeathRecap_GetEvents()`, present in Forever): the attacker of the newest
-  hit. For an environmental death `killer` is `null` and
+  (`C_DeathRecap.GetRecapEvents()`, present in Forever): the attacker of the
+  killing blow. For an environmental death `killer` is `null` and
   `death.environment` holds the recap's `environmentalType` upper-cased
   (`FALLING`, `DROWNING`, `FATIGUE`, `FIRE`, `LAVA`, `SLIME`); both chat
   and Discord word those themselves ("Forgot I couldn't fly."). Both `null`
   when the recap is empty (the notifier retries once after 0.5 s) or the
   API is absent. The combat log is protected, so there is no other source.
+  `death.killer_kind` is the killing blow's `sourceGUID` read as `player`
+  (`Player-…`), `pet` (`Pet-…`) or `npc` (anything else; some summons
+  such as totems may read as `npc`); `null` without a GUID, when it's
+  secret, or with no killer. The recap API is
+  `C_DeathRecap.GetRecapEvents()`; `DeathRecap_GetEvents` is only an alias
+  while the `loadDeprecationFallbacks` CVar is on, kept as the fallback.
+  Without timestamps, entry 1 is the killing blow (Blizzard's recap UI:
+  `causedDeath = i == 1`). A secret name, timestamp or environment counts
+  as unknown: a secret can't be compared or encoded.
 - `test` is present (and `true`) only for events from `/doink test`. The
   companion should still post them, but label them as tests.
 - `seq` is per-character, monotonic, never reused. The companion dedupes on it.
@@ -183,13 +200,15 @@ Rules:
 - `data` shapes per type:
   - `level_up`:  `{"level": 20}`
   - `loot`:      `{"item_id": 123, "link": "|cnIQ3:|Hitem:123:...|h[Name]|h|r", "name": "...", "quality": 3, "qty": 1, "vendor_value": 1234, "boe": true|false|null, "gear": true|false|null}`
-  - `death`:     `{"zone": "Westfall", "subzone": "..."|null, "killer": "Defias Pillager"|null, "environment": "FALLING"|null}`
+  - `death`:     `{"zone": "Westfall", "subzone": "..."|null, "killer": "Defias Pillager"|null, "killer_kind": "player"|"pet"|"npc"|null, "environment": "FALLING"|null}`
   - `quest`:     `{"quest_id": 123, "title": "...", "xp": 1200}`
   - `boss_kill`: `{"encounter_id": 123, "name": "...", "instance": "..."|null, "difficulty": 1, "success": true, "group_size": 5, "first_kill": true|false, "group": ["Flano Wren (Warrior 23)", ...]|null}`
   - `skill_up`:  `{"skill": "Blacksmithing", "rank": 150, "max_rank": 150|null}`
   - `mount`:     `{"name": "Gray Wolf"|null, "item_id": 5656|null, "spell_id": 6777|null, "link": "|Hitem..."|null, "bought": true|false}`
   - `duel`:      `{"opponent": "Grakkor Highmountain", "won": true|false, "fled": true|false, "makgora": true|false}`
   - `battleground`: `{"name": "Warsong Gulch", "won": true|false}`
+  - `session`:   `{"state": "login"|"reload"|"logout", "settings": {"recorded": [types], "played", "group", "realtime", "realtime_image"}}`
+  - `pvp_kill`:  `{"victim": "Grakkor"|null, "class": "SHAMAN"|null, "race": "Orc"|null, "level": 24|null, "zone": "Westfall", "subzone": "..."|null}`
 - `loot.boe` is `bindType == 2` (Bind on Equip; `null` when the bind type is
   unknown). `loot.gear` is item class 2 (weapon) or 4 (armor); `null` when
   the class is unknown.
@@ -212,6 +231,21 @@ Rules:
 | `mount`     | `NEW_MOUNT_ADDED`, `CHAT_MSG_LOOT` | always (one per 120 s)                   |
 | `duel`      | `CHAT_MSG_SYSTEM`          | wins only (`wins_only`)                          |
 | `battleground` | `UPDATE_BATTLEFIELD_STATUS`, `PVP_MATCH_COMPLETE`, `PLAYER_ENTERING_WORLD` | wins only (`wins_only`) |
+| `session`   | `PLAYER_ENTERING_WORLD` (login/reload), `PLAYER_LOGOUT` | always; record-only |
+| `pvp_kill`  | `PARTY_KILL`               | our killing blows on players (`Player-` GUID) |
+
+`session` is **record-only** (`ns.RecordOnly`, companion
+`discord.RecordOnly`): never a realtime screenshot (a shot and a "Screen
+captured" at every login would cost too much), never announced in chat,
+never posted to Discord. It is queued like any event, so it reaches the
+companion with the next SavedVariables write (`/reload` or logout:
+`PLAYER_LOGOUT` fires just before that write) and is forwarded to
+`forward_url`. Zone changes between instances (`PLAYER_ENTERING_WORLD`
+with both flags false) aren't sessions. A `/reload` records `logout`
+then `reload`. Each carries `settings`, the character's settings at that
+moment (the enabled types, played, group, realtime and realtime image), so
+a tool can tell an event that didn't happen from one that isn't recorded;
+settings are otherwise only in SavedVariables.
 
 Loot: `rares_boe_only` (default true) drops rares (quality 3) only when they
 are known not to be Bind on Equip (an unknown bind type, `boe = null`,
@@ -421,6 +455,7 @@ tests/test_addon.lua`.
 /doink flush             ReloadUI() to force SavedVariables write
 /doink enable|disable <type>
 /doink played on|off     add total time played to every recorded event
+/doink group on|off      add the other party members to every recorded event
 ```
 
 ## Companion conventions
@@ -990,8 +1025,8 @@ fixture included; that's a stand-in for the real name, by decision.)
   and graveyard helpers (`GetCorpseMapPosition`, `GetDeathReleasePosition`,
   `GetSelfResurrectOptions`, `GetGraveyardsForMap`, `UseSelfResurrectOption`).
   - [ ] Whether entries carry `timestamp` and which index is the killing
-    blow: unverified; the notifier takes the newest by timestamp, else the
-    last entry.
+    blow: unverified in game; the notifier takes the newest by timestamp,
+    else entry 1 (Blizzard's recap UI marks entry 1 as the cause).
   - [x] The recap is already filled when `PLAYER_DEAD` fires: a real death
     named the scorpid at once, no retry (the 0.5 s retry stays as a guard).
   - [ ] Environmental `environmentalType` values unseen; retail uses
@@ -1035,6 +1070,36 @@ fixture included; that's a stand-in for the real name, by decision.)
 - [x] SavedVariables string format: events are written as double-quoted Lua
   strings with `\"` escapes, one per line:
   `"{\"char\":\"Flano\",...,\"type\":\"level_up\"}",`
+
+- [ ] **From Blizzard's Forever UI source, not yet seen in game**
+  (2026-11-16; build 1.60.1 (70938), the `forever` branch of
+  github.com/Gethe/wow-ui-source; "API docs" = its
+  `Blizzard_APIDocumentationGenerated`):
+  - `DeathRecap_HasEvents` / `DeathRecap_GetEvents` are aliases for
+    `C_DeathRecap.HasRecapEvents` / `GetRecapEvents`, defined only while the
+    `loadDeprecationFallbacks` CVar is on
+    (`Blizzard_DeprecatedCombatLog/Deprecated_CombatLog.lua`).
+  - Recap entries carry `sourceGUID`
+    (`Blizzard_PTRFeedback/Blizzard_PTRFeedback_Events.lua` reads
+    `deathEvents[1].sourceGUID`), and entry 1 is the killing blow
+    (`Blizzard_DeathRecap.lua`: `causedDeath = i == 1`). Whether recap
+    fields are secret after a PvP death is undocumented. Check: after
+    dying to a player, `/dump C_DeathRecap.GetRecapEvents()[1]`.
+  - `PARTY_KILL(attackerGUID, targetGUID)` exists, tagged
+    `SecretWhenUnitIdentityRestricted`: secret "when the unit isn't
+    player-controlled or in the party/raid". Check: register it, kill a
+    player, print `issecretvalue` of both GUIDs.
+  - `GetPlayerInfoByGUID` returns class, race, sex, name, realmName and
+    (new) level; it may return nothing. What Forever puts in realmName
+    (the surname?) is unknown.
+  - `UnitName` / `UnitClass` of party and raid members are never secret
+    (same predicate); `UnitLevel` has no secret tag.
+  - Chat events tagged `SecretInChatMessagingLockdown` are secret during
+    encounters, challenge modes and PvP matches, "and when the player is on
+    a communication-restricted map such as a dungeon or raid": possibly the
+    whole dungeon visit, not only boss fights. Tagged: `CHAT_MSG_SKILL`,
+    `CHAT_MSG_SYSTEM` (duel results) and the say/party/guild/whisper
+    families. Not tagged: `CHAT_MSG_LOOT`, `CHAT_MSG_COMBAT_HONOR_GAIN`.
 
 ## Milestones
 

@@ -24,7 +24,7 @@ var testFixtures = map[string]map[string]any{
 		"link":    "|cnIQ5:|Hitem:19019::::::::|h[Thunderfury, Blessed Blade of the Windseeker]|h|r",
 		"quality": 5.0, "qty": 1.0, "vendor_value": 255355.0, "boe": true, "gear": true,
 	},
-	"death": {"zone": "Westfall", "subzone": "Moonbrook", "killer": "Hogger", "environment": nil},
+	"death": {"zone": "Westfall", "subzone": "Moonbrook", "killer": "Hogger", "killer_kind": "npc", "environment": nil},
 	"quest": {"quest_id": 783.0, "title": "A Threat Within", "xp": 40.0},
 	"boss_kill": {
 		"encounter_id": 672.0, "name": "Ragnaros", "instance": "Molten Core", "difficulty": 9.0,
@@ -38,6 +38,17 @@ var testFixtures = map[string]map[string]any{
 	},
 	"duel":         {"opponent": "Grakkor Highmountain", "won": true, "fled": false, "makgora": false},
 	"battleground": {"name": "Warsong Gulch", "won": true},
+	"session": {
+		"state": "login",
+		"settings": map[string]any{
+			"recorded": []any{"boss_kill", "death", "level_up", "loot", "session"},
+			"played":   true, "group": false, "realtime": true, "realtime_image": false,
+		},
+	},
+	"pvp_kill": {
+		"victim": "Grakkor", "class": "SHAMAN", "race": "Orc", "level": 24.0,
+		"zone": "Westfall", "subzone": "Moonbrook",
+	},
 }
 
 func testTypes() []string {
@@ -98,12 +109,18 @@ func postTestEvents(events []savedvars.Event, url string, sender discord.Sender,
 		batch := events[start:min(start+discord.MaxEmbedsPerMessage, len(events))]
 		embeds := make([]discord.Embed, 0, len(batch))
 		for _, e := range batch {
+			if discord.RecordOnly(e.Type) {
+				continue // never posted, so there is nothing to preview
+			}
 			var item *wowhead.Item
 			id, ok := e.Data["item_id"].(float64)
 			if ok && id == math.Trunc(id) && items != nil && (e.Type == "loot" || e.Type == "mount") {
 				item = items.Lookup(int(id))
 			}
 			embeds = append(embeds, discord.BuildEmbed(e, item))
+		}
+		if len(embeds) == 0 {
+			continue
 		}
 		if err := sender.Send(url, embeds); err != nil {
 			return err
@@ -156,7 +173,13 @@ func runTestEvents(args []string, cfg *config.Config, log *slog.Logger) int {
 	}
 	var kinds []string
 	for _, e := range events {
-		kinds = append(kinds, e.Type)
+		if !discord.RecordOnly(e.Type) {
+			kinds = append(kinds, e.Type)
+		}
+	}
+	if len(kinds) == 0 {
+		log.Info("nothing to post: session events are never posted to Discord")
+		return 0
 	}
 	log.Info(fmt.Sprintf("%s test %s", verb, strings.Join(kinds, ", ")))
 	return 0

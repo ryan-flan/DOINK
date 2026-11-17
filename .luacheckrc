@@ -14,19 +14,19 @@ globals = { "DOINKDB", "SLASH_DOINK1", "SlashCmdList" }
 -- facts"). Keep alphabetical. Anything luacheck flags that is NOT a known
 -- API is a bug to fix, not a name to add here.
 read_globals = {
-  "bit", "C_AddOns", "C_CVar", "C_Item", "C_MountJournal", "C_QuestLog",
+  "bit", "C_AddOns", "C_CVar", "C_DeathRecap", "C_Item", "C_MountJournal", "C_QuestLog",
   "C_Timer", "CreateFrame", "CreateSettingsListSectionHeaderInitializer",
   "DeathRecap_GetEvents", "DeathRecap_HasEvents", "GetAddOnMetadata",
   "GetBattlefieldWinner", "GetCVar", "geterrorhandler", "GetInstanceInfo",
   "GetItemInfo", "GetItemInfoInstant", "GetNumSkillLines",
-  "GetPhysicalScreenSize", "GetProfessionInfo", "GetProfessions",
+  "GetPhysicalScreenSize", "GetPlayerInfoByGUID", "GetProfessionInfo", "GetProfessions",
   "GetRealmName", "GetSkillLineInfo", "GetSubZoneText", "GetTime",
   "GetTitleText", "GetZoneText", "IsInGroup", "IsInGuild", "IsInInstance",
   "IsInRaid", "issecretvalue", "LOOT_ITEM_SELF", "LOOT_ITEM_SELF_MULTIPLE",
   "MinimalSliderWithSteppersMixin", "NUM_CHAT_WINDOWS", "ReloadUI",
   "RequestTimePlayed", "Screenshot",
   "SendChatMessage", "SetCVar", "Settings", "SKILL_RANK_UP", "time",
-  "UIParent", "UnitClass", "UnitExists", "UnitFactionGroup",
+  "UIParent", "UnitClass", "UnitExists", "UnitFactionGroup", "UnitGUID",
   "UnitIsFeignDeath", "UnitLevel", "UnitName",
 }
 
@@ -36,7 +36,7 @@ files["addon/tests/**"] = {
   allow_defined_top = true,
   ignore = { "131" }, -- unused global stubs are fine
   globals = {
-    "DOINK_WRITE_FIXTURE", "DeathRecap_GetEvents", "DeathRecap_HasEvents",
+    "C_DeathRecap", "DOINK_WRITE_FIXTURE", "DeathRecap_GetEvents", "DeathRecap_HasEvents", "GetPlayerInfoByGUID",
     "GetProfessionInfo", "GetProfessions", "issecretvalue", "RequestTimePlayed",
     "UnitIsFeignDeath",
   },

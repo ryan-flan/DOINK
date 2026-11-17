@@ -137,7 +137,7 @@ realtime state, and which event types are enabled.
 | `/doink announce guild` / `officer` / `party` / `raid` / `off` | Choose where announcements go |
 | `/doink announce loot rare` | Change a rule (any event type, values as listed above) |
 | `/doink announce test` | Whisper yourself a sample of every announcement, with whether the current rules would send it |
-| `/doink enable <type>` / `disable <type>` | Only for the Discord companion: record an event type or not (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`). Chat announcements don't need it |
+| `/doink enable <type>` / `disable <type>` | Only for the Discord companion: record an event type or not (`level_up`, `loot`, `death`, `quest`, `boss_kill`, `skill_up`, `mount`, `duel`, `battleground`, `pvp_kill`; `session` is only forwarded, never posted). Chat announcements don't need it |
 | `/doink options [type]` | Show the event settings (for example the loot quality and vendor-value thresholds used for Discord) |
 | `/doink set <type> <option> <value>` | Change one, e.g. `/doink set loot min_quality 4` |
 | `/doink reset <type>` | Back to defaults |
@@ -147,6 +147,7 @@ realtime state, and which event types are enabled.
 | `/doink flush` | Reload the UI so saved variables are written |
 | `/doink webhook [here] <url>` / `clear` | Only for the Discord companion: store a webhook URL account-wide, or for this character |
 | `/doink played on` / `off` | Only for the Discord companion: add this character's total time played to every recorded event (off by default). Discord shows it on level-ups |
+| `/doink group on` / `off` | Only for tools reading `forward_url`: add who else is in your party to every recorded event (off by default). Discord doesn't show it |
 | `/doink realtime on` / `off` / `test` | Only for the Discord companion: post each event within seconds instead of at the next reload (see [Instant posts](#instant-posts-realtime)) |
 | `/doink realtime image on` / `off` | With instant posts: also attach the screenshot to the Discord post (off by default; see [Instant posts](#instant-posts-realtime)) |
 
@@ -391,11 +392,18 @@ announcement rules above work on their own. The one exception is `wins_only`, wh
 | `mount` | You get a new mount | |
 | `duel` | A duel or Mak'gora ends | `wins_only` on |
 | `battleground` | A battleground match ends | `wins_only` on |
+| `session` | You log in or out, with which events you record (never posted to Discord; for [`forward_url`](#sending-events-to-your-own-tool)) | |
+| `pvp_kill` | You land the killing blow on another player | |
 
 **Time played.** `/doink played on` (or the checkbox on the settings page)
 adds your total time played to every recorded event, and the level-up post
 shows it ("Time played: 4d 17h 27m"). Off by default. The addon asks the
 game once at login, the way `/played` does.
+
+**Your party.** `/doink group on` (or the checkbox on the settings page)
+adds who else is in your party to every recorded event, for tools reading
+[`forward_url`](#sending-events-to-your-own-tool). Discord posts don't
+change. Off by default; left out when you're alone or in a raid.
 
 Money options accept `1g50s` (e.g. `/doink set loot min_vendor_value 25g`, also a slider in `/doink config` up to 100g), `75s`, `30c` or plain copper. Quality: 0 poor,
 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
@@ -431,7 +439,8 @@ as the addon recorded it:
  "class":"WARRIOR","level":20,"played":408475,"type":"level_up","data":{"level":20}}
 ```
 
-`played` (total seconds played) is there only with `/doink played on`.
+`played` (total seconds played) is there only with `/doink played on`,
+and `group` (your party members) only with `/doink group on`.
 
 Every field of every event type is described, with an example each, in
 the [event reference](https://github.com/ryan-flan/DOINK/blob/main/docs/events.md);

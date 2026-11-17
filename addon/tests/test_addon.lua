@@ -239,6 +239,7 @@ for _, file in ipairs({ "Json.lua", "Defaults.lua", "Core.lua",
     "Notifiers/LevelUp.lua", "Notifiers/Loot.lua", "Notifiers/Death.lua",
     "Notifiers/Quest.lua", "Notifiers/BossKill.lua", "Notifiers/SkillUp.lua",
     "Notifiers/Mount.lua", "Notifiers/Duel.lua", "Notifiers/Battleground.lua",
+    "Notifiers/Session.lua", "Notifiers/PvpKill.lua",
     "Announce.lua", "Transports/Screenshot.lua", "Options.lua" }) do
   assert(loadfile(ROOT .. "/" .. file))("DOINK", ns)
 end
@@ -472,6 +473,73 @@ test("death: killer is the newest death recap hit", function()
   die(); runTimers()
   assert(has('"killer":null'), last())
   DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
+end)
+
+test("death: C_DeathRecap first; without timestamps the first entry is the killing blow", function()
+  -- Blizzard's recap marks entry 1 as the hit that caused the death.
+  local recap = { { sourceName = "Hogger" }, { sourceName = "Kobold Vermin" } }
+  DeathRecap_HasEvents = function() return true end
+  DeathRecap_GetEvents = function() return { { sourceName = "Old Alias" } } end
+  C_DeathRecap = {
+    HasRecapEvents = function() return #recap > 0 end,
+    GetRecapEvents = function() return recap end,
+  }
+  die()
+  assert(has('"killer":"Hogger"'), last())
+  C_DeathRecap = nil
+  die()
+  assert(has('"killer":"Old Alias"'), "the aliases still work alone: " .. last())
+  DeathRecap_HasEvents, DeathRecap_GetEvents = nil, nil
+end)
+
+test("death: a recap the client hides (secret values) still records the death, killer unknown", function()
+  local recap = { { sourceName = "Hidden Harry", timestamp = "secret-ts" },
+                  { sourceName = "Kobold Vermin", timestamp = 4 } }
+  C_DeathRecap = {
+    HasRecapEvents = function() return true end,
+    GetRecapEvents = function() return recap end,
+  }
+  issecretvalue = function(v) return v == "Hidden Harry" or v == "secret-ts" end
+  local n = count()
+  timers = {}
+  die(); runTimers()
+  eq(count(), n + 1, "the death is still recorded")
+  assert(has('"killer":"Kobold Vermin"'), "a secret timestamp is skipped: " .. last())
+  recap = { { sourceName = "Hidden Harry" } }
+  die(); runTimers()
+  eq(count(), n + 2, "recorded")
+  assert(has('"killer":null'), "a secret name counts as unknown: " .. last())
+  issecretvalue = nil
+  C_DeathRecap = nil
+end)
+
+test("death: killer_kind from the killing blow's GUID; null when unknown or secret", function()
+  local recap = {}
+  C_DeathRecap = {
+    HasRecapEvents = function() return #recap > 0 end,
+    GetRecapEvents = function() return recap end,
+  }
+  recap = { { sourceName = "Grakkor", sourceGUID = "Player-5826-0A1B2C3D" } }
+  die()
+  assert(has('"killer":"Grakkor"') and has('"killer_kind":"player"'), last())
+  recap = { { sourceName = "Wolf", sourceGUID = "Pet-0-5826-0-1234-1-0100A1B2C3" } }
+  die()
+  assert(has('"killer_kind":"pet"'), last())
+  recap = { { sourceName = "Hogger", sourceGUID = "Creature-0-5826-0-1234-448-0000A1B2C3" } }
+  die()
+  assert(has('"killer_kind":"npc"'), last())
+  recap = { { sourceName = "Hogger" } }
+  die()
+  assert(has('"killer_kind":null'), "no GUID: " .. last())
+  issecretvalue = function(v) return type(v) == "string" and v:find("^Player") ~= nil end
+  recap = { { sourceName = "Grakkor", sourceGUID = "Player-5826-0A1B2C3D" } }
+  die()
+  assert(has('"killer":"Grakkor"') and has('"killer_kind":null'), "secret GUID: " .. last())
+  issecretvalue = nil
+  recap = { { environmentalType = "Drowning" } }
+  die()
+  assert(has('"killer_kind":null') and has('"environment":"DROWNING"'), last())
+  C_DeathRecap = nil
 end)
 
 test("quest: title from reward screen when log lookup fails", function()
@@ -718,6 +786,94 @@ test("boss_kill: first kill flagged once, group lists party members, first_kill_
   assert(has('"group":null'), "solo: " .. last())
 end)
 
+test("group: off by default; on, every event lists the party; left out alone, in a raid or when secret", function()
+  local function quest() fire("QUEST_TURNED_IN", 7, 100, 0) end
+  partyOn = true
+  quest()
+  assert(not has('"group"'), "off by default: " .. last())
+  slash("group on")
+  eq(ns:GetOption("general", "group"), true, "/doink group on")
+  quest()
+  assert(has('"group":["Grakkor Highmountain (Shaman 24)","Mira (Mage 22)"]'), last())
+  inRaid = true
+  quest()
+  assert(not has('"group"'), "raid: " .. last())
+  inRaid = false
+  issecretvalue = function(v) return v == "Mira" end
+  quest()
+  assert(not has('"group"'), "secret: " .. last())
+  issecretvalue = nil
+  partyOn = false
+  quest()
+  assert(not has('"group"'), "alone: " .. last())
+  slash("group off")
+  eq(ns:GetOption("general", "group"), false, "/doink group off")
+end)
+
+test("session: login and reload recorded, zoning ignored, logout recorded; never a realtime shot", function()
+  local n = count()
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  eq(count(), n + 1, "login")
+  assert(has('"type":"session"') and has('"state":"login"'), last())
+  fire("PLAYER_ENTERING_WORLD", false, false)
+  eq(count(), n + 1, "zoning between instances isn't a session")
+  fire("PLAYER_LOGOUT")
+  assert(has('"state":"logout"'), last())
+  fire("PLAYER_ENTERING_WORLD", false, true)
+  assert(has('"state":"reload"'), last())
+  eq(count(), n + 3, "three recorded")
+  assert(ns.RecordOnly.session, "record-only: no screenshot, no Discord post")
+end)
+
+test("session: each one carries the character's settings, so a tool can tell what isn't recorded", function()
+  local mountWas = ns:GetOption("mount", "enabled")
+  local realtimeWas, imageWas = DOINKDB.realtime.enabled, DOINKDB.realtime.image
+  slash("disable mount")
+  DOINKDB.realtime.enabled, DOINKDB.realtime.image = true, false
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  assert(has('"settings":{'), last())
+  assert(has('"realtime":true') and has('"realtime_image":false'), last())
+  assert(not has('"mount"'), "mount isn't ticked: " .. last())
+  assert(has('"recorded":[') and has('"session"'), "session is on, so it's listed: " .. last())
+  slash("enable mount")
+  fire("PLAYER_LOGOUT")
+  assert(has('"state":"logout"') and has('"mount"'), "ticked mid-session: shows at logout: " .. last())
+  -- recorded is sorted, so the list is stable for a reader.
+  local list = last():match('"recorded":%[(.-)%]')
+  local types = {}
+  for t in list:gmatch('"([%w_]+)"') do types[#types + 1] = t end
+  local sorted = { unpack(types) }
+  table.sort(sorted)
+  eq(table.concat(types, ","), table.concat(sorted, ","), "sorted")
+  ns:SetOption("mount", "enabled", mountWas)
+  DOINKDB.realtime.enabled, DOINKDB.realtime.image = realtimeWas, imageWas
+end)
+
+test("pvp_kill: our killing blows on players only, with what the client knows of the victim", function()
+  GetPlayerInfoByGUID = function(guid)
+    if guid == "Player-5826-0A1B2C3D" then
+      return "Shaman", "SHAMAN", "Orc", "Orc", 2, "Grakkor", "", 24
+    end
+  end
+  local me = UnitGUID("player")
+  local n = count()
+  fire("PARTY_KILL", me, "Player-5826-0A1B2C3D")
+  eq(count(), n + 1, "a player we killed")
+  assert(has('"type":"pvp_kill"') and has('"victim":"Grakkor"') and has('"class":"SHAMAN"')
+    and has('"race":"Orc"') and has('"level":24') and has('"zone":"Elwynn Forest"'), last())
+  fire("PARTY_KILL", me, "Creature-0-5826-0-1234-448-0000A1B2C3")
+  fire("PARTY_KILL", "Player-5826-99999999", "Player-5826-0A1B2C3D")
+  eq(count(), n + 1, "creatures and other people's kills ignored")
+  fire("PARTY_KILL", me, "Player-5826-77777777")
+  eq(count(), n + 2, "an unknown player still counts")
+  assert(has('"victim":null') and has('"level":null'), last())
+  issecretvalue = function(v) return v == me end
+  fire("PARTY_KILL", me, "Player-5826-0A1B2C3D")
+  eq(count(), n + 2, "secret GUIDs are ignored")
+  issecretvalue = nil
+  GetPlayerInfoByGUID = nil
+end)
+
 test("set: numbers, money and booleans, typed by the default", function()
   slash("set loot min_quality 4")
   eq(ns:GetOption("loot", "min_quality"), 4, "number")
@@ -771,7 +927,7 @@ end)
 
 test("every notifier has a working /doink test fixture", function()
   for _, t in ipairs({ "levelup", "loot", "death", "quest", "bosskill", "skillup",
-      "mount", "duel", "battleground" }) do
+      "mount", "duel", "battleground", "session", "pvpkill" }) do
     local n = count()
     SlashCmdList.DOINK("test " .. t)
     eq(count(), n + 1, t)
@@ -985,6 +1141,17 @@ test("realtime: image on sets flag bit 1 on events, never on hellos", function()
   drainShots()
   assert(slash("realtime image"):find("realtime image: off", 1, true), "prints the state")
   eq(DOINKDB.realtime.image, false, "asking changes nothing")
+end)
+
+test("realtime: session events are never shot (they wait for /reload or logout)", function()
+  local wasOn = DOINKDB.realtime.enabled
+  slash("realtime on")
+  drainShots()
+  local n = count()
+  fire("PLAYER_ENTERING_WORLD", true, false)
+  eq(count(), n + 1, "recorded")
+  eq(#T.queue(), 0, "no screenshot queued for a login")
+  if not wasOn then slash("realtime off") end
 end)
 
 test("realtime: a hello for /doink realtime test", function()
@@ -1239,7 +1406,7 @@ end)
 -- The suite runs with every type enabled (see SHIPPED above), which is not
 -- what a new player has: these tests switch the Discord toggles off again.
 local ALL_TYPES = { "level_up", "loot", "death", "quest", "boss_kill", "skill_up",
-  "mount", "duel", "battleground" }
+  "mount", "duel", "battleground", "session", "pvp_kill" }
 
 -- Sets `enabled` for the given types; returns a function that puts back
 -- whatever overrides were there.
@@ -1415,10 +1582,10 @@ end
 test("options: registered once at login with every control and three headers", function()
   eq(settings.categories, 1, "one category")
   assert(settings.registered, "added to the AddOns list")
-  eq(#settings.controls, 7 + 3 + 10 + 7 + 1 + 2, "announce 7+3, discord 10+7+1, realtime 2")
+  eq(#settings.controls, 7 + 3 + 13 + 7 + 1 + 2, "announce 7+3, discord 13+7+1, realtime 2")
   local kinds = { checkbox = 0, dropdown = 0, slider = 0 }
   for _, c in ipairs(settings.controls) do kinds[c.kind] = kinds[c.kind] + 1 end
-  eq(kinds.checkbox, 24, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
+  eq(kinds.checkbox, 27, "checkboxes"); eq(kinds.dropdown, 5, "dropdowns"); eq(kinds.slider, 1, "slider")
   for _, c in ipairs(settings.controls) do assert(c.name and c.name ~= "", c.variable .. " has a label") end
   ns.Options.Register()
   eq(settings.categories, 1, "registering again is a no-op")

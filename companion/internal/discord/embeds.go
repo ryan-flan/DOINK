@@ -371,6 +371,37 @@ func battleground(name string, d data) Embed {
 	return Embed{"title": name + " lost " + bg, "description": "Defeat in " + bg + "."}
 }
 
+// pvpKill: "Flano Wren killed Grakkor", with what the client knew of the
+// victim ("Level 24 Orc Shaman") and where.
+func pvpKill(name string, d data) Embed {
+	victim := d.str("victim")
+	if victim == "" {
+		victim = "a player"
+	}
+	where := d.str("zone")
+	if where == "" {
+		where = "somewhere"
+	}
+	if sub := d.str("subzone"); sub != "" {
+		where = sub + ", " + where
+	}
+	var who []string
+	if level, ok := d.num("level"); ok {
+		who = append(who, "Level "+number(level))
+	}
+	if race := d.str("race"); race != "" {
+		who = append(who, race)
+	}
+	if class := d.str("class"); class != "" {
+		who = append(who, strings.ToUpper(class[:1])+strings.ToLower(class[1:]))
+	}
+	description := "in " + where
+	if len(who) > 0 {
+		description = strings.Join(who, " ") + ", " + description
+	}
+	return Embed{"title": name + " killed " + victim, "description": description}
+}
+
 func skillUp(name string, d data) Embed {
 	skill := d.str("skill")
 	if skill == "" {
@@ -405,6 +436,15 @@ func generic(name, kind string, d data) Embed {
 	return Embed{"title": name + ": " + kind, "description": "```json\n" + body + "\n```"}
 }
 
+// recordOnly are the event types that exist only for tools reading
+// forward_url (logins and logouts): the addon never sends them as a
+// realtime screenshot, and they are never posted to Discord.
+var recordOnly = map[string]bool{"session": true}
+
+// RecordOnly reports whether events of this type are never posted to
+// Discord, only forwarded.
+func RecordOnly(eventType string) bool { return recordOnly[eventType] }
+
 // BuildEmbed turns one event into an embed. item is Wowhead's details for a
 // loot or mount event, when the lookup is on and succeeded; other types
 // ignore it.
@@ -434,6 +474,8 @@ func BuildEmbed(e savedvars.Event, item *wowhead.Item) Embed {
 		embed = duel(name, d)
 	case "battleground":
 		embed = battleground(name, d)
+	case "pvp_kill":
+		embed = pvpKill(name, d)
 	default:
 		embed = generic(name, e.Type, d)
 	}

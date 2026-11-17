@@ -74,6 +74,7 @@ shape depends on `type`.
 | `class` | string | always | The class in capitals, the same in every language: `WARRIOR`, `PALADIN`, `HUNTER`, `ROGUE`, `PRIEST`, `SHAMAN`, `MAGE`, `WARLOCK`, `DRUID`. |
 | `level` | integer | always | The character's level when the event happened. On a `level_up` it is the new level. |
 | `played` | integer | only with `/doink played on` | Total time played on this character, in seconds. Missing until the game has answered the addon's request, so the first event after turning it on may not have it. |
+| `group` | array of strings | only with `/doink group on`, in a party | Who else was in the party, each as `"Name Surname (Class Level)"` (the surname only when the client gives one), at most 4. Left out when the character was alone, in a raid, or when the game hid a name (party names shouldn't be hidden, but every value is checked). Discord doesn't show it. |
 | `type` | string | always | What happened. One of the types below. |
 | `data` | object | always | The details. See the section for the `type`. |
 | `test` | `true` | only on test events | The event was made with `/doink test` and nothing really happened. Never `false`: the field is left out instead. |
@@ -95,6 +96,8 @@ whole numbers.
 | [`mount`](#mount) | The character gets a new mount |
 | [`duel`](#duel) | A duel ends |
 | [`battleground`](#battleground) | A battleground ends |
+| [`session`](#session) | The character logs in or out (never posted to Discord) |
+| [`pvp_kill`](#pvp_kill) | The character lands the killing blow on another player |
 
 A type is only recorded if the player turned it on, and each has filters
 the player can change (for example "rare items and better"), so which
@@ -163,6 +166,7 @@ not seen, because the game hides chat from addons until the fight ends.
     "zone": "Westfall",
     "subzone": "Moonbrook",
     "killer": "Hogger",
+    "killer_kind": "npc",
     "environment": null
   }
 }
@@ -173,6 +177,7 @@ not seen, because the game hides chat from addons until the fight ends.
 | `zone` | string | The zone the character died in. |
 | `subzone` | string or `null` | The area within the zone. `null` where the game names none. |
 | `killer` | string or `null` | Who landed the last hit: a creature's or a player's name. `null` for an environmental death, or when the game gave no cause. |
+| `killer_kind` | string or `null` | What the killer was: `player`, `pet` (a player's pet; whose isn't known) or `npc`, from its GUID in the death recap. Some player summons (totems, guardians) may read as `npc`. `null` when the game gave no GUID or hid it, and when there was no killer. A creature can share a player's name, so `player` is the reliable sign of a PvP death. Added after 0.19.0: older addons leave it out. |
 | `environment` | string or `null` | For an environmental death, its kind in capitals: `FALLING`, `DROWNING`, `FATIGUE`, `FIRE`, `LAVA` or `SLIME`. The value comes from the game, so allow for others. `null` otherwise. |
 
 At most one of `killer` and `environment` is set. Both are `null` when
@@ -315,6 +320,85 @@ By default only wins are recorded.
 | `won` | boolean | Whether this character's faction won. |
 
 By default only wins are recorded.
+
+### `session`
+
+```json
+{
+  "seq": 51, "ts": 1759301000, "char": "Flano", "surname": "Wren",
+  "realm": "Whatever", "class": "WARRIOR", "level": 20,
+  "type": "session",
+  "data": {
+    "state": "login",
+    "settings": {
+      "recorded": ["boss_kill", "death", "level_up", "loot", "session"],
+      "played": true, "group": false, "realtime": true, "realtime_image": false
+    }
+  }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `state` | string | `login`: entered the world from character select. `reload`: the UI was reloaded. `logout`: logged out, or the UI is about to reload. |
+| `settings` | object | The character's settings at that moment (below). |
+
+`settings` lets a tool tell "nothing happened" from "not recorded": no
+`mount` event is only news if `mount` is in `recorded`. DOINK keeps its
+settings in the game's saved data and sends them nowhere else, so this is
+how a tool sees them, and it can point the player at the box to tick. A
+change made mid-session shows at the next logout or `/reload`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `recorded` | array of strings | The event types this character records for the companion (ticked under **Discord, via the companion app**), sorted. Always includes `session`. |
+| `played` | boolean | Time played is added to events (`/doink played on`). |
+| `group` | boolean | The party is added to events (`/doink group on`). |
+| `realtime` | boolean | Events go out instantly as screenshots (`/doink realtime on`). Account-wide. |
+| `realtime_image` | boolean | The companion attaches each screenshot to the post (`/doink realtime image on`). Account-wide. |
+
+Logins and logouts exist for tools like yours: the companion forwards them
+but never posts them to Discord, and the addon never sends them as a
+realtime screenshot. They reach you with the game's next save, at
+`/reload` or logout, so a session's `login` and `logout` usually arrive
+together, seconds after the logout.
+
+- A `/reload` records `logout` and then `reload` within a second or two.
+  A `logout` not followed by a `reload` is a real logout.
+- `played` (with `/doink played on`) is usually missing on `login` and
+  `reload`, because the game hasn't answered the addon's request yet; it
+  is there on `logout` once the game has answered. Without it, the session's length is the logout's
+  `ts` minus the login's `ts`.
+- A crash or Alt-F4 saves nothing, so that session's events never arrive.
+
+### `pvp_kill`
+
+```json
+{
+  "seq": 52, "ts": 1759301100, "char": "Flano", "surname": "Wren",
+  "realm": "Whatever", "class": "WARRIOR", "level": 20,
+  "type": "pvp_kill",
+  "data": {
+    "victim": "Grakkor",
+    "class": "SHAMAN",
+    "race": "Orc",
+    "level": 24,
+    "zone": "Westfall",
+    "subzone": "Moonbrook"
+  }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `victim` | string or `null` | The player killed, by first name. `null` when the game had no details on them. |
+| `class` | string or `null` | Their class in capitals, the same in every language. |
+| `race` | string or `null` | Their race in English. |
+| `level` | integer or `null` | Their level. |
+| `zone` | string | Where it happened. |
+| `subzone` | string or `null` | The area within the zone. `null` where the game names none. |
+
+Only killing blows count, not every kill you helped with. PvP kills are posted to Discord but never announced in chat.
 
 ## Test events
 

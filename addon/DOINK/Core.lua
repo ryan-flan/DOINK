@@ -282,7 +282,60 @@ function ns:SetPlayed(on)
   self:Played() -- on: ask now, so the next event has it
 end
 
+------------------------------------------------------------------ group
+
+-- "WARRIOR" -> "Warrior"
+local function TitleCase(word)
+  return word:sub(1, 1):upper() .. word:sub(2):lower()
+end
+
+-- Party members other than you, as "Name Surname (Class Level)", from
+-- party1-party4. nil when you're alone, in a raid, or when the client hides
+-- any of it (secret values). Under the 12.0 secret rules a party or raid
+-- member's name and class aren't secret (SecretWhenUnitIdentityRestricted:
+-- "when the unit isn't player-controlled or in the party/raid", Forever
+-- 1.60.1 API docs), but every value is still checked: one secret value
+-- would take table.concat and the JSON encoder down.
+--
+-- Raids are left out on purpose: 39 names don't fit a realtime screenshot
+-- (1024 bytes per shot).
+function ns:PartyList()
+  if IsInRaid() then return nil end
+  local list = {}
+  for i = 1, 4 do
+    local unit = "party" .. i
+    if UnitExists(unit) then
+      local name, second = UnitName(unit)
+      local _, classFile = UnitClass(unit)
+      local level = UnitLevel(unit)
+      if ns.IsSecret(name) or ns.IsSecret(second) or ns.IsSecret(classFile)
+          or ns.IsSecret(level) then
+        return nil
+      end
+      if type(name) == "string" then
+        local display = name .. (second and second ~= "" and (" " .. second) or "")
+        local class = type(classFile) == "string" and TitleCase(classFile) or "?"
+        list[#list + 1] = ("%s (%s %d)"):format(display, class, tonumber(level) or 0)
+      end
+    end
+  end
+  if #list == 0 then return nil end
+  return list
+end
+
+-- The optional `group` field (general.group, off by default): who else was
+-- in your party when the event happened. Left out when the option is off,
+-- when you're alone or in a raid, or when the client hides a name.
+function ns:Group()
+  if not self:GetOption("general", "group") then return nil end
+  return self:PartyList()
+end
+
 ------------------------------------------------------------------ emit
+
+-- Types that are only recorded for tools reading forward_url: no realtime
+-- screenshot, no chat, and the companion doesn't post them to Discord.
+ns.RecordOnly = { session = true }
 
 -- Builds the envelope and hands the event to the transports.
 --
@@ -320,6 +373,7 @@ function ns:Emit(eventType, data, isTest, filtered)
     class = self.player.class,
     level = level,
     played = self:Played(), -- nil leaves the field out
+    group = self:Group(), -- nil leaves the field out
     type = eventType,
     data = data or {},
   }
@@ -466,6 +520,7 @@ local HELP = {
   "/doink announce test - whisper yourself a sample of every announcement",
   "/doink webhook [here] <url>|clear - Discord webhook (here = this character only)",
   "/doink played on|off - add your total time played to every recorded event",
+  "/doink group on|off - add who's in your party to every recorded event",
   "/doink realtime on|off|test|image on|off - post to Discord instantly via screenshots (needs the companion)",
   "/doink test <type> [count] - emit a fake event",
   "/doink dump [n] - print the last n queued events",
@@ -560,6 +615,7 @@ commands[""] = function()
   ns:Print("webhook: %s", WebhookStatus())
   ns:Print("realtime: %s", ns.Transports.Screenshot.Status())
   ns:Print("time played in events: %s", ns:GetOption("general", "played") and "on" or "off")
+  ns:Print("party in events: %s", ns:GetOption("general", "group") and "on" or "off")
   ns:Print("recorded for Discord (/doink enable <type>):")
   for _, notifier in ipairs(SortedNotifiers()) do
     local state = ns:GetOption(notifier.type, "enabled")
@@ -761,6 +817,22 @@ commands.played = function(args)
       .. "Discord shows it on level-ups")
   else
     ns:Print("time played off")
+  end
+end
+
+commands.group = function(args)
+  local value = ParseValue(false, args)
+  if value == nil then
+    ns:Print("party in events: %s", ns:GetOption("general", "group") and "on" or "off")
+    ns:Print("usage: /doink group on|off")
+    return
+  end
+  ns:SetOption("general", "group", value)
+  if value then
+    ns:Print("party in events on: every recorded event lists who else is in your party "
+      .. "(not shown on Discord; for tools reading forward_url)")
+  else
+    ns:Print("party in events off")
   end
 end
 
